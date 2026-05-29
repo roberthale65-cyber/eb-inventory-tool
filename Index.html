@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eternal Blooms — Inventory Tool</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Mulish:wght@300;400;600;700;800&family=Nunito+Sans:wght@400;500;700&display=swap');
+  :root {
+    --teal:#006688;--teal-dark:#004d67;--teal-light:#c2e8ff;--teal-bg:#f0f9ff;
+    --green-bg:#E1F5EE;--green-text:#085041;--red-bg:#FCEBEB;--red-text:#791F1F;
+    --amber-bg:#FAEEDA;--amber-text:#633806;--surface:#f6fafe;--card:#ffffff;
+    --border:rgba(0,0,0,0.1);--text:#171c1f;--text-muted:#40484d;
+    --font-head:'Mulish',Arial,sans-serif;--font-body:'Nunito Sans',Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font-body);background:var(--surface);color:var(--text);min-height:100vh;padding:0 0 60px}
+  .top-bar{background:var(--teal);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,102,136,0.15)}
+  .top-bar-left{display:flex;align-items:center;gap:12px}
+  .logo-mark{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-size:18px;font-weight:800}
+  .top-bar-title{font-family:var(--font-head);font-size:18px;font-weight:700}
+  .top-bar-sub{font-size:12px;opacity:.75;margin-top:1px}
+  .stats{display:flex;gap:24px}
+  .stat{text-align:center}
+  .stat-val{font-family:var(--font-head);font-size:22px;font-weight:700;line-height:1}
+  .stat-label{font-size:10px;opacity:.7;letter-spacing:.06em;margin-top:2px;text-transform:uppercase}
+  .main{max-width:760px;margin:0 auto;padding:24px 16px}
+  .status-bar{border-radius:10px;padding:11px 16px;font-size:13px;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+  .status-bar.loading{background:#f0f4f8;color:var(--text-muted)}
+  .status-bar.success{background:var(--green-bg);color:var(--green-text)}
+  .status-bar.error{background:var(--red-bg);color:var(--red-text)}
+  .status-bar.warn{background:var(--amber-bg);color:var(--amber-text)}
+  .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .loading .status-dot{background:#71787d;animation:pulse 1.2s ease-in-out infinite}
+  .success .status-dot{background:#1D9E75}
+  .error .status-dot{background:#E24B4A}
+  .warn .status-dot{background:#BA7517}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:20px 24px;margin-bottom:16px}
+  .card-title{font-family:var(--font-head);font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--text-muted);text-transform:uppercase;margin-bottom:16px}
+  .field-grid{display:grid;gap:12px;margin-bottom:14px}
+  .grid-3{grid-template-columns:1fr 1fr 1fr}
+  .grid-2{grid-template-columns:1fr 1fr}
+  .grid-1{grid-template-columns:1fr}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field label{font-size:12px;font-weight:700;color:var(--text-muted);letter-spacing:.04em}
+  .field select,.field input[type=text],.field input[type=number],.field input[type=password]{font-family:var(--font-body);font-size:14px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;color:var(--text);outline:none;transition:border-color .15s;width:100%}
+  .field select:focus,.field input:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,102,136,.1)}
+  .eb-display-wrap{margin-bottom:16px}
+  .eb-display-label{font-size:12px;font-weight:700;color:var(--text-muted);letter-spacing:.04em;margin-bottom:6px}
+  .eb-display{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;min-height:48px}
+  .eb-display.available{border-color:#1D9E75;background:var(--green-bg)}
+  .eb-display.taken{border-color:#E24B4A;background:var(--red-bg)}
+  .eb-number{font-family:'Courier New',monospace;font-size:20px;font-weight:700;color:var(--teal);letter-spacing:.04em}
+  .eb-display.available .eb-number{color:var(--green-text)}
+  .eb-display.taken .eb-number{color:var(--red-text)}
+  .eb-placeholder{font-size:14px;color:var(--text-muted)}
+  .badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px}
+  .badge-available{background:#9FE1CB;color:#04342C}
+  .badge-taken{background:#F7C1C1;color:#501313}
+  .qr-section{display:flex;gap:20px;align-items:flex-start;background:var(--teal-bg);border-radius:14px;padding:16px;margin-bottom:16px}
+  .qr-box{width:128px;height:128px;flex-shrink:0;background:#fff;border-radius:10px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .qr-info{flex:1}
+  .qr-info-title{font-family:var(--font-head);font-size:13px;font-weight:700;color:var(--teal-dark);margin-bottom:6px}
+  .qr-url{font-family:'Courier New',monospace;font-size:11px;color:var(--teal-dark);word-break:break-all;background:rgba(255,255,255,.6);padding:6px 10px;border-radius:8px;margin-bottom:10px;line-height:1.5}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap}
+  button{font-family:var(--font-body);font-size:13px;font-weight:700;padding:10px 18px;border-radius:10px;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--text);transition:all .15s;display:flex;align-items:center;gap:6px}
+  button:hover{background:var(--surface);border-color:var(--teal);color:var(--teal)}
+  button:active{transform:scale(.97)}
+  .btn-primary{background:var(--teal);color:#fff;border-color:var(--teal);font-size:14px;padding:11px 22px}
+  .btn-primary:hover{background:var(--teal-dark);border-color:var(--teal-dark);color:#fff}
+  .btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .btn-danger{background:#fff;color:var(--red-text);border-color:#E24B4A;font-size:12px;padding:7px 14px}
+  .btn-danger:hover{background:var(--red-bg);border-color:#A32D2D;color:#501313}
+  .divider{border:none;border-top:1px solid var(--border);margin:16px 0}
+  .field-check-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+  .fc-item{display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 0}
+  .fc-ok{color:var(--green-text)}.fc-miss{color:var(--red-text)}
+  .fc-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .fc-ok .fc-dot{background:#1D9E75}.fc-miss .fc-dot{background:#E24B4A}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{background:var(--surface);color:var(--text-muted);font-weight:700;font-size:11px;letter-spacing:.05em;text-transform:uppercase;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}
+  td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text)}
+  tr:last-child td{border-bottom:none}
+  .eb-cell{font-family:'Courier New',monospace;font-size:12px;font-weight:700;color:var(--teal)}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px}
+  .pill-instock{background:var(--green-bg);color:var(--green-text)}
+  .pill-listed{background:var(--teal-light);color:var(--teal-dark)}
+  .pill-sold{background:#e5deff;color:#474364}
+  .pill-fair{background:var(--amber-bg);color:var(--amber-text)}
+  .pill-other{background:var(--surface);color:var(--text-muted)}
+  .section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .token-setup{background:var(--card);border:2px solid var(--teal-light);border-radius:20px;padding:28px 28px;margin-bottom:16px}
+  .token-setup h2{font-family:var(--font-head);font-size:20px;font-weight:700;color:var(--teal);margin-bottom:8px}
+  .token-setup p{font-size:14px;color:var(--text-muted);line-height:1.6;margin-bottom:16px}
+  .token-note{font-size:12px;color:var(--text-muted);margin-top:8px;line-height:1.5}
+  .connected-bar{display:flex;align-items:center;justify-content:space-between;background:var(--green-bg);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:var(--green-text)}
+  @media(max-width:600px){.grid-3{grid-template-columns:1fr 1fr}.stats{gap:14px}.field-check-grid{grid-template-columns:1fr 1fr}.qr-section{flex-direction:column}}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="top-bar-left">
+    <div class="logo-mark">EB</div>
+    <div>
+      <div class="top-bar-title">Eternal Blooms Designs</div>
+      <div class="top-bar-sub">Inventory &amp; EB number generator</div>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-val" id="stat-total">—</div><div class="stat-label">Total pieces</div></div>
+    <div class="stat"><div class="stat-val" id="stat-stock">—</div><div class="stat-label">In stock</div></div>
+    <div class="stat"><div class="stat-val" id="stat-next">—</div><div class="stat-label">Next number</div></div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- TOKEN SETUP SCREEN -->
+  <div id="token-setup-card" class="token-setup">
+    <h2>Connect to Airtable</h2>
+    <p>Paste your Airtable Personal Access Token below. It will be saved in this browser only — it is never stored in this file or sent anywhere except directly to Airtable.</p>
+    <div class="field" style="margin-bottom:8px">
+      <label>Personal access token</label>
+      <input type="password" id="token-input" placeholder="patXXXXXXXXXXXXXX.XXXXXXXX" autocomplete="off">
+    </div>
+    <p class="token-note">To create a token: go to airtable.com/create/tokens &rarr; Create token &rarr; add scopes <strong>data.records:read</strong> and <strong>data.records:write</strong> &rarr; add your <strong>Inventory</strong> base &rarr; create and copy.</p>
+    <div style="margin-top:16px">
+      <button class="btn-primary" onclick="connectWithToken()">Connect to Airtable &rarr;</button>
+    </div>
+  </div>
+
+  <!-- CONNECTED BAR (shown after connect) -->
+  <div id="connected-bar" class="connected-bar" style="display:none">
+    <span>&#10003; Connected to Airtable &mdash; <span id="connected-base">Inventory</span></span>
+    <button class="btn-danger" onclick="disconnectToken()">Disconnect</button>
+  </div>
+
+  <div id="status-bar" class="status-bar loading" style="display:none">
+    <div class="status-dot"></div>
+    <span id="status-msg">Connecting...</span>
+  </div>
+
+  <!-- FIELD CHECK -->
+  <div class="card" id="field-check-card" style="display:none">
+    <div class="card-title">Airtable field check</div>
+    <div class="field-check-grid" id="field-check-list"></div>
+  </div>
+
+  <!-- MAIN FORM -->
+  <div class="card" id="main-form" style="display:none">
+    <div class="card-title">Generate new EB number</div>
+    <div class="field-grid grid-3">
+      <div class="field"><label>Year</label>
+        <select id="f-year">
+          <option value="26">2026</option><option value="27">2027</option><option value="28">2028</option>
+        </select>
+      </div>
+      <div class="field"><label>Season</label>
+        <select id="f-season">
+          <option value="">— pick —</option>
+          <option value="SP">Spring</option><option value="SU">Summer</option>
+          <option value="FA">Fall</option><option value="WI">Winter</option>
+        </select>
+      </div>
+      <div class="field"><label>Type</label>
+        <select id="f-type">
+          <option value="">— pick —</option>
+          <option value="WR">Wreath</option><option value="TB">Tabletop</option>
+          <option value="OP">Outdoor pot</option><option value="CP">Centerpiece</option>
+          <option value="WP">Wall piece</option><option value="SW">Swag</option>
+          <option value="CU">Custom</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-grid grid-2">
+      <div class="field"><label>Holiday (optional)</label>
+        <select id="f-holiday">
+          <option value="None">None</option>
+          <option value="Christmas">Christmas</option><option value="Thanksgiving">Thanksgiving</option>
+          <option value="Easter">Easter</option><option value="Mother's Day">Mother's Day</option>
+          <option value="Fourth of July">Fourth of July</option>
+          <option value="Halloween">Halloween</option><option value="Valentine's Day">Valentine's Day</option>
+        </select>
+      </div>
+      <div class="field"><label>Description</label>
+        <input type="text" id="f-desc" placeholder="e.g. burgundy fall wreath with ribbon">
+      </div>
+    </div>
+    <div class="field-grid grid-2">
+      <div class="field"><label>Price ($)</label>
+        <input type="number" id="f-price" placeholder="0.00" min="0" step="0.01">
+      </div>
+      <div class="field"><label>Cost ($)</label>
+        <input type="number" id="f-cost" placeholder="0.00" min="0" step="0.01">
+      </div>
+    </div>
+    <div class="field-grid grid-1">
+      <div class="field"><label>Bin location</label>
+        <input type="text" id="f-bin" placeholder="e.g. WR-2">
+      </div>
+    </div>
+
+    <div class="eb-display-wrap">
+      <div class="eb-display-label">Generated EB number</div>
+      <div class="eb-display" id="eb-display">
+        <span class="eb-placeholder">Fill in year, season, and type above</span>
+      </div>
+    </div>
+
+    <div class="qr-section" id="qr-area" style="display:none">
+      <div class="qr-box" id="qr-box"></div>
+      <div class="qr-info">
+        <div class="qr-info-title">QR code — print &amp; attach to piece</div>
+        <div class="qr-url" id="qr-url-display"></div>
+        <div class="btn-row">
+          <button onclick="downloadTag()">&#8595; Download PNG tag</button>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider">
+    <div class="btn-row">
+      <button class="btn-primary" id="save-btn" onclick="saveToAirtable()" disabled>&#8679; Save to Airtable</button>
+      <button onclick="resetForm()">&#8635; Reset form</button>
+    </div>
+  </div>
+
+  <!-- INVENTORY TABLE -->
+  <div class="card" id="inventory-card" style="display:none">
+    <div class="section-head">
+      <div class="card-title" style="margin-bottom:0">Recent inventory (last 15)</div>
+      <button onclick="loadInventory()" style="font-size:12px;padding:6px 12px">&#8635; Refresh</button>
+    </div>
+    <div id="inv-table-wrap"></div>
+  </div>
+
+</div>
+
+<script>
+const BASE_ID = 'appHw4SEE5RNT8tCV';
+const TABLE = 'Inventory';
+const SHOPIFY_BASE = 'https://eternalbloomsdesigns.com/products/';
+const TOKEN_KEY = 'eb_at_token';
+
+const SEASON_MAP = {SP:'Spring',SU:'Summer',FA:'Fall',WI:'Winter'};
+const TYPE_MAP = {WR:'Wreath',TB:'Tabletop',OP:'Outdoor pot',CP:'Centerpiece',WP:'Wall piece',SW:'Swag',CU:'Custom'};
+const REQUIRED_FIELDS = ['EB Number','Description','Season','Type','Holiday','Date made','Status','Price ($)','Cost ($)','Margin ($)','Shopify tags','Shopify URL','Bin location','Photos done','Listed on Shopify','Etsy listing ID','Date sold','Sale channel','Notes','Attachments'];
+
+let existingEBNumbers = new Set();
+let currentEB = '';
+let AT_TOKEN = '';
+
+function setStatus(msg, type='loading') {
+  const bar = document.getElementById('status-bar');
+  bar.style.display = 'flex';
+  bar.className = 'status-bar ' + type;
+  document.getElementById('status-msg').textContent = msg;
+}
+
+function hideStatus() { document.getElementById('status-bar').style.display = 'none'; }
+
+async function airtableFetch(path, opts={}) {
+  const url = 'https://api.airtable.com/v0/' + BASE_ID + '/' + encodeURIComponent(TABLE) + path;
+  const res = await fetch(url, {
+    headers: {'Authorization':'Bearer ' + AT_TOKEN,'Content-Type':'application/json'},
+    ...opts
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(()=>({}));
+    throw new Error((err.error && err.error.message) || 'Airtable error ' + res.status);
+  }
+  return res.json();
+}
+
+async function connectWithToken() {
+  const input = document.getElementById('token-input').value.trim();
+  if (!input) { alert('Please paste your token first.'); return; }
+  AT_TOKEN = input;
+  setStatus('Testing connection...','loading');
+  try {
+    await loadInventory();
+    await checkFields();
+    localStorage.setItem(TOKEN_KEY, AT_TOKEN);
+    showConnected();
+    setStatus('Connected — ' + existingEBNumbers.size + ' existing EB numbers loaded.','success');
+    setTimeout(hideStatus, 4000);
+  } catch(e) {
+    AT_TOKEN = '';
+    setStatus('Connection failed: ' + e.message,'error');
+  }
+}
+
+function showConnected() {
+  document.getElementById('token-setup-card').style.display = 'none';
+  document.getElementById('connected-bar').style.display = 'flex';
+  document.getElementById('main-form').style.display = 'block';
+  document.getElementById('inventory-card').style.display = 'block';
+}
+
+function disconnectToken() {
+  localStorage.removeItem(TOKEN_KEY);
+  AT_TOKEN = '';
+  document.getElementById('token-setup-card').style.display = 'block';
+  document.getElementById('connected-bar').style.display = 'none';
+  document.getElementById('main-form').style.display = 'none';
+  document.getElementById('inventory-card').style.display = 'none';
+  document.getElementById('field-check-card').style.display = 'none';
+  document.getElementById('token-input').value = '';
+  hideStatus();
+}
+
+async function loadInventory() {
+  let allRecords = [], offset = null;
+  do {
+    let url = '?pageSize=100&fields[]=EB%20Number&fields[]=Season&fields[]=Type&fields[]=Status&fields[]=Price%20(%24)&fields[]=Margin%20(%24)';
+    if (offset) url += '&offset=' + offset;
+    const data = await airtableFetch(url);
+    allRecords = allRecords.concat(data.records || []);
+    offset = data.offset || null;
+  } while(offset);
+
+  existingEBNumbers = new Set(allRecords.map(r => r.fields['EB Number']).filter(Boolean));
+  document.getElementById('stat-total').textContent = allRecords.length;
+  document.getElementById('stat-stock').textContent = allRecords.filter(r => r.fields['Status'] === 'In stock').length;
+
+  const recent = allRecords.slice(-15).reverse();
+  const wrap = document.getElementById('inv-table-wrap');
+  if (recent.length === 0) {
+    wrap.innerHTML = '<p style="font-size:13px;color:#71787d;padding:10px 0">No records yet — add your first piece above.</p>';
+  } else {
+    wrap.innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>EB number</th><th>Season</th><th>Type</th><th>Status</th><th>Price</th><th>Margin</th></tr></thead><tbody>' +
+      recent.map(r => {
+        const f = r.fields;
+        const s = f['Status'] || '';
+        const cls = s==='In stock'?'pill-instock':s==='Listed'?'pill-listed':s==='Sold'?'pill-sold':s==='Craft fair'?'pill-fair':'pill-other';
+        return '<tr><td class="eb-cell">' + (f['EB Number']||'—') + '</td><td>' + (f['Season']||'—') + '</td><td>' + (f['Type']||'—') + '</td><td><span class="pill ' + cls + '">' + (s||'—') + '</span></td><td>' + (f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—') + '</td><td>' + (f['Margin ($)']!=null?'$'+Number(f['Margin ($)']).toFixed(2):'—') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  updateEBDisplay();
+}
+
+async function checkFields() {
+  try {
+    const res = await fetch('https://api.airtable.com/v0/meta/bases/' + BASE_ID + '/tables', {
+      headers:{'Authorization':'Bearer ' + AT_TOKEN}
+    });
+    if (!res.ok) return;
+    const meta = await res.json();
+    const table = (meta.tables||[]).find(t => t.name === TABLE);
+    if (!table) return;
+    const found = new Set((table.fields||[]).map(f => f.name));
+    document.getElementById('field-check-list').innerHTML = REQUIRED_FIELDS.map(f => {
+      const ok = found.has(f);
+      return '<div class="fc-item ' + (ok?'fc-ok':'fc-miss') + '"><div class="fc-dot"></div>' + f + '</div>';
+    }).join('');
+    document.getElementById('field-check-card').style.display = 'block';
+  } catch(e) {}
+}
+
+function getNextNumber(year, seasonCode, typeCode) {
+  const prefix = 'EB-' + year + seasonCode + '-' + typeCode + '-';
+  let max = 0;
+  existingEBNumbers.forEach(eb => {
+    if (eb && eb.startsWith(prefix)) {
+      const n = parseInt(eb.replace(prefix,''),10);
+      if (!isNaN(n) && n > max) max = n;
+    }
+  });
+  return max + 1;
+}
+
+function updateEBDisplay() {
+  const year = document.getElementById('f-year').value;
+  const season = document.getElementById('f-season').value;
+  const type = document.getElementById('f-type').value;
+  const display = document.getElementById('eb-display');
+  const saveBtn = document.getElementById('save-btn');
+  if (!season || !type) {
+    display.className = 'eb-display';
+    display.innerHTML = '<span class="eb-placeholder">Fill in year, season, and type above</span>';
+    document.getElementById('qr-area').style.display = 'none';
+    saveBtn.disabled = true;
+    document.getElementById('stat-next').textContent = '—';
+    currentEB = '';
+    return;
+  }
+  const nextNum = getNextNumber(year, season, type);
+  const eb = 'EB-' + year + season + '-' + type + '-' + String(nextNum).padStart(3,'0');
+  currentEB = eb;
+  document.getElementById('stat-next').textContent = String(nextNum).padStart(3,'0');
+  const taken = existingEBNumbers.has(eb);
+  display.className = 'eb-display ' + (taken?'taken':'available');
+  display.innerHTML = '<span class="eb-number">' + eb + '</span><span class="badge ' + (taken?'badge-taken':'badge-available') + '">' + (taken?'already used':'available') + '</span>';
+  if (!taken) { generateQR(eb); saveBtn.disabled = false; }
+  else { document.getElementById('qr-area').style.display = 'none'; saveBtn.disabled = true; }
+}
+
+function generateQR(eb) {
+  const url = SHOPIFY_BASE + eb.toLowerCase();
+  document.getElementById('qr-url-display').textContent = url;
+  const box = document.getElementById('qr-box');
+  box.innerHTML = '';
+  new QRCode(box, {text:url,width:120,height:120,colorDark:'#006688',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
+  document.getElementById('qr-area').style.display = 'flex';
+}
+
+function downloadTag() {
+  const qrEl = document.querySelector('#qr-box img') || document.querySelector('#qr-box canvas');
+  if (!qrEl || !currentEB) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = 280; canvas.height = 320;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,280,320);
+  ctx.fillStyle = '#006688'; ctx.fillRect(0,0,280,48);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 14px Mulish,Arial,sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('Eternal Blooms Designs',140,20);
+  ctx.font = '11px Nunito Sans,Arial,sans-serif';
+  ctx.fillText('eternalbloomsdesigns.com',140,36);
+  const draw = (imgEl) => {
+    ctx.drawImage(imgEl,80,58,120,120);
+    ctx.fillStyle = '#006688';
+    ctx.font = 'bold 18px Courier New,monospace'; ctx.textAlign = 'center';
+    ctx.fillText(currentEB,140,210);
+    ctx.fillStyle = '#40484d';
+    ctx.font = '12px Nunito Sans,Arial,sans-serif';
+    ctx.fillText('Scan to view on eternalbloomsdesigns.com',140,232);
+    ctx.strokeStyle = '#c2e8ff'; ctx.lineWidth = 3;
+    ctx.strokeRect(6,6,268,308);
+    const link = document.createElement('a');
+    link.download = currentEB + '-tag.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
+  if (qrEl.tagName === 'CANVAS') { draw(qrEl); }
+  else { const img = new Image(); img.onload = ()=>draw(img); img.src = qrEl.src; }
+}
+
+async function saveToAirtable() {
+  if (!currentEB || existingEBNumbers.has(currentEB)) return;
+  const season = document.getElementById('f-season').value;
+  const type = document.getElementById('f-type').value;
+  const desc = document.getElementById('f-desc').value.trim();
+  const price = document.getElementById('f-price').value;
+  const cost = document.getElementById('f-cost').value;
+  const bin = document.getElementById('f-bin').value.trim();
+  const holiday = document.getElementById('f-holiday').value;
+  const saveBtn = document.getElementById('save-btn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = '... Saving';
+  setStatus('Saving ' + currentEB + ' to Airtable...','loading');
+  const fields = {
+    'EB Number': currentEB,
+    'Season': SEASON_MAP[season]||season,
+    'Type': TYPE_MAP[type]||type,
+    'Status': 'In stock',
+    'Date made': new Date().toISOString().split('T')[0]
+  };
+  if (desc) fields['Description'] = desc;
+  if (price) fields['Price ($)'] = parseFloat(price);
+  if (cost) fields['Cost ($)'] = parseFloat(cost);
+  if (bin) fields['Bin location'] = bin;
+  if (holiday && holiday !== 'None') fields['Holiday'] = holiday;
+  try {
+    await airtableFetch('', {method:'POST', body:JSON.stringify({fields,typecast:true})});
+    existingEBNumbers.add(currentEB);
+    setStatus('Saved! ' + currentEB + ' is now in your Airtable inventory.','success');
+    saveBtn.textContent = '✓ Saved!';
+    await loadInventory();
+    setTimeout(()=>{ resetForm(); setTimeout(hideStatus,2000); }, 2000);
+  } catch(e) {
+    setStatus('Save failed: ' + e.message,'error');
+    saveBtn.disabled = false;
+    saveBtn.textContent = '↑ Save to Airtable';
+  }
+}
+
+function resetForm() {
+  document.getElementById('f-season').value = '';
+  document.getElementById('f-type').value = '';
+  document.getElementById('f-desc').value = '';
+  document.getElementById('f-price').value = '';
+  document.getElementById('f-cost').value = '';
+  document.getElementById('f-bin').value = '';
+  document.getElementById('f-holiday').value = 'None';
+  document.getElementById('save-btn').textContent = '↑ Save to Airtable';
+  updateEBDisplay();
+}
+
+document.getElementById('f-year').addEventListener('change', updateEBDisplay);
+document.getElementById('f-season').addEventListener('change', updateEBDisplay);
+document.getElementById('f-type').addEventListener('change', updateEBDisplay);
+
+// Auto-connect if token saved in this browser
+const saved = localStorage.getItem(TOKEN_KEY);
+if (saved) {
+  AT_TOKEN = saved;
+  document.getElementById('token-input').value = saved;
+  connectWithToken();
+}
+</script>
+</body>
+</html>
