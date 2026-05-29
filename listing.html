@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eternal Blooms — Listing Assistant</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Mulish:wght@300;400;600;700;800&family=Nunito+Sans:wght@400;500;700&display=swap');
+  :root {
+    --teal:#006688;--teal-dark:#004d67;--teal-light:#c2e8ff;--teal-bg:#f0f9ff;
+    --green-bg:#E1F5EE;--green-text:#085041;--red-bg:#FCEBEB;--red-text:#791F1F;
+    --amber-bg:#FAEEDA;--amber-text:#633806;--surface:#f6fafe;--card:#ffffff;
+    --border:rgba(0,0,0,0.1);--text:#171c1f;--text-muted:#40484d;
+    --font-head:'Mulish',Arial,sans-serif;--font-body:'Nunito Sans',Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font-body);background:var(--surface);color:var(--text);min-height:100vh;padding:0 0 80px}
+  .top-bar{background:var(--teal);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,102,136,0.15)}
+  .top-bar-left{display:flex;align-items:center;gap:12px}
+  .logo-mark{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-size:18px;font-weight:800}
+  .top-bar-title{font-family:var(--font-head);font-size:18px;font-weight:700}
+  .top-bar-sub{font-size:12px;opacity:.75;margin-top:1px}
+  .connected-pill{background:rgba(255,255,255,0.2);font-size:12px;padding:4px 12px;border-radius:99px;display:flex;align-items:center;gap:6px}
+  .main{max-width:800px;margin:0 auto;padding:24px 16px}
+  .status-bar{border-radius:10px;padding:11px 16px;font-size:13px;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+  .status-bar.loading{background:#f0f4f8;color:var(--text-muted)}
+  .status-bar.success{background:var(--green-bg);color:var(--green-text)}
+  .status-bar.error{background:var(--red-bg);color:var(--red-text)}
+  .status-bar.warn{background:var(--amber-bg);color:var(--amber-text)}
+  .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .loading .status-dot{background:#71787d;animation:pulse 1.2s ease-in-out infinite}
+  .success .status-dot{background:#1D9E75}
+  .error .status-dot{background:#E24B4A}
+  .warn .status-dot{background:#BA7517}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:20px 24px;margin-bottom:16px}
+  .card-title{font-family:var(--font-head);font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--text-muted);text-transform:uppercase;margin-bottom:16px}
+  .token-setup{background:var(--card);border:2px solid var(--teal-light);border-radius:20px;padding:28px;margin-bottom:16px}
+  .token-setup h2{font-family:var(--font-head);font-size:20px;font-weight:700;color:var(--teal);margin-bottom:8px}
+  .token-setup p{font-size:14px;color:var(--text-muted);line-height:1.6;margin-bottom:16px}
+  .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+  .field label{font-size:12px;font-weight:700;color:var(--text-muted);letter-spacing:.04em}
+  .field select,.field input[type=text],.field input[type=password],.field textarea{font-family:var(--font-body);font-size:14px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;color:var(--text);outline:none;transition:border-color .15s;width:100%}
+  .field select:focus,.field input:focus,.field textarea:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,102,136,.1)}
+  .field textarea{resize:vertical;min-height:80px;line-height:1.5}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .airtable-record{background:var(--teal-bg);border-radius:14px;padding:16px;margin-bottom:16px}
+  .at-record-title{font-family:var(--font-head);font-size:12px;font-weight:700;color:var(--teal-dark);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px}
+  .at-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .at-field{background:rgba(255,255,255,.7);border-radius:8px;padding:8px 10px}
+  .at-label{font-size:10px;font-weight:700;color:var(--teal-dark);letter-spacing:.05em;text-transform:uppercase;margin-bottom:2px}
+  .at-value{font-size:13px;color:var(--text);font-weight:600}
+  .at-value.empty{color:var(--text-muted);font-weight:400;font-style:italic}
+  .divider{border:none;border-top:1px solid var(--border);margin:16px 0}
+  button{font-family:var(--font-body);font-size:13px;font-weight:700;padding:10px 18px;border-radius:10px;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--text);transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+  button:hover{background:var(--surface);border-color:var(--teal);color:var(--teal)}
+  button:active{transform:scale(.97)}
+  .btn-primary{background:var(--teal);color:#fff;border-color:var(--teal);font-size:14px;padding:11px 22px}
+  .btn-primary:hover{background:var(--teal-dark);border-color:var(--teal-dark);color:#fff}
+  .btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+  .output-block{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.7;color:var(--text);position:relative;min-height:60px}
+  .output-block.generating{opacity:.6;font-style:italic;color:var(--text-muted)}
+  .output-label{font-size:12px;font-weight:700;color:var(--text-muted);letter-spacing:.04em;margin-bottom:6px}
+  .copy-btn{position:absolute;top:10px;right:10px;font-size:11px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text-muted);cursor:pointer}
+  .copy-btn:hover{background:var(--teal-bg);color:var(--teal);border-color:var(--teal)}
+  .copy-btn.copied{background:var(--green-bg);color:var(--green-text);border-color:#1D9E75}
+  .shopify-checklist{margin-top:8px}
+  .cl-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+  .cl-item:last-child{border-bottom:none}
+  .cl-label{font-weight:700;min-width:140px;color:var(--text-muted);font-size:12px;letter-spacing:.03em;flex-shrink:0}
+  .cl-value{color:var(--text);flex:1;font-family:'Courier New',monospace;font-size:12px;background:var(--surface);padding:3px 8px;border-radius:6px;word-break:break-all}
+  .cl-copy{font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--text-muted);cursor:pointer;flex-shrink:0;white-space:nowrap}
+  .cl-copy:hover{background:var(--teal-bg);color:var(--teal);border-color:var(--teal)}
+  .cl-copy.copied{background:var(--green-bg);color:var(--green-text);border-color:#1D9E75}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;margin:2px}
+  .pill-teal{background:var(--teal-light);color:var(--teal-dark)}
+  .steps{counter-reset:step;margin-bottom:0}
+  .step-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+  .step-item:last-child{border-bottom:none}
+  .step-num{width:24px;height:24px;border-radius:50%;background:var(--teal);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+  .step-num.done{background:#1D9E75}
+  .step-content{flex:1;font-size:13px;color:var(--text);line-height:1.5}
+  @media(max-width:600px){.grid-2,.grid-3{grid-template-columns:1fr}.at-fields{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="top-bar-left">
+    <div class="logo-mark">EB</div>
+    <div>
+      <div class="top-bar-title">Eternal Blooms Designs</div>
+      <div class="top-bar-sub">Shopify listing assistant</div>
+    </div>
+  </div>
+  <div id="conn-pill" class="connected-pill" style="display:none">&#10003; Connected to Airtable</div>
+</div>
+
+<div class="main">
+
+  <!-- TOKEN SETUP -->
+  <div id="token-setup-card" class="token-setup">
+    <h2>Connect to Airtable</h2>
+    <p>Paste your Airtable Personal Access Token to load your inventory. Saved in this browser only.</p>
+    <div class="field">
+      <label>Personal access token</label>
+      <input type="password" id="token-input" placeholder="patXXXXXXXXXXXXXX.XXXXXXXX" autocomplete="off">
+    </div>
+    <button class="btn-primary" onclick="connectWithToken()">Connect &rarr;</button>
+  </div>
+
+  <div id="status-bar" class="status-bar loading" style="display:none">
+    <div class="status-dot"></div>
+    <span id="status-msg">Connecting...</span>
+  </div>
+
+  <!-- STEP 1: PICK EB NUMBER -->
+  <div class="card" id="step1-card" style="display:none">
+    <div class="card-title">Step 1 &mdash; Select piece from inventory</div>
+    <div class="field">
+      <label>Choose an EB number (in stock pieces only)</label>
+      <select id="eb-select">
+        <option value="">— loading inventory... —</option>
+      </select>
+    </div>
+    <div id="airtable-preview" style="display:none">
+      <div class="airtable-record">
+        <div class="at-record-title">Pulled from Airtable</div>
+        <div class="at-fields" id="at-fields-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: EXTRA DETAILS FOR AI -->
+  <div class="card" id="step2-card" style="display:none">
+    <div class="card-title">Step 2 &mdash; Add details for the AI description</div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Primary colors</label>
+        <input type="text" id="d-colors" placeholder="e.g. burgundy, cream, deep green">
+      </div>
+      <div class="field">
+        <label>Approximate size</label>
+        <input type="text" id="d-size" placeholder="e.g. 24 inch diameter, 18 inches tall">
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Key materials / flowers</label>
+        <input type="text" id="d-materials" placeholder="e.g. silk peonies, dried eucalyptus, velvet ribbon">
+      </div>
+      <div class="field">
+        <label>Best display location</label>
+        <input type="text" id="d-location" placeholder="e.g. front door, dining table, fireplace mantel">
+      </div>
+    </div>
+    <div class="field">
+      <label>Anything special about this piece? (optional)</label>
+      <textarea id="d-special" placeholder="e.g. extra full, took 3 hours to make, great for gifting, matches farmhouse style..."></textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" id="gen-btn" onclick="generateListing()">&#10024; Generate listing with AI</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: GENERATED LISTING -->
+  <div class="card" id="step3-card" style="display:none">
+    <div class="card-title">Step 3 &mdash; Your Shopify listing</div>
+
+    <div class="shopify-checklist" id="listing-fields"></div>
+
+    <hr class="divider">
+    <div style="margin-bottom:8px">
+      <div class="output-label">Product description</div>
+      <div class="output-block" id="desc-output">
+        <button class="copy-btn" id="desc-copy-btn" onclick="copyField('desc-output','desc-copy-btn')">Copy</button>
+        <span id="desc-text"></span>
+      </div>
+    </div>
+
+    <hr class="divider">
+    <div class="btn-row">
+      <button class="btn-primary" onclick="regenerate()">&#8635; Regenerate description</button>
+      <button onclick="resetAll()">&#8592; Start new listing</button>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin-top:12px;line-height:1.6">
+      &#9432; Copy each field above and paste into the matching Shopify product field. After your listing goes live, come back and paste the Shopify URL into your Airtable record and flip Status to &ldquo;Listed.&rdquo;
+    </p>
+  </div>
+
+</div>
+
+<script>
+const BASE_ID = 'appHw4SEE5RNT8tCV';
+const TABLE_ID = 'tbl29ndzXDXXU8f7x';
+const TOKEN_KEY = 'eb_at_token_listing';
+const SHOPIFY_BASE = 'https://eternalbloomsdesigns.com/products/';
+
+const SEASON_MAP = {Spring:'Spring',Summer:'Summer',Fall:'Fall',Winter:'Winter'};
+const TYPE_LABELS = {Wreath:'Wreath',Tabletop:'Tabletop arrangement',
+  'Outdoor pot':'Outdoor pot arrangement','Centerpiece':'Centerpiece',
+  'Wall piece':'Wall piece',Swag:'Swag',Custom:'Custom arrangement'};
+
+let AT_TOKEN = '';
+let allRecords = [];
+let selectedRecord = null;
+
+function setStatus(msg, type='loading') {
+  const bar = document.getElementById('status-bar');
+  bar.style.display = 'flex';
+  bar.className = 'status-bar ' + type;
+  document.getElementById('status-msg').textContent = msg;
+}
+function hideStatus() { document.getElementById('status-bar').style.display = 'none'; }
+
+async function airtableFetch(path, opts={}) {
+  const url = 'https://api.airtable.com/v0/' + BASE_ID + '/' + TABLE_ID + path;
+  const res = await fetch(url, {
+    headers:{'Authorization':'Bearer '+AT_TOKEN,'Content-Type':'application/json'},
+    ...opts
+  });
+  if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error((e.error&&e.error.message)||'Airtable error '+res.status); }
+  return res.json();
+}
+
+async function connectWithToken() {
+  const input = document.getElementById('token-input').value.trim();
+  if (!input) { alert('Please paste your token first.'); return; }
+  AT_TOKEN = input;
+  setStatus('Connecting...','loading');
+  try {
+    await loadInventory();
+    localStorage.setItem(TOKEN_KEY, AT_TOKEN);
+    document.getElementById('token-setup-card').style.display = 'none';
+    document.getElementById('conn-pill').style.display = 'flex';
+    document.getElementById('step1-card').style.display = 'block';
+    setStatus('Connected — ' + allRecords.length + ' in-stock pieces loaded.','success');
+    setTimeout(hideStatus, 3000);
+  } catch(e) {
+    AT_TOKEN = '';
+    setStatus('Connection failed: ' + e.message,'error');
+  }
+}
+
+async function loadInventory() {
+  let records = [], offset = null;
+  do {
+    let url = '?pageSize=100&filterByFormula={Status}="In stock"&fields[]=EB%20Number&fields[]=Season&fields[]=Type&fields[]=Holiday&fields[]=Description&fields[]=Price%20(%24)&fields[]=Cost%20(%24)&fields[]=Bin%20location&fields[]=Date%20Made';
+    if (offset) url += '&offset=' + offset;
+    const data = await airtableFetch(url);
+    records = records.concat(data.records || []);
+    offset = data.offset || null;
+  } while(offset);
+  allRecords = records;
+  populateSelect();
+}
+
+function populateSelect() {
+  const sel = document.getElementById('eb-select');
+  if (allRecords.length === 0) {
+    sel.innerHTML = '<option value="">— no in-stock pieces found —</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">— pick a piece —</option>' +
+    allRecords.map(r => {
+      const f = r.fields;
+      const eb = f['EB Number'] || r.id;
+      const label = eb + (f['Season'] ? ' · ' + f['Season'] : '') + (f['Type'] ? ' · ' + f['Type'] : '') + (f['Holiday'] && f['Holiday'] !== 'None' ? ' · ' + f['Holiday'] : '');
+      return '<option value="' + r.id + '">' + label + '</option>';
+    }).join('');
+  sel.addEventListener('change', onSelectRecord);
+}
+
+function onSelectRecord() {
+  const sel = document.getElementById('eb-select');
+  const recId = sel.value;
+  if (!recId) {
+    document.getElementById('airtable-preview').style.display = 'none';
+    document.getElementById('step2-card').style.display = 'none';
+    document.getElementById('step3-card').style.display = 'none';
+    return;
+  }
+  selectedRecord = allRecords.find(r => r.id === recId);
+  if (!selectedRecord) return;
+  showAirtablePreview(selectedRecord.fields);
+  document.getElementById('step2-card').style.display = 'block';
+  document.getElementById('step3-card').style.display = 'none';
+  window.scrollTo({top: document.getElementById('step2-card').offsetTop - 20, behavior:'smooth'});
+}
+
+function showAirtablePreview(f) {
+  const fields = [
+    {label:'EB Number', value: f['EB Number']},
+    {label:'Season', value: f['Season']},
+    {label:'Type', value: f['Type']},
+    {label:'Holiday', value: f['Holiday'] && f['Holiday'] !== 'None' ? f['Holiday'] : null},
+    {label:'Price', value: f['Price ($)'] != null ? '$' + Number(f['Price ($)']).toFixed(2) : null},
+    {label:'Cost', value: f['Cost ($)'] != null ? '$' + Number(f['Cost ($)']).toFixed(2) : null},
+    {label:'Bin', value: f['Bin location']},
+    {label:'Notes', value: f['Description']},
+    {label:'Date made', value: f['Date Made']},
+  ];
+  document.getElementById('at-fields-grid').innerHTML = fields.map(fld =>
+    '<div class="at-field"><div class="at-label">' + fld.label + '</div><div class="at-value' + (fld.value ? '' : ' empty') + '">' + (fld.value || 'not set') + '</div></div>'
+  ).join('');
+  document.getElementById('airtable-preview').style.display = 'block';
+}
+
+function buildTitle(f, colors) {
+  const season = f['Season'] || '';
+  const type = TYPE_LABELS[f['Type']] || f['Type'] || 'arrangement';
+  const holiday = f['Holiday'] && f['Holiday'] !== 'None' ? f['Holiday'] + ' ' : '';
+  const colorPart = colors ? colors.split(',')[0].trim() + ' ' : '';
+  return colorPart.charAt(0).toUpperCase() + colorPart.slice(1) + holiday + season + ' ' + type;
+}
+
+function buildTags(f) {
+  const tags = [];
+  if (f['Season']) tags.push('Season_' + f['Season']);
+  if (f['Type']) tags.push('Type_' + f['Type'].replace(/\s/g,'_'));
+  if (f['Holiday'] && f['Holiday'] !== 'None') tags.push('Holiday_' + f['Holiday'].replace(/\s/g,'_'));
+  tags.push('one-of-a-kind','handmade','faux-floral','Omaha');
+  return tags.join(', ');
+}
+
+function buildSKU(f) { return f['EB Number'] || ''; }
+
+function buildShopifyURL(f) {
+  return f['EB Number'] ? SHOPIFY_BASE + f['EB Number'].toLowerCase() : '';
+}
+
+async function generateListing() {
+  if (!selectedRecord) return;
+  const f = selectedRecord.fields;
+  const colors = document.getElementById('d-colors').value.trim();
+  const size = document.getElementById('d-size').value.trim();
+  const materials = document.getElementById('d-materials').value.trim();
+  const location = document.getElementById('d-location').value.trim();
+  const special = document.getElementById('d-special').value.trim();
+
+  const title = buildTitle(f, colors);
+  const tags = buildTags(f);
+  const sku = buildSKU(f);
+
+  document.getElementById('step3-card').style.display = 'block';
+  document.getElementById('desc-text').textContent = 'Writing description...';
+  document.getElementById('desc-output').classList.add('generating');
+
+  renderListingFields(title, tags, sku, f);
+
+  setStatus('Generating AI description...','loading');
+
+  const prompt = `You write product descriptions for Eternal Blooms Designs, a small handmade artificial flower arrangement business in Omaha, Nebraska run by a local maker. The tone is warm, personal, and inviting — like buying from someone who genuinely loves what they make. Each piece is completely one of a kind.
+
+Write a product description for this listing. Keep it to 3-4 punchy sentences. No fluff, no generic filler. Make the reader feel the quality and uniqueness of the piece. End with a subtle one-of-a-kind callout.
+
+Piece details:
+- Type: ${f['Type'] || 'arrangement'}
+- Season: ${f['Season'] || 'all season'}
+- Holiday: ${f['Holiday'] && f['Holiday'] !== 'None' ? f['Holiday'] : 'none'}
+- Colors: ${colors || 'not specified'}
+- Size: ${size || 'not specified'}
+- Key materials/flowers: ${materials || 'not specified'}
+- Best display location: ${location || 'not specified'}
+- Maker notes: ${(f['Description'] || '') + (special ? ' ' + special : '') || 'none'}
+
+Write ONLY the product description. No title, no bullet points, no intro. Just the description paragraph.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        messages:[{role:'user', content: prompt}]
+      })
+    });
+    const data = await response.json();
+    const text = data.content && data.content[0] && data.content[0].text ? data.content[0].text.trim() : 'Could not generate description — please try again.';
+    document.getElementById('desc-text').textContent = text;
+    document.getElementById('desc-output').classList.remove('generating');
+    setStatus('Listing ready — copy each field into Shopify.','success');
+    setTimeout(hideStatus, 4000);
+    window.scrollTo({top: document.getElementById('step3-card').offsetTop - 20, behavior:'smooth'});
+  } catch(e) {
+    document.getElementById('desc-text').textContent = 'Generation failed. Check your connection and try again.';
+    document.getElementById('desc-output').classList.remove('generating');
+    setStatus('AI generation failed: ' + e.message,'error');
+  }
+}
+
+function renderListingFields(title, tags, sku, f) {
+  const price = f['Price ($)'] != null ? '$' + Number(f['Price ($)']).toFixed(2) : '—';
+  const fields = [
+    {label:'Product title', value: title},
+    {label:'SKU', value: sku},
+    {label:'Price', value: price},
+    {label:'Tags', value: tags},
+    {label:'Collection', value: (f['Season']||'') + (f['Holiday'] && f['Holiday'] !== 'None' ? ', ' + f['Holiday'] : '')},
+    {label:'Shopify URL (after live)', value: buildShopifyURL(f)},
+  ];
+  document.getElementById('listing-fields').innerHTML = fields.map((fld,i) =>
+    '<div class="cl-item"><span class="cl-label">' + fld.label + '</span><span class="cl-value" id="clf-'+i+'">' + (fld.value||'—') + '</span><button class="cl-copy" id="clb-'+i+'" onclick="copyField(\'clf-'+i+'\',\'clb-'+i+'\')">Copy</button></div>'
+  ).join('');
+}
+
+function copyField(valueId, btnId) {
+  const val = document.getElementById(valueId).textContent;
+  navigator.clipboard.writeText(val.trim()).then(() => {
+    const btn = document.getElementById(btnId);
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+function regenerate() {
+  document.getElementById('desc-text').textContent = '';
+  generateListing();
+}
+
+function resetAll() {
+  document.getElementById('eb-select').value = '';
+  document.getElementById('airtable-preview').style.display = 'none';
+  document.getElementById('step2-card').style.display = 'none';
+  document.getElementById('step3-card').style.display = 'none';
+  document.getElementById('d-colors').value = '';
+  document.getElementById('d-size').value = '';
+  document.getElementById('d-materials').value = '';
+  document.getElementById('d-location').value = '';
+  document.getElementById('d-special').value = '';
+  selectedRecord = null;
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+const saved = localStorage.getItem(TOKEN_KEY);
+if (saved) {
+  AT_TOKEN = saved;
+  document.getElementById('token-input').value = saved;
+  connectWithToken();
+}
+</script>
+</body>
+</html>
