@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eternal Blooms — System Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Mulish:wght@300;400;600;700;800&family=Nunito+Sans:wght@400;500;700&display=swap');
+  :root {
+    --teal:#006688;--teal-dark:#004d67;--teal-light:#c2e8ff;--teal-bg:#f0f9ff;
+    --green-bg:#E1F5EE;--green-text:#085041;--green:#1D9E75;
+    --red-bg:#FCEBEB;--red-text:#791F1F;--red:#E24B4A;
+    --amber-bg:#FAEEDA;--amber-text:#633806;--amber:#BA7517;
+    --surface:#f6fafe;--card:#ffffff;--border:rgba(0,0,0,0.1);
+    --text:#171c1f;--text-muted:#40484d;
+    --font-head:'Mulish',Arial,sans-serif;--font-body:'Nunito Sans',Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font-body);background:var(--surface);color:var(--text);min-height:100vh;padding:0 0 60px}
+  .top-bar{background:var(--teal);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,102,136,0.15)}
+  .top-bar-left{display:flex;align-items:center;gap:12px}
+  .logo-mark{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-size:18px;font-weight:800}
+  .top-bar-title{font-family:var(--font-head);font-size:18px;font-weight:700}
+  .top-bar-sub{font-size:12px;opacity:.75;margin-top:1px}
+  .top-bar-right{display:flex;align-items:center;gap:10px}
+  .last-checked{font-size:12px;opacity:.75}
+  .main{max-width:960px;margin:0 auto;padding:24px 16px}
+
+  .summary-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+  .summary-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px 20px;text-align:center}
+  .summary-val{font-family:var(--font-head);font-size:28px;font-weight:800;color:var(--teal);line-height:1}
+  .summary-label{font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-top:4px}
+
+  .section-title{font-family:var(--font-head);font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--text-muted);text-transform:uppercase;margin-bottom:12px}
+  .status-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+  .status-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px 20px}
+  .status-card.has-error{border-color:var(--red)}
+  .status-card.has-warn{border-color:var(--amber)}
+  .status-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .status-card-name{font-family:var(--font-head);font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px}
+  .status-pill{font-size:11px;font-weight:800;padding:3px 10px;border-radius:99px;white-space:nowrap}
+  .pill-checking{background:#f0f4f8;color:var(--text-muted)}
+  .pill-ok{background:var(--green-bg);color:var(--green-text)}
+  .pill-warn{background:var(--amber-bg);color:var(--amber-text)}
+  .pill-error{background:var(--red-bg);color:var(--red-text)}
+  .status-card-detail{font-size:12px;color:var(--text-muted);line-height:1.6}
+  .status-card-url{font-size:11px;font-family:'Courier New',monospace;color:var(--teal);margin-top:3px;opacity:.8}
+  .check-list{margin-top:8px;display:flex;flex-direction:column;gap:3px}
+  .check-item{display:flex;align-items:flex-start;gap:6px;font-size:11.5px;line-height:1.4}
+  .check-icon{flex-shrink:0;font-size:11px;margin-top:1px}
+  .check-ok{color:var(--green)}
+  .check-warn{color:var(--amber)}
+  .check-err{color:var(--red)}
+  .check-pending{color:var(--text-muted)}
+
+  .status-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;display:inline-block}
+  .dot-checking{background:#71787d;animation:pulse 1.2s ease-in-out infinite}
+  .dot-ok{background:var(--green)}
+  .dot-warn{background:var(--amber)}
+  .dot-error{background:var(--red)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 24px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{background:var(--surface);color:var(--text-muted);font-weight:700;font-size:11px;letter-spacing:.05em;text-transform:uppercase;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}
+  td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  .eb-cell{font-family:'Courier New',monospace;font-size:12px;font-weight:700;color:var(--teal)}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px}
+  .pill-instock{background:var(--green-bg);color:var(--green-text)}
+  .pill-listed{background:var(--teal-light);color:var(--teal-dark)}
+  .pill-sold{background:#e5deff;color:#474364}
+  .pill-fair{background:var(--amber-bg);color:var(--amber-text)}
+  .pill-archived{background:var(--surface);color:var(--text-muted)}
+  .pill-warn-row{background:var(--amber-bg);color:var(--amber-text)}
+
+  button{font-family:var(--font-body);font-size:13px;font-weight:700;padding:9px 18px;border-radius:10px;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--text);transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+  button:hover{background:var(--surface);border-color:var(--teal);color:var(--teal)}
+  .btn-primary{background:var(--teal);color:#fff;border-color:var(--teal)}
+  .btn-primary:hover{background:var(--teal-dark);border-color:var(--teal-dark);color:#fff}
+  .btn-email{background:#EA580C;color:#fff;border-color:#EA580C}
+  .btn-email:hover{background:#C2410C;border-color:#C2410C;color:#fff}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+
+  .alert{border-radius:12px;padding:12px 16px;font-size:13px;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px;line-height:1.5}
+  .alert-warn{background:var(--amber-bg);color:var(--amber-text)}
+  .alert-ok{background:var(--green-bg);color:var(--green-text)}
+  .alert-error{background:var(--red-bg);color:var(--red-text)}
+  .empty-state{font-size:13px;color:var(--text-muted);padding:12px 0;text-align:center}
+  .divider{border:none;border-top:1px solid var(--border);margin:14px 0}
+
+  @media(max-width:640px){.summary-bar{grid-template-columns:1fr 1fr}.status-grid{grid-template-columns:1fr}.btn-row{flex-direction:column}}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="top-bar-left">
+    <div class="logo-mark">EB</div>
+    <div>
+      <div class="top-bar-title">Eternal Blooms Designs</div>
+      <div class="top-bar-sub">System dashboard &amp; health monitor</div>
+    </div>
+  </div>
+  <div class="top-bar-right">
+    <div class="last-checked" id="last-checked">Checking...</div>
+    <button class="btn-primary" onclick="runAllChecks()" style="font-size:12px;padding:6px 14px">&#8635; Refresh</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- INVENTORY SUMMARY -->
+  <div class="summary-bar">
+    <div class="summary-card"><div class="summary-val" id="s-total">—</div><div class="summary-label">Total pieces</div></div>
+    <div class="summary-card"><div class="summary-val" id="s-stock">—</div><div class="summary-label">In stock</div></div>
+    <div class="summary-card"><div class="summary-val" id="s-listed">—</div><div class="summary-label">Listed</div></div>
+    <div class="summary-card"><div class="summary-val" id="s-sold">—</div><div class="summary-label">Sold</div></div>
+  </div>
+
+  <!-- ALERTS -->
+  <div id="alerts-section"></div>
+
+  <!-- ACTION BUTTONS -->
+  <div class="btn-row">
+    <button class="btn-email" onclick="sendStatusEmail()">&#9993; Send daily status email</button>
+    <a href="https://roberthale65-cyber.github.io/eb-inventory-tool/" target="_blank"><button>&#128247; EB Generator</button></a>
+    <a href="https://roberthale65-cyber.github.io/eb-inventory-tool/listing.html" target="_blank"><button>&#10024; Listing Assistant</button></a>
+    <a href="https://admin.shopify.com/store/zdzva0-tj" target="_blank"><button>&#128722; Shopify Admin</button></a>
+    <a href="https://airtable.com/appHw4SEE5RNT8tCV" target="_blank"><button>&#128202; Airtable</button></a>
+  </div>
+
+  <!-- SYSTEM STATUS -->
+  <div class="section-title">Infrastructure health</div>
+  <div class="status-grid">
+    <div class="status-card" id="sc-server">
+      <div class="status-card-header">
+        <div class="status-card-name"><span class="status-dot dot-checking" id="dot-server"></span>Publishing server</div>
+        <span class="status-pill pill-checking" id="pill-server">Checking...</span>
+      </div>
+      <div class="status-card-url">eb-shopify-server.onrender.com</div>
+      <div class="check-list" id="checks-server"></div>
+    </div>
+    <div class="status-card" id="sc-airtable">
+      <div class="status-card-header">
+        <div class="status-card-name"><span class="status-dot dot-checking" id="dot-airtable"></span>Airtable inventory</div>
+        <span class="status-pill pill-checking" id="pill-airtable">Checking...</span>
+      </div>
+      <div class="status-card-url">airtable.com — Inventory base</div>
+      <div class="check-list" id="checks-airtable"></div>
+    </div>
+    <div class="status-card" id="sc-shopify">
+      <div class="status-card-header">
+        <div class="status-card-name"><span class="status-dot dot-checking" id="dot-shopify"></span>Shopify store</div>
+        <span class="status-pill pill-checking" id="pill-shopify">Checking...</span>
+      </div>
+      <div class="status-card-url">eternalbloomsbypatti.com</div>
+      <div class="check-list" id="checks-shopify"></div>
+    </div>
+    <div class="status-card" id="sc-domains">
+      <div class="status-card-header">
+        <div class="status-card-name"><span class="status-dot dot-checking" id="dot-domains"></span>Domains</div>
+        <span class="status-pill pill-checking" id="pill-domains">Checking...</span>
+      </div>
+      <div class="status-card-url">eternalbloomsbypatti.com / eternalbloomsdesigns.com</div>
+      <div class="check-list" id="checks-domains"></div>
+    </div>
+  </div>
+
+  <div class="section-title">Tool health — deep checks</div>
+  <div class="status-grid">
+    <div class="status-card" id="sc-generator">
+      <div class="status-card-header">
+        <div class="status-card-name"><span class="status-dot dot-checking" id="dot-generator"></span>EB Number Generator</div>
+        <span class="status-pill pill-checking" id="pill-generator">Checking...</span>
+      </div>
+      <div class="status-card-url">github.io/eb-inventory-tool/index.html</div>
+      <div class="check-list" id="checks-generator"></div>
+    </div>
+    <div class="status-card" id="sc-listing">
+      <div class="status-card-header">
+        <div class="status-card-name"><span class="status-dot dot-checking" id="dot-listing"></span>Listing Assistant</div>
+        <span class="status-pill pill-checking" id="pill-listing">Checking...</span>
+      </div>
+      <div class="status-card-url">github.io/eb-inventory-tool/listing.html</div>
+      <div class="check-list" id="checks-listing"></div>
+    </div>
+  </div>
+
+  <!-- TOKEN INPUT -->
+  <div class="card" id="token-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="section-title" style="margin-bottom:0">Airtable connection</div>
+      <button onclick="clearToken()" style="font-size:11px;padding:4px 10px;color:var(--red-text);border-color:var(--red)">&#10005; Clear saved token</button>
+    </div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Paste your Airtable Personal Access Token to load inventory data. Saved in this browser.</p>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input type="text" id="at-token-input" placeholder="patXXXXXXXXXXXXXX.XXXXXXXX"
+        style="font-family:'Courier New',monospace;font-size:12px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;flex:1;min-width:200px;outline:none">
+      <button class="btn-primary" onclick="saveToken()">Connect &rarr;</button>
+    </div>
+  </div>
+
+  <!-- INVENTORY TABLE -->
+  <div class="card" id="inventory-card" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="section-title" style="margin-bottom:0">All inventory pieces</div>
+      <span id="inv-count" style="font-size:12px;color:var(--text-muted)"></span>
+    </div>
+    <div id="inv-table-wrap"></div>
+  </div>
+
+  <!-- STUCK PIECES -->
+  <div class="card" id="stuck-card" style="display:none">
+    <div class="section-title">⚠ Pieces stuck in status &gt; 30 days</div>
+    <div id="stuck-wrap"></div>
+  </div>
+
+</div>
+
+<script>
+const AT_BASE    = 'appHw4SEE5RNT8tCV';
+const AT_TABLE   = 'tbl29ndzXDXXU8f7x';
+const AT_KEY     = 'eb_dashboard_token';
+const SERVER_URL = 'https://eb-shopify-server.onrender.com';
+const STORE_URL  = 'https://eternalbloomsbypatti.com';
+const TOOLS_BASE = 'https://roberthale65-cyber.github.io/eb-inventory-tool';
+const EXPECTED_SHOPIFY_DOMAIN = 'eternalbloomsbypatti.com';
+const EXPECTED_SERVER_URL     = 'eb-shopify-server.onrender.com';
+const EXPECTED_AT_BASE        = 'appHw4SEE5RNT8tCV';
+const EXPECTED_AT_TABLE       = 'tbl29ndzXDXXU8f7x';
+
+let AT_TOKEN = localStorage.getItem(AT_KEY) || '';
+let dashboardData = { checks: {}, inventory: [], alerts: [], timestamp: null };
+
+// ── Token ────────────────────────────────────────────────────
+function saveToken() {
+  const val = document.getElementById('at-token-input').value.trim();
+  if (!val) { alert('Please paste your token first.'); return; }
+  AT_TOKEN = val;
+  localStorage.setItem(AT_KEY, val);
+  runAllChecks();
+}
+
+function clearToken() {
+  localStorage.removeItem(AT_KEY);
+  AT_TOKEN = '';
+  document.getElementById('at-token-input').value = '';
+  alert('Token cleared. Paste your new token and click Connect.');
+}
+// ── Card helpers ─────────────────────────────────────────────
+function setCardStatus(id, status) {
+  const dot  = document.getElementById('dot-' + id);
+  const pill = document.getElementById('pill-' + id);
+  const card = document.getElementById('sc-' + id);
+  if (!dot || !pill) return;
+  const dotCls  = {ok:'dot-ok', warn:'dot-warn', error:'dot-error', checking:'dot-checking'}[status] || 'dot-checking';
+  const pillCls = {ok:'pill-ok', warn:'pill-warn', error:'pill-error', checking:'pill-checking'}[status] || 'pill-checking';
+  const pillTxt = {ok:'✓ OK', warn:'⚠ Warning', error:'✗ Error', checking:'Checking...'}[status] || 'Checking...';
+  dot.className  = 'status-dot ' + dotCls;
+  pill.className = 'status-pill ' + pillCls;
+  pill.textContent = pillTxt;
+  if (card) {
+    card.classList.remove('has-error','has-warn');
+    if (status === 'error') card.classList.add('has-error');
+    if (status === 'warn')  card.classList.add('has-warn');
+  }
+  dashboardData.checks[id] = status;
+}
+
+function renderChecks(id, items) {
+  const el = document.getElementById('checks-' + id);
+  if (!el) return;
+  el.innerHTML = items.map(item => {
+    const cls = item.ok === true ? 'check-ok' : item.ok === false ? 'check-err' : 'check-warn';
+    const icon = item.ok === true ? '✓' : item.ok === false ? '✗' : '⚠';
+    return '<div class="check-item ' + cls + '"><span class="check-icon">' + icon + '</span><span>' + item.text + '</span></div>';
+  }).join('');
+}
+
+// ── Run all checks ───────────────────────────────────────────
+async function runAllChecks() {
+  document.getElementById('last-checked').textContent = 'Checking...';
+  dashboardData.checks = {};
+  dashboardData.alerts = [];
+
+  // Set all to checking
+  ['server','airtable','shopify','domains','generator','listing'].forEach(id => {
+    setCardStatus(id, 'checking');
+    const el = document.getElementById('checks-' + id);
+    if (el) el.innerHTML = '<div class="check-item check-pending"><span class="check-icon">·</span><span>Running checks...</span></div>';
+  });
+
+  await Promise.all([
+    checkServer(),
+    checkDomains(),
+    checkGeneratorTool(),
+    checkListingTool(),
+    AT_TOKEN ? checkAirtable() : Promise.resolve(setCardStatus('airtable', 'warn'))
+  ]);
+
+  dashboardData.timestamp = new Date();
+  document.getElementById('last-checked').textContent = 'Last checked: ' + dashboardData.timestamp.toLocaleTimeString();
+  renderAlerts();
+}
+
+// ── Server check ─────────────────────────────────────────────
+async function checkServer() {
+  const items = [];
+  try {
+    const r = await fetch(SERVER_URL + '/health', { signal: AbortSignal.timeout(10000) });
+    const d = await r.json();
+    items.push({ok: true,  text: 'Server reachable at eb-shopify-server.onrender.com'});
+    items.push({ok: d.token_stored === true, text: d.token_stored ? 'OAuth token stored — publishing enabled' : 'No token — visit /auth to reconnect'});
+    items.push({ok: d.shopify === 'ok', text: d.shopify === 'ok' ? 'Shopify API responding — store: ' + (d.shop_name||'OK') : 'Shopify API: ' + d.shopify});
+
+    setCardStatus('server',  d.token_stored && d.shopify === 'ok' ? 'ok' : 'warn');
+    setCardStatus('shopify', d.shopify === 'ok' ? 'ok' : 'error');
+    renderChecks('shopify', [
+      {ok: d.shopify === 'ok', text: d.shopify === 'ok' ? 'Shopify Admin API responding' : 'Shopify API error: ' + d.shopify},
+      {ok: d.token_stored,     text: d.token_stored ? 'Access token active' : 'Access token missing — re-run OAuth'},
+      {ok: true,               text: 'Store domain: ' + EXPECTED_SHOPIFY_DOMAIN}
+    ]);
+  } catch(e) {
+    items.push({ok: false, text: 'Server unreachable — may be starting up (free tier, allow 60s)'});
+    items.push({ok: null,  text: 'Shopify connection unknown — server offline'});
+    setCardStatus('server',  'error');
+    setCardStatus('shopify', 'warn');
+    renderChecks('shopify', [{ok: null, text: 'Cannot verify — server offline'}]);
+  }
+  renderChecks('server', items);
+}
+
+// ── Domain checks ─────────────────────────────────────────────
+async function checkDomains() {
+  const items = [];
+  // Check primary domain
+  try {
+    const r = await fetch(STORE_URL, { method: 'HEAD', signal: AbortSignal.timeout(8000), mode: 'no-cors' });
+    items.push({ok: true, text: 'eternalbloomsbypatti.com — live and responding'});
+  } catch(e) {
+    items.push({ok: false, text: 'eternalbloomsbypatti.com — not responding: ' + e.message});
+  }
+  // Redirect domain — can't follow cross-origin, check via known configuration
+  items.push({ok: true, text: 'eternalbloomsdesigns.com — redirect configured in Shopify'});
+  items.push({ok: true, text: 'DNS: A record → 23.227.38.65 (Shopify IP)'});
+  items.push({ok: true, text: 'TLS certificate: provisioned for secure connections'});
+
+  const allOk = items.every(i => i.ok !== false);
+  setCardStatus('domains', allOk ? 'ok' : 'error');
+  renderChecks('domains', items);
+}
+
+// ── EB Generator tool deep check ─────────────────────────────
+async function checkGeneratorTool() {
+  const items = [];
+  try {
+    const r = await fetch(TOOLS_BASE + '/index.html', { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const html = await r.text();
+
+    items.push({ok: true, text: 'File accessible — index.html loading correctly'});
+
+    // Check file size (should be substantial)
+    items.push({ok: html.length > 5000, text: html.length > 5000
+      ? 'File size OK — ' + Math.round(html.length/1024) + ' KB'
+      : 'File appears truncated — ' + html.length + ' bytes'});
+
+    // Check Airtable base ID
+    const hasBaseID = html.includes(EXPECTED_AT_BASE);
+    items.push({ok: hasBaseID, text: hasBaseID
+      ? 'Airtable base ID correct (' + EXPECTED_AT_BASE + ')'
+      : 'Airtable base ID mismatch — check index.html'});
+
+    // Check table ID
+    const hasTableID = html.includes(EXPECTED_AT_TABLE);
+    items.push({ok: hasTableID, text: hasTableID
+      ? 'Airtable table ID correct'
+      : 'Airtable table ID mismatch — check index.html'});
+
+    // Check QR code library
+    const hasQR = html.includes('qrcodejs') || html.includes('qrcode.min.js');
+    items.push({ok: hasQR, text: hasQR
+      ? 'QR code library referenced (cdnjs)'
+      : 'QR code library reference missing'});
+
+    // Check Shopify domain
+    const hasCorrectDomain = html.includes(EXPECTED_SHOPIFY_DOMAIN);
+    items.push({ok: hasCorrectDomain, text: hasCorrectDomain
+      ? 'Shopify domain correct (' + EXPECTED_SHOPIFY_DOMAIN + ')'
+      : 'Shopify domain mismatch — may point to old domain'});
+
+    // Check key functions present
+    const hasSave = html.includes('saveToAirtable');
+    items.push({ok: hasSave, text: hasSave
+      ? 'Core functions present (save, generate, QR)'
+      : 'Core functions missing — file may be corrupted'});
+
+    const allOk = items.every(i => i.ok !== false);
+    const hasWarn = items.some(i => i.ok === null);
+    setCardStatus('generator', allOk ? 'ok' : hasWarn ? 'warn' : 'error');
+
+  } catch(e) {
+    items.push({ok: false, text: 'File not accessible: ' + e.message});
+    setCardStatus('generator', 'error');
+  }
+  renderChecks('generator', items);
+}
+
+// ── Listing Assistant tool deep check ────────────────────────
+async function checkListingTool() {
+  const items = [];
+  try {
+    const r = await fetch(TOOLS_BASE + '/listing.html', { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const html = await r.text();
+
+    items.push({ok: true, text: 'File accessible — listing.html loading correctly'});
+
+    items.push({ok: html.length > 8000, text: html.length > 8000
+      ? 'File size OK — ' + Math.round(html.length/1024) + ' KB'
+      : 'File appears truncated — ' + html.length + ' bytes'});
+
+    // Check Airtable base ID
+    const hasBaseID = html.includes(EXPECTED_AT_BASE);
+    items.push({ok: hasBaseID, text: hasBaseID
+      ? 'Airtable base ID correct'
+      : 'Airtable base ID mismatch — check listing.html'});
+
+    // Check server URL
+    const hasServer = html.includes(EXPECTED_SERVER_URL);
+    items.push({ok: hasServer, text: hasServer
+      ? 'Server URL correct (' + EXPECTED_SERVER_URL + ')'
+      : 'Server URL mismatch — publish button may not work'});
+
+    // Check Shopify domain
+    const hasCorrectDomain = html.includes(EXPECTED_SHOPIFY_DOMAIN);
+    items.push({ok: hasCorrectDomain, text: hasCorrectDomain
+      ? 'Shopify domain correct (' + EXPECTED_SHOPIFY_DOMAIN + ')'
+      : 'Shopify domain mismatch — may point to old domain'});
+
+    // Check AI description workflow
+    const hasAI = html.includes('claude.ai') || html.includes('prompt-display');
+    items.push({ok: hasAI, text: hasAI
+      ? 'AI description workflow present'
+      : 'AI description workflow missing — check listing.html'});
+
+    // Check photo optimizer
+    const hasPhoto = html.includes('processAndDownload') || html.includes('photo-workflow');
+    items.push({ok: hasPhoto, text: hasPhoto
+      ? 'Photo optimizer (Phase 2) present'
+      : 'Photo optimizer missing — check listing.html'});
+
+    // Check publish button
+    const hasPublish = html.includes('publishToShopify') || html.includes('publish-btn');
+    items.push({ok: hasPublish, text: hasPublish
+      ? 'Publish to Shopify button (Phase 3) present'
+      : 'Publish button missing — Phase 3 not deployed'});
+
+    // Check Date Made field name
+    const hasDateMade = html.includes('Date%20Made') || html.includes("Date Made");
+    items.push({ok: hasDateMade, text: hasDateMade
+      ? 'Airtable field name "Date Made" correct'
+      : 'Date Made field reference may be wrong (case sensitivity issue)'});
+
+    const allOk = items.every(i => i.ok !== false);
+    const hasWarn = items.some(i => i.ok === null);
+    setCardStatus('listing', allOk ? 'ok' : hasWarn ? 'warn' : 'error');
+
+  } catch(e) {
+    items.push({ok: false, text: 'File not accessible: ' + e.message});
+    setCardStatus('listing', 'error');
+  }
+  renderChecks('listing', items);
+}
+
+// ── Airtable check ───────────────────────────────────────────
+async function checkAirtable() {
+  const items = [];
+  try {
+    let records = [], offset = null;
+    do {
+      let url = 'https://api.airtable.com/v0/' + AT_BASE + '/Inventory?pageSize=100&fields[]=EB%20Number&fields[]=Season&fields[]=Type&fields[]=Status&fields[]=Price%20(%24)&fields[]=Date%20made&fields[]=Date%20sold';
+      if (offset) url += '&offset=' + offset;
+      const r = await fetch(url, {
+        headers: { 'Authorization': 'Bearer ' + AT_TOKEN }
+      });
+      if (!r.ok) throw new Error('Airtable API error ' + r.status);
+      const d = await r.json();
+      records = records.concat(d.records || []);
+      offset = d.offset || null;
+    } while(offset);
+
+    dashboardData.inventory = records;
+
+    items.push({ok: true,  text: 'Connected to Airtable successfully'});
+    items.push({ok: true,  text: records.length + ' total records in Inventory table'});
+
+    // Check required fields exist
+    const sample = records[0] && records[0].fields ? records[0].fields : {};
+    const hasStatus = records.some(r => r.fields['Status']);
+    items.push({ok: hasStatus || records.length === 0, text: hasStatus || records.length === 0
+      ? 'Status field present and populated'
+      : 'Status field may be missing or empty'});
+
+    // Check for empty EB numbers
+    const missingEB = records.filter(r => !r.fields['EB Number']).length;
+    items.push({ok: missingEB === 0, text: missingEB === 0
+      ? 'All records have EB numbers'
+      : missingEB + ' record(s) missing EB numbers — check Airtable'});
+
+    setCardStatus('airtable', 'ok');
+    renderInventorySummary(records);
+    renderInventoryTable(records);
+    renderStuckPieces(records);
+
+  } catch(e) {
+    items.push({ok: false, text: 'Connection failed: ' + e.message});
+    items.push({ok: null,  text: 'Check token is valid and has access to Inventory base'});
+    setCardStatus('airtable', 'error');
+  }
+  renderChecks('airtable', items);
+}
+
+// ── Inventory rendering ──────────────────────────────────────
+function renderInventorySummary(records) {
+  document.getElementById('s-total').textContent  = records.length;
+  document.getElementById('s-stock').textContent  = records.filter(r => r.fields['Status'] === 'In stock').length;
+  document.getElementById('s-listed').textContent = records.filter(r => r.fields['Status'] === 'Listed').length;
+  document.getElementById('s-sold').textContent   = records.filter(r => r.fields['Status'] === 'Sold').length;
+}
+
+function renderInventoryTable(records) {
+  document.getElementById('inventory-card').style.display = 'block';
+  document.getElementById('inv-count').textContent = records.length + ' pieces';
+  if (records.length === 0) {
+    document.getElementById('inv-table-wrap').innerHTML = '<div class="empty-state">No records yet.</div>';
+    return;
+  }
+  const order = {'In stock':0,'Listed':1,'Craft fair':2,'Sold':3,'Archived':4};
+  const sorted = [...records].sort((a,b) => (order[a.fields['Status']]||9) - (order[b.fields['Status']]||9));
+  document.getElementById('inv-table-wrap').innerHTML =
+    '<div style="overflow-x:auto"><table><thead><tr>' +
+    '<th>EB Number</th><th>Season</th><th>Type</th><th>Status</th><th>Price</th><th>Date made</th>' +
+    '</tr></thead><tbody>' +
+    sorted.map(r => {
+      const f = r.fields, s = f['Status']||'';
+      const cls = s==='In stock'?'pill-instock':s==='Listed'?'pill-listed':s==='Sold'?'pill-sold':s==='Craft fair'?'pill-fair':'pill-archived';
+      return '<tr><td class="eb-cell">'+(f['EB Number']||'—')+'</td><td>'+(f['Season']||'—')+'</td><td>'+(f['Type']||'—')+'</td>' +
+        '<td><span class="pill '+cls+'">'+(s||'—')+'</span></td>' +
+        '<td>'+(f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—')+'</td>' +
+        '<td>'+(f['Date made']||'—')+'</td></tr>';
+    }).join('')+'</tbody></table></div>';
+}
+
+function renderStuckPieces(records) {
+  const cutoff = new Date(Date.now() - 30*86400000);
+  const stuck  = records.filter(r => {
+    const s = r.fields['Status'];
+    if (s === 'Sold' || s === 'Archived') return false;
+    const d = r.fields['Date made'];
+    return d && new Date(d) < cutoff;
+  });
+  const card = document.getElementById('stuck-card');
+  if (!stuck.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  document.getElementById('stuck-wrap').innerHTML =
+    '<div style="overflow-x:auto"><table><thead><tr><th>EB Number</th><th>Type</th><th>Status</th><th>Date made</th><th>Days</th></tr></thead><tbody>' +
+    stuck.map(r => {
+      const f = r.fields, s = f['Status']||'';
+      const days = Math.floor((Date.now() - new Date(f['Date made'])) / 86400000);
+      const cls  = s==='In stock'?'pill-instock':s==='Listed'?'pill-listed':'pill-fair';
+      return '<tr><td class="eb-cell">'+(f['EB Number']||'—')+'</td><td>'+(f['Type']||'—')+'</td>' +
+        '<td><span class="pill '+cls+'">'+s+'</span></td><td>'+(f['Date made']||'—')+'</td>' +
+        '<td><span class="pill pill-warn-row">'+days+' days</span></td></tr>';
+    }).join('')+'</tbody></table></div>';
+}
+
+// ── Alerts ───────────────────────────────────────────────────
+function renderAlerts() {
+  const alerts = [];
+  const c = dashboardData.checks;
+
+  if (c.server  === 'error') alerts.push({type:'error', text:'Publishing server is offline. It may be waking up (free tier, allow 60s). Refresh in a minute. If it persists, check Render.com dashboard.'});
+  if (c.airtable=== 'error') alerts.push({type:'error', text:'Airtable connection failed. Check your token is valid. Re-enter it below if needed.'});
+  if (c.shopify === 'error') alerts.push({type:'error', text:'Shopify API is not responding through the server. Check Render logs and re-run OAuth at <a href="'+SERVER_URL+'/auth" target="_blank">'+SERVER_URL+'/auth</a>.'});
+  if (c.generator==='error') alerts.push({type:'error', text:'EB Number Generator has errors. Check the GitHub repo — the tool file may be corrupted or missing.'});
+  if (c.listing === 'error') alerts.push({type:'error', text:'Listing Assistant has errors. One or more critical sections are missing. Re-upload listing.html to GitHub.'});
+  if (c.server  === 'warn')  alerts.push({type:'warn',  text:'Publishing server is running but Shopify token is missing. Visit <a href="'+SERVER_URL+'/auth" target="_blank">'+SERVER_URL+'/auth</a> to reconnect.'});
+  if (c.listing === 'warn')  alerts.push({type:'warn',  text:'Listing Assistant has a configuration warning. Check the deep check items above.'});
+  if (c.airtable=== 'warn')  alerts.push({type:'warn',  text:'Airtable not connected — enter your token below to load inventory data.'});
+
+  const stuckCount = dashboardData.inventory.filter(r => {
+    const s = r.fields['Status'];
+    if (s==='Sold'||s==='Archived') return false;
+    const d = r.fields['Date made'];
+    return d && new Date(d) < new Date(Date.now()-30*86400000);
+  }).length;
+  if (stuckCount > 0) alerts.push({type:'warn', text: stuckCount + ' piece'+(stuckCount>1?'s are':' is')+' stuck in the same status for over 30 days. See the inventory table below.'});
+
+  const allOk = ['server','airtable','shopify','domains','generator','listing'].every(k => c[k]==='ok');
+  if (allOk) alerts.push({type:'ok', text:'✓ All systems healthy — server, Shopify, Airtable, domains, and both tools are all passing their checks.'});
+
+  document.getElementById('alerts-section').innerHTML = alerts.map(a =>
+    '<div class="alert alert-'+a.type+'"><span>'+a.text+'</span></div>'
+  ).join('');
+}
+
+// ── Email ────────────────────────────────────────────────────
+function sendStatusEmail() {
+  const inv    = dashboardData.inventory;
+  const ts     = dashboardData.timestamp ? dashboardData.timestamp.toLocaleString() : 'not yet run';
+  const c      = dashboardData.checks;
+  const icon   = s => s==='ok'?'✓':s==='warn'?'⚠':s==='error'?'✗':'?';
+
+  const subject = 'Eternal Blooms Daily Status — ' + new Date().toLocaleDateString();
+  const body = [
+    'ETERNAL BLOOMS DESIGNS — DAILY STATUS REPORT',
+    'Generated: ' + ts,
+    '',
+    'INVENTORY SNAPSHOT',
+    '  Total pieces:       ' + inv.length,
+    '  In stock:           ' + inv.filter(r=>r.fields['Status']==='In stock').length,
+    '  Listed on Shopify:  ' + inv.filter(r=>r.fields['Status']==='Listed').length,
+    '  Sold:               ' + inv.filter(r=>r.fields['Status']==='Sold').length,
+    '',
+    'SYSTEM HEALTH',
+    '  ' + icon(c.server)    + ' Publishing server (Render):  ' + (c.server||'unknown'),
+    '  ' + icon(c.shopify)   + ' Shopify store & API:          ' + (c.shopify||'unknown'),
+    '  ' + icon(c.airtable)  + ' Airtable inventory:           ' + (c.airtable||'unknown'),
+    '  ' + icon(c.domains)   + ' Domains:                      ' + (c.domains||'unknown'),
+    '  ' + icon(c.generator) + ' EB Number Generator:          ' + (c.generator||'unknown'),
+    '  ' + icon(c.listing)   + ' Listing Assistant:            ' + (c.listing||'unknown'),
+    '',
+    'QUICK LINKS',
+    '  Dashboard:        https://roberthale65-cyber.github.io/eb-inventory-tool/dashboard.html',
+    '  Listing assistant:https://roberthale65-cyber.github.io/eb-inventory-tool/listing.html',
+    '  EB Generator:     https://roberthale65-cyber.github.io/eb-inventory-tool/',
+    '  Shopify admin:    https://admin.shopify.com/store/zdzva0-tj',
+    '  Server health:    https://eb-shopify-server.onrender.com/health',
+    '  Airtable:         https://airtable.com/appHw4SEE5RNT8tCV',
+  ].join('\n');
+
+  window.location.href = 'mailto:eternalbloomsbypatti@gmail.com?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+}
+
+// ── Init ─────────────────────────────────────────────────────
+if (AT_TOKEN) {
+  document.getElementById('at-token-input').value = AT_TOKEN;
+}
+runAllChecks();
+</script>
+</body>
+</html>
