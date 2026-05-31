@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eternal Blooms — Listing Assistant</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Mulish:wght@300;400;600;700;800&family=Nunito+Sans:wght@400;500;700&display=swap');
+  :root {
+    --teal:#006688;--teal-dark:#004d67;--teal-light:#c2e8ff;--teal-bg:#f0f9ff;
+    --green-bg:#E1F5EE;--green-text:#085041;--red-bg:#FCEBEB;--red-text:#791F1F;
+    --amber-bg:#FAEEDA;--amber-text:#633806;--surface:#f6fafe;--card:#ffffff;
+    --border:rgba(0,0,0,0.1);--text:#171c1f;--text-muted:#40484d;
+    --purple-bg:#F3F0FF;--purple-text:#3B1F7A;--purple-border:#C4B5FD;
+    --orange-bg:#FFF4ED;--orange-text:#7C2D12;--orange-border:#FED7AA;
+    --green2-bg:#F0FDF4;--green2-border:#86EFAC;--green2-text:#14532D;
+    --font-head:'Mulish',Arial,sans-serif;--font-body:'Nunito Sans',Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font-body);background:var(--surface);color:var(--text);min-height:100vh;padding:0 0 80px}
+  .top-bar{background:var(--teal);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,102,136,0.15)}
+  .top-bar-left{display:flex;align-items:center;gap:12px}
+  .logo-mark{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-size:18px;font-weight:800}
+  .top-bar-title{font-family:var(--font-head);font-size:18px;font-weight:700}
+  .top-bar-sub{font-size:12px;opacity:.75;margin-top:1px}
+  .connected-pill{background:rgba(255,255,255,0.2);font-size:12px;padding:4px 12px;border-radius:99px;display:flex;align-items:center;gap:6px}
+  .main{max-width:800px;margin:0 auto;padding:24px 16px}
+  .status-bar{border-radius:10px;padding:11px 16px;font-size:13px;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+  .status-bar.loading{background:#f0f4f8;color:var(--text-muted)}
+  .status-bar.success{background:var(--green-bg);color:var(--green-text)}
+  .status-bar.error{background:var(--red-bg);color:var(--red-text)}
+  .status-bar.warn{background:var(--amber-bg);color:var(--amber-text)}
+  .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .loading .status-dot{background:#71787d;animation:pulse 1.2s ease-in-out infinite}
+  .success .status-dot{background:#1D9E75}
+  .error .status-dot{background:#E24B4A}
+  .warn .status-dot{background:#BA7517}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:20px 24px;margin-bottom:16px}
+  .card-title{font-family:var(--font-head);font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--text-muted);text-transform:uppercase;margin-bottom:16px}
+  .token-setup{background:var(--card);border:2px solid var(--teal-light);border-radius:20px;padding:28px;margin-bottom:16px}
+  .token-setup h2{font-family:var(--font-head);font-size:20px;font-weight:700;color:var(--teal);margin-bottom:8px}
+  .token-setup p{font-size:14px;color:var(--text-muted);line-height:1.6;margin-bottom:16px}
+  .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+  .field label{font-size:12px;font-weight:700;color:var(--text-muted);letter-spacing:.04em}
+  .field select,.field input[type=text],.field input[type=password],.field textarea{font-family:var(--font-body);font-size:14px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;color:var(--text);outline:none;transition:border-color .15s;width:100%}
+  .field select:focus,.field input:focus,.field textarea:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,102,136,.1)}
+  .field textarea{resize:vertical;min-height:80px;line-height:1.5}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .airtable-record{background:var(--teal-bg);border-radius:14px;padding:16px;margin-bottom:16px}
+  .at-record-title{font-family:var(--font-head);font-size:12px;font-weight:700;color:var(--teal-dark);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px}
+  .at-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .at-field{background:rgba(255,255,255,.7);border-radius:8px;padding:8px 10px}
+  .at-label{font-size:10px;font-weight:700;color:var(--teal-dark);letter-spacing:.05em;text-transform:uppercase;margin-bottom:2px}
+  .at-value{font-size:13px;color:var(--text);font-weight:600}
+  .at-value.empty{color:var(--text-muted);font-weight:400;font-style:italic}
+  .divider{border:none;border-top:1px solid var(--border);margin:16px 0}
+  button{font-family:var(--font-body);font-size:13px;font-weight:700;padding:10px 18px;border-radius:10px;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--text);transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+  button:hover{background:var(--surface);border-color:var(--teal);color:var(--teal)}
+  button:active{transform:scale(.97)}
+  .btn-primary{background:var(--teal);color:#fff;border-color:var(--teal);font-size:14px;padding:11px 22px}
+  .btn-primary:hover{background:var(--teal-dark);border-color:var(--teal-dark);color:#fff}
+  .btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .btn-purple{background:#6D28D9;color:#fff;border-color:#6D28D9;font-size:14px;padding:11px 22px}
+  .btn-purple:hover{background:#5B21B6;border-color:#5B21B6;color:#fff}
+  .btn-orange{background:#EA580C;color:#fff;border-color:#EA580C;font-size:14px;padding:11px 22px}
+  .btn-orange:hover{background:#C2410C;border-color:#C2410C;color:#fff}
+  .btn-orange:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+  .output-block{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.7;color:var(--text);position:relative;min-height:60px}
+  .output-label{font-size:12px;font-weight:700;color:var(--text-muted);letter-spacing:.04em;margin-bottom:6px}
+  .copy-btn{position:absolute;top:10px;right:10px;font-size:11px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text-muted);cursor:pointer}
+  .copy-btn:hover{background:var(--teal-bg);color:var(--teal);border-color:var(--teal)}
+  .copy-btn.copied{background:var(--green-bg);color:var(--green-text);border-color:#1D9E75}
+  .shopify-checklist{margin-top:8px}
+  .cl-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+  .cl-item:last-child{border-bottom:none}
+  .cl-label{font-weight:700;min-width:140px;color:var(--text-muted);font-size:12px;letter-spacing:.03em;flex-shrink:0}
+  .cl-value{color:var(--text);flex:1;font-family:'Courier New',monospace;font-size:12px;background:var(--surface);padding:3px 8px;border-radius:6px;word-break:break-all}
+  .cl-copy{font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--text-muted);cursor:pointer;flex-shrink:0;white-space:nowrap}
+  .cl-copy:hover{background:var(--teal-bg);color:var(--teal);border-color:var(--teal)}
+  .cl-copy.copied{background:var(--green-bg);color:var(--green-text);border-color:#1D9E75}
+
+  /* AI Description workflow */
+  .ai-workflow{background:var(--purple-bg);border:1.5px solid var(--purple-border);border-radius:16px;padding:20px 22px;margin-top:16px}
+  .ai-workflow-title{font-family:var(--font-head);font-size:12px;font-weight:700;letter-spacing:.07em;color:var(--purple-text);text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .ai-steps{display:flex;flex-direction:column;gap:0;margin-bottom:16px}
+  .ai-step{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid rgba(107,70,193,0.12)}
+  .ai-step:last-child{border-bottom:none}
+  .ai-step-num{width:22px;height:22px;border-radius:50%;background:#6D28D9;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+  .ai-step-num.done{background:#1D9E75}
+  .ai-step-text{font-size:13px;color:var(--purple-text);line-height:1.5;flex:1}
+  .ai-step-text strong{color:#3B1F7A}
+  .prompt-box-wrap{position:relative;margin-bottom:14px}
+  .prompt-box{background:#fff;border:1.5px solid var(--purple-border);border-radius:10px;padding:14px 50px 14px 14px;font-size:12.5px;font-family:'Courier New',monospace;line-height:1.6;color:#3B1F7A;max-height:180px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
+  .prompt-copy-btn{position:absolute;top:10px;right:10px;font-size:11px;padding:4px 10px;border-radius:8px;border:1px solid var(--purple-border);background:#fff;color:var(--purple-text);cursor:pointer;font-weight:700}
+  .prompt-copy-btn:hover{background:var(--purple-bg);border-color:#6D28D9}
+  .prompt-copy-btn.copied{background:var(--green-bg);color:var(--green-text);border-color:#1D9E75}
+  .paste-area-label{font-size:12px;font-weight:700;color:var(--purple-text);letter-spacing:.04em;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+  .paste-area{width:100%;font-family:var(--font-body);font-size:13.5px;padding:12px 14px;border:1.5px solid var(--purple-border);border-radius:10px;background:#fff;color:var(--text);outline:none;resize:vertical;min-height:110px;line-height:1.6;transition:border-color .15s}
+  .paste-area:focus{border-color:#6D28D9;box-shadow:0 0 0 3px rgba(109,40,217,0.1)}
+  .paste-area::placeholder{color:#a78bfa;font-style:italic}
+  .paste-area-btns{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap}
+  .btn-confirm-desc{background:#1D9E75;color:#fff;border-color:#1D9E75;font-size:13px;padding:9px 18px}
+  .btn-confirm-desc:hover{background:#168c65;border-color:#168c65;color:#fff}
+  .desc-confirmed{background:var(--green-bg);border:1.5px solid #1D9E75;border-radius:12px;padding:14px 50px 14px 16px;font-size:14px;line-height:1.7;color:var(--text);position:relative;min-height:60px}
+
+  /* Photo optimizer */
+  .photo-workflow{background:var(--orange-bg);border:1.5px solid var(--orange-border);border-radius:16px;padding:20px 22px;margin-top:16px}
+  .photo-workflow-title{font-family:var(--font-head);font-size:12px;font-weight:700;letter-spacing:.07em;color:var(--orange-text);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .photo-workflow-sub{font-size:13px;color:var(--orange-text);opacity:.8;margin-bottom:16px;line-height:1.5}
+  .drop-zone{border:2px dashed var(--orange-border);border-radius:12px;background:#fff;padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px}
+  .drop-zone:hover,.drop-zone.dragover{border-color:#EA580C;background:var(--orange-bg)}
+  .drop-zone-icon{font-size:32px;margin-bottom:8px}
+  .drop-zone-text{font-size:14px;font-weight:700;color:var(--orange-text);margin-bottom:4px}
+  .drop-zone-sub{font-size:12px;color:var(--text-muted)}
+  .drop-zone input[type=file]{display:none}
+  .photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+  .photo-card{background:#fff;border:1.5px solid var(--orange-border);border-radius:10px;overflow:hidden;position:relative;cursor:grab;user-select:none}
+  .photo-card.dragging{opacity:.4;cursor:grabbing}
+  .photo-card.drag-over{border-color:#EA580C;border-style:solid;border-width:2px}
+  .photo-card img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+  .photo-card-footer{padding:5px 7px;background:#fff}
+  .photo-card-name{font-size:10px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'Courier New',monospace}
+  .photo-card-size{font-size:10px;color:var(--text-muted)}
+  .photo-card-badge{position:absolute;top:5px;left:5px;font-size:10px;font-weight:800;padding:2px 7px;border-radius:99px;background:#EA580C;color:#fff}
+  .photo-card-badge.hero{background:#EA580C}
+  .photo-card-remove{position:absolute;top:5px;right:5px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,0.5);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;padding:0;line-height:1}
+  .photo-card-remove:hover{background:rgba(220,38,38,0.9)}
+  .photo-status-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-size:13px;color:var(--orange-text)}
+  .photo-count-pill{background:#EA580C;color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:99px}
+  .photo-count-pill.warn{background:#BA7517}
+  .photo-count-pill.ok{background:#1D9E75}
+  .progress-bar-wrap{background:rgba(234,88,12,0.15);border-radius:99px;height:6px;margin-bottom:14px;overflow:hidden;display:none}
+  .progress-bar{height:100%;background:#EA580C;border-radius:99px;transition:width .3s;width:0%}
+  .video-note{background:#fff;border:1.5px solid var(--orange-border);border-radius:10px;padding:12px 16px;font-size:13px;color:var(--orange-text);line-height:1.6;margin-bottom:14px}
+  .video-note strong{display:block;margin-bottom:4px}
+
+  /* Publish to Shopify */
+  .publish-block{background:var(--green2-bg);border:1.5px solid var(--green2-border);border-radius:16px;padding:20px 22px;margin-top:0}
+  .publish-title{font-family:var(--font-head);font-size:12px;font-weight:700;letter-spacing:.07em;color:var(--green2-text);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .publish-summary{background:#fff;border:1px solid var(--green2-border);border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px;line-height:1.8;color:var(--text)}
+  .publish-summary strong{color:var(--green2-text);font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+  .btn-publish{background:#16A34A;color:#fff;border-color:#16A34A;font-size:15px;padding:13px 28px;font-weight:800}
+  .btn-publish:hover{background:#15803D;border-color:#15803D;color:#fff}
+  .btn-publish:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .publish-result{border-radius:12px;padding:14px 16px;font-size:13px;line-height:1.7;margin-top:12px}
+  .publish-result.success{background:var(--green-bg);color:var(--green-text);border:1.5px solid #1D9E75}
+  .publish-result.error{background:var(--red-bg);color:var(--red-text);border:1.5px solid #E24B4A}
+  .publish-result a{color:inherit;font-weight:700}
+
+  @media(max-width:600px){.grid-2{grid-template-columns:1fr}.at-fields{grid-template-columns:1fr 1fr}.btn-row{flex-direction:column}.paste-area-btns{flex-direction:column}.photo-grid{grid-template-columns:repeat(auto-fill,minmax(90px,1fr))}}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="top-bar-left">
+    <div class="logo-mark">EB</div>
+    <div>
+      <div class="top-bar-title">Eternal Blooms Designs</div>
+      <div class="top-bar-sub">Shopify listing assistant</div>
+    </div>
+  </div>
+  <div id="conn-pill" class="connected-pill" style="display:none">&#10003; Connected to Airtable</div>
+</div>
+
+<div class="main">
+
+  <!-- TOKEN SETUP -->
+  <div id="token-setup-card" class="token-setup">
+    <h2>Connect to Airtable</h2>
+    <p>Paste your Airtable Personal Access Token to load your inventory. Saved in this browser only — you only need to do this once per device.</p>
+    <div class="field">
+      <label>Personal access token</label>
+      <input type="password" id="token-input" placeholder="patXXXXXXXXXXXXXX.XXXXXXXX" autocomplete="off">
+    </div>
+    <button class="btn-primary" onclick="connectWithToken()">Connect &rarr;</button>
+  </div>
+
+  <div id="status-bar" class="status-bar loading" style="display:none">
+    <div class="status-dot"></div>
+    <span id="status-msg">Connecting...</span>
+  </div>
+
+  <!-- STEP 1: PICK EB NUMBER -->
+  <div class="card" id="step1-card" style="display:none">
+    <div class="card-title">Step 1 &mdash; Select piece from inventory</div>
+    <div class="field">
+      <label>Choose an EB number (in stock pieces only)</label>
+      <select id="eb-select">
+        <option value="">— loading inventory... —</option>
+      </select>
+    </div>
+    <div id="airtable-preview" style="display:none">
+      <div class="airtable-record">
+        <div class="at-record-title">Pulled from Airtable</div>
+        <div class="at-fields" id="at-fields-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: EXTRA DETAILS -->
+  <div class="card" id="step2-card" style="display:none">
+    <div class="card-title">Step 2 &mdash; Add details for the description</div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Primary colors</label>
+        <input type="text" id="d-colors" placeholder="e.g. burgundy, cream, deep green">
+      </div>
+      <div class="field">
+        <label>Approximate size</label>
+        <input type="text" id="d-size" placeholder="e.g. 24 inch diameter, 18 inches tall">
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Key materials / flowers</label>
+        <input type="text" id="d-materials" placeholder="e.g. silk peonies, dried eucalyptus, velvet ribbon">
+      </div>
+      <div class="field">
+        <label>Best display location</label>
+        <input type="text" id="d-location" placeholder="e.g. front door, dining table, fireplace mantel">
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Packaged weight (lbs) — for shipping rates</label>
+        <input type="text" id="d-weight" placeholder="e.g. 1.5">
+      </div>
+      <div class="field">
+        <label>Meta description — 1–2 sentences for Google (optional)</label>
+        <input type="text" id="d-meta" placeholder="e.g. Handmade fall wreath with dried botanicals, 24 inch. One of a kind.">
+      </div>
+    </div>
+    <div id="outdoor-pot-warning" style="display:none;background:#FEF3C7;border:1.5px solid #F59E0B;border-radius:10px;padding:12px 16px;font-size:13px;color:#92400E;margin-bottom:12px;line-height:1.6">
+      <strong>⚠ Outdoor pot — local delivery only.</strong> This piece cannot ship via standard carriers. Make sure your listing description includes the local-only note. The shipping profile in Shopify must be set to local delivery only — do not assign a standard shipping rate to this listing.
+    </div>
+    <div class="field">
+      <label>Anything special about this piece? (optional)</label>
+      <textarea id="d-special" placeholder="e.g. extra full, took 3 hours to make, great for gifting, matches farmhouse style..."></textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" id="gen-btn" onclick="generateListing()">&#10024; Build listing</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: GENERATED LISTING -->
+  <div class="card" id="step3-card" style="display:none">
+    <div class="card-title">Step 3 &mdash; Your Shopify listing</div>
+
+    <div class="shopify-checklist" id="listing-fields"></div>
+
+    <hr class="divider">
+
+    <!-- AI DESCRIPTION WORKFLOW -->
+    <div class="output-label">Product description</div>
+    <div class="ai-workflow" id="ai-workflow-block">
+      <div class="ai-workflow-title"><span>&#10024;</span> Write description with Claude AI — 3 quick steps</div>
+      <div class="ai-steps">
+        <div class="ai-step">
+          <div class="ai-step-num" id="snum-1">1</div>
+          <div class="ai-step-text"><strong>Copy the prompt below</strong> — it contains all the details about this piece, pre-written and ready to go.</div>
+        </div>
+        <div class="ai-step">
+          <div class="ai-step-num" id="snum-2">2</div>
+          <div class="ai-step-text"><strong>Open Claude.ai</strong> in a new tab, paste the prompt, and press Enter. Claude writes the description in seconds.</div>
+        </div>
+        <div class="ai-step">
+          <div class="ai-step-num" id="snum-3">3</div>
+          <div class="ai-step-text"><strong>Paste the description back</strong> into the box below and click Confirm — then copy it straight into Shopify.</div>
+        </div>
+      </div>
+      <div class="output-label" style="color:var(--purple-text)">Your pre-filled prompt</div>
+      <div class="prompt-box-wrap">
+        <div class="prompt-box" id="prompt-display"></div>
+        <button class="prompt-copy-btn" id="prompt-copy-btn" onclick="copyPrompt()">Copy prompt</button>
+      </div>
+      <div class="btn-row" style="margin-bottom:16px">
+        <button class="btn-purple" onclick="openClaude()">Open Claude.ai &rarr;</button>
+      </div>
+      <div id="paste-back-section">
+        <div class="paste-area-label"><span>&#8595;</span> Paste Claude&rsquo;s description here</div>
+        <textarea class="paste-area" id="desc-paste" placeholder="Paste the description Claude wrote here, then click Confirm description..."></textarea>
+        <div class="paste-area-btns">
+          <button class="btn-confirm-desc" onclick="confirmDescription()">&#10003; Confirm description</button>
+          <button onclick="regenerate()">&#8635; Regenerate prompt</button>
+        </div>
+      </div>
+      <div id="desc-confirmed-block" style="display:none">
+        <div class="output-label" style="margin-top:4px">Description — ready to copy into Shopify</div>
+        <div class="desc-confirmed" id="desc-confirmed-text">
+          <button class="copy-btn" id="desc-final-copy-btn" onclick="copyConfirmedDesc()">Copy</button>
+        </div>
+        <div class="paste-area-btns" style="margin-top:10px">
+          <button onclick="editDescription()">&#9998; Edit description</button>
+          <button onclick="regenerate()">&#8635; New prompt</button>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- PHOTO OPTIMIZER — PHASE 2 -->
+    <div class="output-label">Photos &amp; video</div>
+    <div class="photo-workflow" id="photo-workflow-block">
+      <div class="photo-workflow-title"><span>&#128247;</span> Photo optimizer — prep &amp; download for Shopify</div>
+      <div class="photo-workflow-sub">Drag in your photos, put the hero shot first, then download a ZIP of optimized &amp; renamed files ready to drag straight into Shopify.</div>
+
+      <div class="video-note">
+        <strong>&#127909; Video reminder</strong>
+        Upload your 15–30 second video directly in Shopify — browsers can't compress video. Keep it under 1 GB (MP4 preferred). Upload it in the Media section of the product listing alongside your photos.
+      </div>
+
+      <!-- DROP ZONE -->
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('photo-file-input').click()" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <input type="file" id="photo-file-input" accept="image/jpeg,image/jpg,image/png,image/webp,image/heic" multiple onchange="onFileSelect(event)">
+        <div class="drop-zone-icon">&#128444;&#65039;</div>
+        <div class="drop-zone-text">Drag photos here or tap to browse</div>
+        <div class="drop-zone-sub">JPG, PNG, WEBP, HEIC &nbsp;&middot;&nbsp; Up to 15 photos &nbsp;&middot;&nbsp; Any size</div>
+      </div>
+
+      <!-- PHOTO COUNT + PROGRESS -->
+      <div class="photo-status-row" id="photo-status-row" style="display:none">
+        <span id="photo-count-label">0 photos added</span>
+        <span class="photo-count-pill" id="photo-count-pill">0 / 15</span>
+      </div>
+      <div class="progress-bar-wrap" id="progress-wrap">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+
+      <!-- PHOTO GRID -->
+      <div class="photo-grid" id="photo-grid"></div>
+
+      <!-- INSTRUCTIONS -->
+      <div id="photo-instructions" style="display:none;font-size:12px;color:var(--orange-text);margin-bottom:12px;line-height:1.7;background:#fff;border-radius:8px;padding:10px 14px;border:1px solid var(--orange-border)">
+        <strong>&#8593; Drag to reorder.</strong> First photo = hero shot (appears in collection grids). Put your best full-piece shot first.<br>
+        Photos will be resized to 2048&times;2048 px, compressed under 300 KB, and renamed using the EB number (e.g. <span style="font-family:monospace">EB-26SP-WR-001-01.jpg</span>).
+      </div>
+
+      <!-- DOWNLOAD BUTTON -->
+      <div class="btn-row" id="photo-btn-row" style="display:none">
+        <button class="btn-orange" id="download-btn" onclick="processAndDownload()">&#8595; Optimize &amp; download ZIP</button>
+        <button onclick="clearPhotos()">&#10005; Clear all photos</button>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- PUBLISH TO SHOPIFY — PHASE 3 -->
+    <div class="publish-block" id="publish-block">
+      <div class="publish-title"><span>🛍️</span> Publish to Shopify — one click</div>
+      <div class="publish-summary" id="publish-summary">Fill in the listing details above to see a summary here before publishing.</div>
+      <div class="btn-row">
+        <button class="btn-publish" id="publish-btn" onclick="publishToShopify()" disabled>&#8679; Publish listing to Shopify</button>
+      </div>
+      <div id="publish-result" style="display:none" class="publish-result"></div>
+    </div>
+
+    <hr class="divider">
+    <div class="btn-row">
+      <button onclick="resetAll()">&#8592; Start new listing</button>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin-top:14px;line-height:1.6">
+      &#9432;&nbsp; Copy each field above into the matching Shopify product field. Upload the optimized photos from the ZIP. After the listing goes live, paste the Shopify URL into your Airtable record and flip Status to &ldquo;Listed.&rdquo;
+    </p>
+  </div>
+
+</div>
+
+<script>
+const BASE_ID = 'appHw4SEE5RNT8tCV';
+const TABLE_ID = 'tbl29ndzXDXXU8f7x';
+const TOKEN_KEY = 'eb_at_token_listing';
+const SHOPIFY_BASE = 'https://eternalbloomsbypatti.com/products/';
+const SERVER_URL = 'https://eb-shopify-server.onrender.com';
+
+const TYPE_LABELS = {
+  Wreath:'Wreath',Tabletop:'Tabletop arrangement',
+  'Outdoor pot':'Outdoor pot arrangement',Centerpiece:'Centerpiece',
+  'Wall piece':'Wall piece',Swag:'Swag',Custom:'Custom arrangement'
+};
+
+// ── COLLECTION MAPPING ────────────────────────────────────────
+// Maps Airtable Type values to Shopify collection handles.
+// Must match exactly the collection handles in your Shopify store.
+const COLLECTION_HANDLE_MAP = {
+  'Wreath':       'door-wreaths',
+  'Outdoor pot':  'outdoor-pot-arrangements',
+  'Tabletop':     'tabletop-and-centerpieces',
+  'Centerpiece':  'tabletop-and-centerpieces',
+  'Wall piece':   'nature-and-everyday',
+  'Swag':         'nature-and-everyday',
+  'Custom':       'nature-and-everyday',
+};
+
+const COLLECTION_LABEL_MAP = {
+  'door-wreaths':              'Door wreaths',
+  'outdoor-pot-arrangements':  'Outdoor pot arrangements',
+  'tabletop-and-centerpieces': 'Tabletop and centerpieces',
+  'nature-and-everyday':       'Nature and everyday',
+  'holiday-and-seasonal':      'Holiday and seasonal',
+};
+
+// Returns array of collection handles for a piece.
+// A piece with a Holiday also gets added to holiday-and-seasonal.
+function buildCollections(f) {
+  const handles = [];
+  const typeHandle = COLLECTION_HANDLE_MAP[f['Type']];
+  if (typeHandle) handles.push(typeHandle);
+  if (f['Holiday'] && f['Holiday'] !== 'None') {
+    handles.push('holiday-and-seasonal');
+  }
+  return handles;
+}
+
+// Human-readable label for the UI display row.
+function buildCollectionLabel(f) {
+  const handles = buildCollections(f);
+  if (handles.length === 0) return '— type not mapped';
+  return handles.map(h => COLLECTION_LABEL_MAP[h] || h).join(' + ');
+}
+// ─────────────────────────────────────────────────────────────
+
+let AT_TOKEN = '';
+let allRecords = [];
+let selectedRecord = null;
+let currentPrompt = '';
+let photoItems = []; // {file, dataUrl, outputName}
+let dragSrcIdx = null;
+
+// ── Status bar ───────────────────────────────────────────────
+function setStatus(msg, type='loading') {
+  const bar = document.getElementById('status-bar');
+  bar.style.display = 'flex';
+  bar.className = 'status-bar ' + type;
+  document.getElementById('status-msg').textContent = msg;
+}
+function hideStatus() { document.getElementById('status-bar').style.display = 'none'; }
+
+// ── Airtable ─────────────────────────────────────────────────
+async function airtableFetch(path, opts={}) {
+  const url = 'https://api.airtable.com/v0/' + BASE_ID + '/' + TABLE_ID + path;
+  const res = await fetch(url, {
+    headers:{'Authorization':'Bearer '+AT_TOKEN,'Content-Type':'application/json'},
+    ...opts
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(()=>({}));
+    throw new Error((e.error && e.error.message) || 'Airtable error ' + res.status);
+  }
+  return res.json();
+}
+
+async function connectWithToken() {
+  const input = document.getElementById('token-input').value.trim();
+  if (!input) { alert('Please paste your token first.'); return; }
+  AT_TOKEN = input;
+  setStatus('Connecting...','loading');
+  try {
+    await loadInventory();
+    localStorage.setItem(TOKEN_KEY, AT_TOKEN);
+    document.getElementById('token-setup-card').style.display = 'none';
+    document.getElementById('conn-pill').style.display = 'flex';
+    document.getElementById('step1-card').style.display = 'block';
+    setStatus('Connected — ' + allRecords.length + ' in-stock pieces loaded.','success');
+    setTimeout(hideStatus, 3000);
+  } catch(e) {
+    AT_TOKEN = '';
+    setStatus('Connection failed: ' + e.message,'error');
+  }
+}
+
+async function loadInventory() {
+  let records = [], offset = null;
+  do {
+    // FIX: field name is "Date made" (lowercase m) — Airtable field names are case-sensitive
+    let url = '?pageSize=100&filterByFormula={Status}="In stock"'
+      + '&fields[]=EB%20Number&fields[]=Season&fields[]=Type&fields[]=Holiday'
+      + '&fields[]=Description&fields[]=Price%20(%24)&fields[]=Cost%20(%24)'
+      + '&fields[]=Bin%20location&fields[]=Date%20made';
+    if (offset) url += '&offset=' + offset;
+    const data = await airtableFetch(url);
+    records = records.concat(data.records || []);
+    offset = data.offset || null;
+  } while(offset);
+  allRecords = records;
+  populateSelect();
+}
+
+function populateSelect() {
+  const sel = document.getElementById('eb-select');
+  if (allRecords.length === 0) {
+    sel.innerHTML = '<option value="">— no in-stock pieces found —</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">— pick a piece —</option>' +
+    allRecords.map(r => {
+      const f = r.fields;
+      const eb = f['EB Number'] || r.id;
+      const label = eb
+        + (f['Season'] ? ' · ' + f['Season'] : '')
+        + (f['Type'] ? ' · ' + f['Type'] : '')
+        + (f['Holiday'] && f['Holiday'] !== 'None' ? ' · ' + f['Holiday'] : '');
+      return '<option value="' + r.id + '">' + label + '</option>';
+    }).join('');
+  sel.addEventListener('change', onSelectRecord);
+}
+
+function onSelectRecord() {
+  const sel = document.getElementById('eb-select');
+  const recId = sel.value;
+  if (!recId) {
+    document.getElementById('airtable-preview').style.display = 'none';
+    document.getElementById('step2-card').style.display = 'none';
+    document.getElementById('step3-card').style.display = 'none';
+    return;
+  }
+  selectedRecord = allRecords.find(r => r.id === recId);
+  if (!selectedRecord) return;
+  showAirtablePreview(selectedRecord.fields);
+  document.getElementById('step2-card').style.display = 'block';
+  document.getElementById('step3-card').style.display = 'none';
+  // Show outdoor pot warning if applicable
+  const isOutdoor = selectedRecord.fields['Type'] === 'Outdoor pot';
+  document.getElementById('outdoor-pot-warning').style.display = isOutdoor ? 'block' : 'none';
+  window.scrollTo({top: document.getElementById('step2-card').offsetTop - 20, behavior:'smooth'});
+}
+
+function showAirtablePreview(f) {
+  const fields = [
+    {label:'EB Number', value: f['EB Number']},
+    {label:'Season',    value: f['Season']},
+    {label:'Type',      value: f['Type']},
+    {label:'Holiday',   value: f['Holiday'] && f['Holiday'] !== 'None' ? f['Holiday'] : null},
+    {label:'Price',     value: f['Price ($)'] != null ? '$' + Number(f['Price ($)']).toFixed(2) : null},
+    {label:'Cost',      value: f['Cost ($)']  != null ? '$' + Number(f['Cost ($)']).toFixed(2) : null},
+    {label:'Bin',       value: f['Bin location']},
+    {label:'Notes',     value: f['Description']},
+    {label:'Date made', value: f['Date made']},
+  ];
+  document.getElementById('at-fields-grid').innerHTML = fields.map(fld =>
+    '<div class="at-field"><div class="at-label">' + fld.label + '</div>'
+    + '<div class="at-value' + (fld.value ? '' : ' empty') + '">' + (fld.value || 'not set') + '</div></div>'
+  ).join('');
+  document.getElementById('airtable-preview').style.display = 'block';
+}
+
+// ── Listing helpers ──────────────────────────────────────────
+function buildTitle(f, colors) {
+  const season   = f['Season'] || '';
+  const type     = TYPE_LABELS[f['Type']] || f['Type'] || 'arrangement';
+  const holiday  = f['Holiday'] && f['Holiday'] !== 'None' ? f['Holiday'] + ' ' : '';
+  const colorPart = colors ? colors.split(',')[0].trim() + ' ' : '';
+  return (colorPart.charAt(0).toUpperCase() + colorPart.slice(1) + holiday + season + ' ' + type).trim();
+}
+function buildTags(f) {
+  const tags = [];
+  if (f['Season']) tags.push('Season_' + f['Season']);
+  if (f['Type'])   tags.push('Type_' + f['Type'].replace(/\s/g,'_'));
+  if (f['Holiday'] && f['Holiday'] !== 'None') tags.push('Holiday_' + f['Holiday'].replace(/\s/g,'_'));
+  tags.push('one-of-a-kind','handmade','faux-floral','Omaha');
+  return tags.join(', ');
+}
+function buildSKU(f)        { return f['EB Number'] || ''; }
+function buildShopifyURL(f) { return f['EB Number'] ? SHOPIFY_BASE + f['EB Number'].toLowerCase() : ''; }
+
+function buildPrompt(f, colors, size, materials, location, special) {
+  return `You write product descriptions for Eternal Blooms Designs, a small handmade artificial flower arrangement business in Omaha, Nebraska run by a local maker named Patti. The tone is warm, personal, and inviting — like buying from someone who genuinely loves what they make. Each piece is completely one of a kind.
+
+Write a product description for this listing. Keep it to 3–4 punchy sentences. No fluff, no generic filler. Make the reader feel the quality and uniqueness of the piece. End with a subtle one-of-a-kind callout.
+
+Piece details:
+- EB number: ${f['EB Number'] || 'not set'}
+- Type: ${f['Type'] || 'arrangement'}
+- Season: ${f['Season'] || 'all season'}
+- Holiday: ${f['Holiday'] && f['Holiday'] !== 'None' ? f['Holiday'] : 'none'}
+- Colors: ${colors || 'not specified'}
+- Size: ${size || 'not specified'}
+- Key materials / flowers: ${materials || 'not specified'}
+- Best display location: ${location || 'not specified'}
+- Maker notes: ${(f['Description'] || '') + (special ? ' ' + special : '') || 'none'}
+
+Write ONLY the product description paragraph. No title, no bullet points, no intro phrase like "Here is..." — just the description.`.trim();
+}
+
+function generateListing() {
+  if (!selectedRecord) return;
+  const f         = selectedRecord.fields;
+  const colors    = document.getElementById('d-colors').value.trim();
+  const size      = document.getElementById('d-size').value.trim();
+  const materials = document.getElementById('d-materials').value.trim();
+  const location  = document.getElementById('d-location').value.trim();
+  const special   = document.getElementById('d-special').value.trim();
+  const weight    = document.getElementById('d-weight').value.trim();
+  const meta      = document.getElementById('d-meta').value.trim();
+  currentPrompt   = buildPrompt(f, colors, size, materials, location, special);
+  document.getElementById('step3-card').style.display = 'block';
+  renderListingFields(buildTitle(f, colors), buildTags(f), buildSKU(f), f, weight, meta);
+  document.getElementById('prompt-display').textContent = currentPrompt;
+  resetDescriptionArea();
+  ['snum-1','snum-2','snum-3'].forEach(id => document.getElementById(id).classList.remove('done'));
+  setStatus('Prompt ready — copy it and paste into Claude.ai to get your description.','success');
+  setTimeout(hideStatus, 5000);
+  updatePublishSummary(buildTitle(f, colors), buildTags(f), buildSKU(f), f);
+  window.scrollTo({top: document.getElementById('step3-card').offsetTop - 20, behavior:'smooth'});
+}
+
+function renderListingFields(title, tags, sku, f, weight, meta) {
+  const price = f['Price ($)'] != null ? '$' + Number(f['Price ($)']).toFixed(2) : '—';
+  const fields = [
+    {label:'Product title',           value: title},
+    {label:'SKU',                     value: sku},
+    {label:'Price',                   value: price},
+    {label:'Tags',                    value: tags},
+    {label:'Collection(s)',           value: buildCollectionLabel(f)},
+    {label:'Quantity',                value: '1'},
+    {label:'Weight (lbs)',            value: weight || '— enter above'},
+    {label:'Meta description',        value: meta || '— enter above'},
+    {label:'Shopify URL (after live)',value: buildShopifyURL(f)},
+  ];
+  document.getElementById('listing-fields').innerHTML = fields.map((fld,i) =>
+    '<div class="cl-item">'
+    + '<span class="cl-label">' + fld.label + '</span>'
+    + '<span class="cl-value" id="clf-'+i+'">' + (fld.value||'—') + '</span>'
+    + '<button class="cl-copy" id="clb-'+i+'" onclick="copyField(\'clf-'+i+'\',\'clb-'+i+'\')">Copy</button>'
+    + '</div>'
+  ).join('');
+}
+
+function copyPrompt() {
+  navigator.clipboard.writeText(currentPrompt).then(() => {
+    const btn = document.getElementById('prompt-copy-btn');
+    btn.textContent = '✓ Copied!';
+    btn.classList.add('copied');
+    document.getElementById('snum-1').classList.add('done');
+    setTimeout(() => { btn.textContent = 'Copy prompt'; btn.classList.remove('copied'); }, 2500);
+  });
+}
+function openClaude() {
+  document.getElementById('snum-2').classList.add('done');
+  window.open('https://claude.ai', '_blank');
+}
+function confirmDescription() {
+  const text = document.getElementById('desc-paste').value.trim();
+  if (!text) { alert('Paste Claude\'s description first, then click Confirm.'); return; }
+  document.getElementById('paste-back-section').style.display = 'none';
+  document.getElementById('desc-confirmed-block').style.display = 'block';
+  document.getElementById('desc-confirmed-text').innerHTML =
+    '<button class="copy-btn" id="desc-final-copy-btn" onclick="copyConfirmedDesc()">Copy</button>' + escapeHtml(text);
+  document.getElementById('snum-3').classList.add('done');
+  setStatus('Description confirmed — copy it into Shopify.','success');
+  setTimeout(hideStatus, 4000);
+}
+function copyConfirmedDesc() {
+  const el  = document.getElementById('desc-confirmed-text');
+  const btn = el.querySelector('.copy-btn');
+  const text = el.textContent.replace(btn.textContent, '').trim();
+  navigator.clipboard.writeText(text).then(() => {
+    const b = document.getElementById('desc-final-copy-btn');
+    b.textContent = '✓ Copied'; b.classList.add('copied');
+    setTimeout(() => { b.textContent = 'Copy'; b.classList.remove('copied'); }, 2500);
+  });
+}
+function editDescription() {
+  const el  = document.getElementById('desc-confirmed-text');
+  const btn = el.querySelector('.copy-btn');
+  document.getElementById('desc-paste').value = el.textContent.replace(btn ? btn.textContent : '', '').trim();
+  document.getElementById('desc-confirmed-block').style.display = 'none';
+  document.getElementById('paste-back-section').style.display = 'block';
+}
+function resetDescriptionArea() {
+  document.getElementById('desc-paste').value = '';
+  document.getElementById('desc-confirmed-block').style.display = 'none';
+  document.getElementById('paste-back-section').style.display = 'block';
+}
+function regenerate() {
+  resetDescriptionArea();
+  if (selectedRecord) {
+    const f = selectedRecord.fields;
+    const weight = document.getElementById('d-weight').value.trim();
+    const meta   = document.getElementById('d-meta').value.trim();
+    currentPrompt = buildPrompt(f,
+      document.getElementById('d-colors').value.trim(),
+      document.getElementById('d-size').value.trim(),
+      document.getElementById('d-materials').value.trim(),
+      document.getElementById('d-location').value.trim(),
+      document.getElementById('d-special').value.trim()
+    );
+    document.getElementById('prompt-display').textContent = currentPrompt;
+    renderListingFields(buildTitle(f, document.getElementById('d-colors').value.trim()), buildTags(f), buildSKU(f), f, weight, meta);
+    ['snum-1','snum-2','snum-3'].forEach(id => document.getElementById(id).classList.remove('done'));
+    setStatus('Prompt refreshed — copy it and paste into Claude.ai.','success');
+    setTimeout(hideStatus, 4000);
+    window.scrollTo({top: document.getElementById('step3-card').offsetTop - 20, behavior:'smooth'});
+  }
+}
+function copyField(valueId, btnId) {
+  navigator.clipboard.writeText(document.getElementById(valueId).textContent.trim()).then(() => {
+    const btn = document.getElementById(btnId);
+    const orig = btn.textContent;
+    btn.textContent = '✓'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+// ── Photo optimizer ──────────────────────────────────────────
+function getEBNumber() {
+  return selectedRecord && selectedRecord.fields['EB Number']
+    ? selectedRecord.fields['EB Number'].toUpperCase()
+    : 'EB-UNKNOWN';
+}
+
+function onDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragover'); }
+function onDragLeave()  { document.getElementById('drop-zone').classList.remove('dragover'); }
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('dragover');
+  const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+  addFiles(files);
+}
+function onFileSelect(e) { addFiles(Array.from(e.target.files)); e.target.value = ''; }
+
+function addFiles(files) {
+  const remaining = 15 - photoItems.length;
+  files.slice(0, remaining).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      photoItems.push({file, dataUrl: ev.target.result, outputName: ''});
+      renderPhotoGrid();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderPhotoGrid() {
+  const grid = document.getElementById('photo-grid');
+  const count = photoItems.length;
+  document.getElementById('photo-status-row').style.display = count > 0 ? 'flex' : 'none';
+  document.getElementById('photo-instructions').style.display = count > 0 ? 'block' : 'none';
+  document.getElementById('photo-btn-row').style.display = count > 0 ? 'flex' : 'none';
+  const pill = document.getElementById('photo-count-pill');
+  pill.textContent = count + ' / 15';
+  pill.className = 'photo-count-pill ' + (count < 8 ? 'warn' : 'ok');
+  document.getElementById('photo-count-label').textContent =
+    count + ' photo' + (count !== 1 ? 's' : '') + ' added' + (count < 8 ? ' — aim for 8 minimum' : ' ✓');
+
+  grid.innerHTML = photoItems.map((item, i) =>
+    '<div class="photo-card" id="pc-'+i+'" draggable="true"'
+    + ' ondragstart="photoDragStart('+i+')" ondragover="photoDragOver(event,'+i+')"'
+    + ' ondragleave="photoDragLeave('+i+')" ondrop="photoDrop(event,'+i+')">'
+    + '<span class="photo-card-badge' + (i===0?' hero':'') + '">' + (i===0?'HERO':i+1) + '</span>'
+    + '<button class="photo-card-remove" onclick="removePhoto('+i+')">&#10005;</button>'
+    + '<img src="' + item.dataUrl + '" alt="photo ' + (i+1) + '">'
+    + '<div class="photo-card-footer">'
+    + '<div class="photo-card-name">' + item.file.name + '</div>'
+    + '<div class="photo-card-size">' + (item.file.size/1024).toFixed(0) + ' KB</div>'
+    + '</div></div>'
+  ).join('');
+}
+
+function removePhoto(i) { photoItems.splice(i, 1); renderPhotoGrid(); }
+function clearPhotos()  { photoItems = []; renderPhotoGrid(); }
+
+// Drag-to-reorder within photo grid
+function photoDragStart(i) { dragSrcIdx = i; document.getElementById('pc-'+i).classList.add('dragging'); }
+function photoDragOver(e, i) { e.preventDefault(); if (i !== dragSrcIdx) document.getElementById('pc-'+i).classList.add('drag-over'); }
+function photoDragLeave(i)  { document.getElementById('pc-'+i).classList.remove('drag-over'); }
+function photoDrop(e, i) {
+  e.preventDefault();
+  document.getElementById('pc-'+i).classList.remove('drag-over');
+  if (dragSrcIdx === null || dragSrcIdx === i) { dragSrcIdx = null; return; }
+  const moved = photoItems.splice(dragSrcIdx, 1)[0];
+  photoItems.splice(i, 0, moved);
+  dragSrcIdx = null;
+  renderPhotoGrid();
+}
+
+async function processAndDownload() {
+  if (photoItems.length === 0) return;
+  const eb = getEBNumber();
+  const btn = document.getElementById('download-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Processing...';
+
+  const progressWrap = document.getElementById('progress-wrap');
+  const progressBar  = document.getElementById('progress-bar');
+  progressWrap.style.display = 'block';
+
+  // Dynamically load JSZip from CDN
+  if (!window.JSZip) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  const zip = new JSZip();
+  const TARGET_SIZE = 2048;
+  const MAX_KB = 300;
+
+  for (let i = 0; i < photoItems.length; i++) {
+    const item = photoItems[i];
+    const num  = String(i + 1).padStart(2, '0');
+    const outputName = eb + '-' + num + '.jpg';
+    photoItems[i].outputName = outputName;
+
+    const blob = await resizeImage(item.dataUrl, TARGET_SIZE, MAX_KB);
+    zip.file(outputName, blob);
+
+    progressBar.style.width = Math.round(((i + 1) / photoItems.length) * 100) + '%';
+  }
+
+  const zipBlob = await zip.generateAsync({type:'blob'});
+  const url = URL.createObjectURL(zipBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = eb + '-photos.zip';
+  a.click();
+  URL.revokeObjectURL(url);
+
+  progressWrap.style.display = 'none';
+  progressBar.style.width = '0%';
+  btn.disabled = false;
+  btn.textContent = '✓ Downloaded — drag ZIP contents into Shopify';
+  btn.style.background = '#1D9E75';
+  btn.style.borderColor = '#1D9E75';
+  setTimeout(() => {
+    btn.textContent = '↓ Optimize & download ZIP';
+    btn.style.background = '';
+    btn.style.borderColor = '';
+  }, 5000);
+
+  setStatus('Photos optimized and downloaded — drag the ZIP contents into Shopify Media.','success');
+  setTimeout(hideStatus, 6000);
+  renderPhotoGrid();
+}
+
+function resizeImage(dataUrl, targetSize, maxKB) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = targetSize;
+      canvas.height = targetSize;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, targetSize, targetSize);
+      const scale = Math.min(targetSize / img.width, targetSize / img.height);
+      const w = img.width  * scale;
+      const h = img.height * scale;
+      const x = (targetSize - w) / 2;
+      const y = (targetSize - h) / 2;
+      ctx.drawImage(img, x, y, w, h);
+      let quality = 0.88;
+      const tryExport = () => {
+        canvas.toBlob(blob => {
+          if (blob.size / 1024 <= maxKB || quality <= 0.5) {
+            resolve(blob);
+          } else {
+            quality -= 0.08;
+            tryExport();
+          }
+        }, 'image/jpeg', quality);
+      };
+      tryExport();
+    };
+    img.src = dataUrl;
+  });
+}
+
+// ── Generic helpers ──────────────────────────────────────────
+function resetAll() {
+  document.getElementById('eb-select').value = '';
+  document.getElementById('airtable-preview').style.display = 'none';
+  document.getElementById('step2-card').style.display = 'none';
+  document.getElementById('step3-card').style.display = 'none';
+  ['d-colors','d-size','d-materials','d-location','d-weight','d-meta'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('d-special').value = '';
+  selectedRecord = null;
+  currentPrompt = '';
+  photoItems = [];
+  renderPhotoGrid();
+  hideStatus();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Publish to Shopify ───────────────────────────────────────
+function updatePublishSummary(title, tags, sku, f) {
+  const price = f['Price ($)'] != null ? '$' + Number(f['Price ($)']).toFixed(2) : 'not set';
+  const desc  = getConfirmedDescription();
+  const photoCount = photoItems.length;
+  const collectionLabel = buildCollectionLabel(f);
+  document.getElementById('publish-summary').innerHTML =
+    '<strong>Title</strong> ' + escapeHtml(title) + '<br>' +
+    '<strong>SKU</strong> ' + escapeHtml(sku) + '<br>' +
+    '<strong>Price</strong> ' + price + '<br>' +
+    '<strong>Tags</strong> ' + escapeHtml(tags) + '<br>' +
+    '<strong>Collection(s)</strong> ' + escapeHtml(collectionLabel) + '<br>' +
+    '<strong>Description</strong> ' + (desc ? '✓ ready' : '⚠ not yet confirmed — complete the AI description step above') + '<br>' +
+    '<strong>Photos</strong> ' + (photoCount > 0 ? photoCount + ' photo' + (photoCount !== 1 ? 's' : '') + ' ready' : '⚠ no photos added yet — add photos above');
+  document.getElementById('publish-btn').disabled = !sku || !title;
+}
+
+function getConfirmedDescription() {
+  const el  = document.getElementById('desc-confirmed-text');
+  if (!el || el.style.display === 'none') return '';
+  const btn = el.querySelector('.copy-btn');
+  return el.textContent.replace(btn ? btn.textContent : '', '').trim();
+}
+
+async function publishToShopify() {
+  if (!selectedRecord) return;
+  const f           = selectedRecord.fields;
+  const colors      = document.getElementById('d-colors').value.trim();
+  const title       = buildTitle(f, colors);
+  const tags        = buildTags(f);
+  const sku         = buildSKU(f);
+  const price       = f['Price ($)'] != null ? Number(f['Price ($)']).toFixed(2) : '0.00';
+  const desc        = getConfirmedDescription();
+  const collections = buildCollections(f);
+  const weight      = parseFloat(document.getElementById('d-weight').value.trim()) || null;
+  const meta        = document.getElementById('d-meta').value.trim();
+  const isOutdoor   = f['Type'] === 'Outdoor pot';
+  const btn         = document.getElementById('publish-btn');
+  const result      = document.getElementById('publish-result');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Publishing...';
+  result.style.display = 'none';
+  setStatus('Publishing to Shopify...', 'loading');
+
+  // Convert photos to base64 for upload
+  const images = photoItems.map((item, i) => ({
+    data: item.dataUrl.split(',')[1],
+    filename: (sku + '-' + String(i+1).padStart(2,'0') + '.jpg')
+  }));
+
+  try {
+    const res = await fetch(SERVER_URL + '/create-product', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        body_html: desc ? '<p>' + desc.replace(/\n/g,'</p><p>') + '</p>' : '',
+        sku,
+        price,
+        tags,
+        product_type: f['Type'] || '',
+        collections,
+        weight_lbs: weight,
+        meta_description: meta || '',
+        requires_shipping: !isOutdoor,
+        images
+      })
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Publish failed');
+    }
+
+    // Write Shopify URL back to Airtable
+    if (selectedRecord) {
+      try {
+        await airtableFetch('/' + selectedRecord.id, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            fields: {
+              'Shopify URL': data.shopify_url,
+              'Listed on Shopify': true,
+              'Status': 'Listed'
+            }
+          })
+        });
+      } catch(e) { console.warn('Airtable writeback failed:', e.message); }
+    }
+
+    result.className = 'publish-result success';
+    result.style.display = 'block';
+    result.innerHTML = '✓ <strong>Published!</strong> Your listing is live on Shopify.<br>' +
+      '🔗 <a href="' + data.shopify_url + '" target="_blank">View listing</a> &nbsp;·&nbsp; ' +
+      '<a href="' + data.admin_url + '" target="_blank">Edit in Shopify admin</a><br>' +
+      '<span style="font-size:12px;opacity:.8">Airtable updated — status set to Listed.</span>' +
+      '<div style="margin-top:10px;padding:10px 12px;background:rgba(255,255,255,0.6);border-radius:8px;font-size:12.5px;line-height:1.6">' +
+      '📹 <strong>Next step — add your video:</strong> Click <a href="' + data.admin_url + '" target="_blank">Edit in Shopify admin</a>, ' +
+      'scroll to the <strong>Media</strong> section, and drag your video file in. Click <strong>Save</strong> when done.' +
+      '</div>';
+
+    btn.textContent = '✓ Published!';
+    btn.style.background = '#1D9E75';
+    btn.style.borderColor = '#1D9E75';
+    setStatus('Listing published to Shopify and Airtable updated.', 'success');
+    setTimeout(hideStatus, 6000);
+
+  } catch(e) {
+    result.className = 'publish-result error';
+    result.style.display = 'block';
+    result.innerHTML = '✗ <strong>Publish failed:</strong> ' + escapeHtml(e.message) +
+      '<br><span style="font-size:12px">Check your server is running: <a href="' + SERVER_URL + '/health" target="_blank">health check</a></span>';
+    btn.disabled = false;
+    btn.textContent = '↑ Publish listing to Shopify';
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    setStatus('Publish failed — see error below.', 'error');
+  }
+}
+
+// ── Server wake-up ping ──────────────────────────────────────
+(async function wakeServer() {
+  try {
+    await fetch(SERVER_URL + '/health', { signal: AbortSignal.timeout(30000) });
+  } catch(e) { /* silent */ }
+})();
+
+// ── Auto-connect ─────────────────────────────────────────────
+const saved = localStorage.getItem(TOKEN_KEY);
+if (saved) {
+  AT_TOKEN = saved;
+  document.getElementById('token-input').value = saved;
+  connectWithToken();
+}
+</script>
+</body>
+</html>
