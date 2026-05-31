@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eternal Blooms — Master Tool Cheat Sheet</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sage:#4A7C59;--sage-light:#EDF3EF;--sage-mid:#C2D9C9;
+    --gold:#B5935A;--gold-light:#FBF5EC;
+    --purple:#6D28D9;--purple-light:#EDE8FF;--purple-mid:#C4B5FD;
+    --dark:#2C2C2C;--gray:#888;--white:#FFFFFF;
+    --amber:#FFF8E7;--amber-border:#D4A853;
+    --step-bg:#F7FAF8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Lato',sans-serif;background:#F4F1EC;color:var(--dark);padding:20px}
+  .page{max-width:960px;margin:0 auto;background:white;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10)}
+
+  /* HEADER */
+  .header{background:var(--sage);padding:22px 32px 20px;display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+  .header-left h1{font-family:'Playfair Display',serif;font-size:24px;color:white;line-height:1.2}
+  .header-left p{font-size:11px;color:rgba(255,255,255,0.75);margin-top:3px;text-transform:uppercase;letter-spacing:.06em}
+  .header-url{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.35);border-radius:5px;padding:8px 14px;text-align:center}
+  .header-url .label{font-size:9px;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}
+  .header-url .url{font-family:monospace;font-size:10px;color:white;font-weight:700}
+
+  /* BODY */
+  .body{padding:20px 28px 24px}
+  .divider{height:1px;background:var(--sage-mid);margin:14px 0}
+
+  /* LIFECYCLE */
+  .lifecycle{display:flex;align-items:center;gap:3px;flex-wrap:nowrap;margin-top:8px}
+  .lc-step{background:var(--step-bg);border:1px solid var(--sage-mid);border-radius:4px;padding:5px 8px;font-size:10px;font-weight:700;color:var(--sage);text-align:center;flex:1}
+  .lc-step span{display:block;font-size:9px;font-weight:400;color:var(--gray);margin-top:1px}
+  .lc-arrow{color:var(--sage-mid);font-size:14px;flex-shrink:0}
+
+  /* SECTION */
+  .section-title{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .section-icon{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;color:white;font-weight:bold}
+  .section-icon.sage{background:var(--sage)}
+  .section-icon.purple{background:var(--purple)}
+  .section-title h2{font-family:'Playfair Display',serif;font-size:14px;color:var(--sage);font-weight:600}
+  .section-title h2.purple{color:var(--purple)}
+
+  /* STEPS */
+  .steps{display:grid;gap:4px}
+  .step{display:flex;align-items:flex-start;gap:8px;background:var(--step-bg);border-radius:4px;padding:6px 10px;border-left:3px solid var(--sage-mid)}
+  .step.purple{border-left-color:var(--purple-mid);background:var(--purple-light)}
+  .step-num{font-family:'Playfair Display',serif;font-size:13px;color:var(--sage);font-weight:600;min-width:14px;line-height:1.4}
+  .step-num.purple{color:var(--purple)}
+  .step-text{font-size:11px;line-height:1.5;color:var(--dark)}
+  .step-text strong{font-weight:700}
+
+  /* LAYOUTS */
+  .two-col{display:flex;gap:16px}
+  .two-col>*{flex:1}
+  .three-col{display:flex;gap:12px}
+  .three-col>*{flex:1}
+  .four-col{display:flex;gap:8px}
+  .four-col>*{flex:1}
+
+  /* TIP */
+  .tip{background:var(--amber);border:1px solid var(--amber-border);border-left:4px solid var(--gold);border-radius:0 4px 4px 0;padding:6px 10px;font-size:10px;color:var(--dark);margin-top:6px;line-height:1.4}
+  .tip strong{color:var(--gold);font-weight:700}
+  .tip.purple{background:var(--purple-light);border-color:var(--purple-mid);border-left-color:var(--purple)}
+  .tip.purple strong{color:var(--purple)}
+
+  /* RULES */
+  .rules-grid{display:flex;gap:8px}
+  .rule-card{flex:1;background:var(--gold-light);border:1px solid #E0C080;border-radius:6px;padding:8px 10px}
+  .rule-icon{font-size:15px;margin-bottom:3px}
+  .rule-title{font-size:10px;font-weight:700;color:var(--dark);margin-bottom:2px}
+  .rule-body{font-size:9px;color:var(--gray);line-height:1.4}
+
+  /* QUICK LINKS */
+  .links-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .link-chip{background:var(--step-bg);border:1px solid var(--sage-mid);border-radius:4px;padding:5px 10px;font-size:10px;font-weight:700;color:var(--sage)}
+  .link-chip.purple{background:var(--purple-light);border-color:var(--purple-mid);color:var(--purple)}
+
+  /* FOOTER */
+  .footer{background:var(--sage-light);border-top:1px solid var(--sage-mid);padding:10px 28px;display:flex;align-items:center;justify-content:space-between}
+  .footer p{font-size:10px;color:var(--gray);font-style:italic}
+  .footer .stamp{font-family:'Playfair Display',serif;font-size:12px;color:var(--sage);font-weight:600}
+
+  @media print{body{background:white;padding:0}.page{box-shadow:none;border-radius:0}}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="header-left">
+      <h1>🌸 Eternal Blooms Designs</h1>
+      <p>Master Tool — Quick Reference &nbsp;·&nbsp; Updated June 2026</p>
+    </div>
+    <div class="header-url">
+      <div class="label">Your one URL — bookmark this</div>
+      <div class="url">roberthale65-cyber.github.io/eb-inventory-tool/master.html</div>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- LIFECYCLE -->
+    <div style="margin-bottom:12px">
+      <div class="section-title">
+        <div class="section-icon sage">→</div>
+        <h2>Every piece moves through these stages</h2>
+      </div>
+      <div class="lifecycle">
+        <div class="lc-step">In Stock<span>just made</span></div>
+        <div class="lc-arrow">›</div>
+        <div class="lc-step">Photographed<span>photos done</span></div>
+        <div class="lc-arrow">›</div>
+        <div class="lc-step">Ready to List<span>details filled</span></div>
+        <div class="lc-arrow">›</div>
+        <div class="lc-step">Listed<span>live on store</span></div>
+        <div class="lc-arrow">›</div>
+        <div class="lc-step">Sold<span>sold!</span></div>
+        <div class="lc-arrow">›</div>
+        <div class="lc-step">Archived<span>portfolio</span></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- NEW PIECE + LIST & PUBLISH -->
+    <div class="two-col" style="margin-bottom:12px">
+      <div>
+        <div class="section-title">
+          <div class="section-icon sage">+</div>
+          <h2>New Piece</h2>
+        </div>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-text">Tap <strong>New Piece</strong> on the home screen</div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-text">Pick <strong>year, season, and type</strong> — EB number assigned automatically</div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-text">Enter <strong>dimensions</strong> (width, height, depth in inches)</div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-text">Print <strong>QR tag</strong> and attach to piece before photographing</div></div>
+          <div class="step"><div class="step-num">5</div><div class="step-text">Tap through the <strong>photo checklist</strong> as you shoot each shot type</div></div>
+          <div class="step"><div class="step-num">6</div><div class="step-text">Tap <strong>Mark as Photographed</strong> when all shots are done — saves progress</div></div>
+        </div>
+        <div class="tip"><strong>Tip:</strong> Take photos on iPhone → iCloud syncs → photos in Camera Roll on iPad when you list.</div>
+      </div>
+      <div>
+        <div class="section-title">
+          <div class="section-icon sage">▶</div>
+          <h2>List &amp; Publish</h2>
+        </div>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-text">Tap <strong>List &amp; Publish</strong> on the home screen</div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-text">Pick the piece — status shown in brackets next to EB number</div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-text">Fill in <strong>colors, materials, location, price, weight</strong> — dimensions already filled</div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-text">Tap <strong>Generate Description</strong> — Claude AI writes it automatically</div></div>
+          <div class="step"><div class="step-num">5</div><div class="step-text"><strong>Upload photos</strong> from Camera Roll — best shot goes first</div></div>
+          <div class="step"><div class="step-num">6</div><div class="step-text">All green → tap <strong>Publish</strong> — listing goes live on Shopify instantly</div></div>
+          <div class="step"><div class="step-num">7</div><div class="step-text">Tap confirmation link → <strong>add video</strong> in Shopify admin (one manual step)</div></div>
+        </div>
+        <div class="tip"><strong>Outdoor pot?</strong> Amber warning appears automatically — local delivery only, shipping handled for you.</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- MARK SOLD + CRAFT FAIR + TROUBLESHOOT -->
+    <div class="three-col" style="margin-bottom:12px">
+      <div>
+        <div class="section-title">
+          <div class="section-icon sage">✓</div>
+          <h2>Mark as Sold</h2>
+        </div>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-text">Tap <strong>Mark as Sold</strong> on home screen</div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-text">Find piece by EB number or scroll</div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-text">Choose <strong>channel:</strong> Shopify · Etsy · Craft Fair · Hair Salon · Direct · Custom</div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-text">Tap <strong>Mark Sold</strong> — store and Airtable update at once</div></div>
+        </div>
+        <div class="tip"><strong>Note:</strong> Sold pieces stay on store in Portfolio with SOLD badge — your history builds automatically.</div>
+      </div>
+      <div>
+        <div class="section-title">
+          <div class="section-icon sage">☆</div>
+          <h2>Craft Fair Mode</h2>
+        </div>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-text"><strong>Before leaving home</strong> — tap Craft Fair Mode to load inventory offline</div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-text">Search by <strong>EB number, type, or season</strong></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-text">Tap a piece card to see full details</div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-text">When it sells → tap card → <strong>Sold at craft fair</strong></div></div>
+          <div class="step"><div class="step-num">5</div><div class="step-text">Syncs to store when back on Wi-Fi</div></div>
+        </div>
+        <div class="tip"><strong>Tip:</strong> Customers scan the QR tag on any piece — opens your store so they can see more.</div>
+      </div>
+      <div>
+        <div class="section-title">
+          <div class="section-icon sage">?</div>
+          <h2>If Something Looks Wrong</h2>
+        </div>
+        <div class="steps">
+          <div class="step"><div class="step-num">•</div><div class="step-text"><strong>Stats show 0?</strong> Tap status pill top-right → paste Airtable token</div></div>
+          <div class="step"><div class="step-num">•</div><div class="step-text"><strong>Publish not working?</strong> Server may be asleep — wait 30 sec, retry</div></div>
+          <div class="step"><div class="step-num">•</div><div class="step-text"><strong>Description not generating?</strong> Same fix — wait 30 sec, retry</div></div>
+          <div class="step"><div class="step-num">•</div><div class="step-text">When in doubt — <strong>close Safari and reopen</strong> the Master Tool URL</div></div>
+        </div>
+        <div class="tip"><strong>Health check:</strong> eb-shopify-server.onrender.com/health — loads = working.</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- LOG A COST — NEW SECTION -->
+    <div style="margin-bottom:12px">
+      <div class="section-title">
+        <div class="section-icon purple">$</div>
+        <h2 class="purple">Log a Cost &nbsp;<span style="font-size:11px;font-weight:400;color:var(--gray);font-family:'Lato',sans-serif">— new</span></h2>
+      </div>
+      <div class="three-col">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">📸 Snap a receipt</div>
+          <div class="steps">
+            <div class="step purple"><div class="step-num purple">1</div><div class="step-text">Tap <strong>Log a cost → Snap or drop a receipt</strong></div></div>
+            <div class="step purple"><div class="step-num purple">2</div><div class="step-text">Tap the upload box → <strong>Camera</strong> to snap, or <strong>Files</strong> for electronic receipts</div></div>
+            <div class="step purple"><div class="step-num purple">3</div><div class="step-text">Tap <strong>Parse with Claude AI</strong> — vendor, amount, date filled in automatically</div></div>
+            <div class="step purple"><div class="step-num purple">4</div><div class="step-text">Review the fields, <strong>pick a category</strong>, tap Save</div></div>
+          </div>
+          <div class="tip purple"><strong>Works with:</strong> JPG · PNG · PDF — printed or electronic receipts</div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">🚗 Log mileage</div>
+          <div class="steps">
+            <div class="step purple"><div class="step-num purple">1</div><div class="step-text">Tap <strong>Log a cost → Log mileage</strong></div></div>
+            <div class="step purple"><div class="step-num purple">2</div><div class="step-text">Type trip details <strong>OR</strong> upload a photo of handwritten mileage notes</div></div>
+            <div class="step purple"><div class="step-num purple">3</div><div class="step-text">Enter miles — <strong>dollar amount calculates automatically</strong> (IRS rate)</div></div>
+            <div class="step purple"><div class="step-num purple">4</div><div class="step-text">Pick purpose and tap <strong>Save mileage</strong></div></div>
+          </div>
+          <div class="tip purple"><strong>IRS rate:</strong> $0.70/mile (2026) — calculated automatically</div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">✏️ Manual entry</div>
+          <div class="steps">
+            <div class="step purple"><div class="step-num purple">1</div><div class="step-text">Tap <strong>Log a cost → Manual entry</strong></div></div>
+            <div class="step purple"><div class="step-num purple">2</div><div class="step-text">Fill in vendor, amount, date, description</div></div>
+            <div class="step purple"><div class="step-num purple">3</div><div class="step-text"><strong>Pick a category</strong> — tap the right tile</div></div>
+            <div class="step purple"><div class="step-num purple">4</div><div class="step-text">Choose payment method → <strong>Save cost</strong></div></div>
+          </div>
+          <div class="tip purple"><strong>Categories:</strong> Materials · Craft Show · Display · Tools · Business · Shipping · Other</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- GOLDEN RULES + QUICK LINKS -->
+    <div class="two-col" style="align-items:flex-start">
+      <div>
+        <div class="section-title">
+          <div class="section-icon sage">★</div>
+          <h2>The Golden Rules</h2>
+        </div>
+        <div class="rules-grid">
+          <div class="rule-card"><div class="rule-icon">🏷</div><div class="rule-title">EB number first</div><div class="rule-body">Always assign before doing anything with a new piece</div></div>
+          <div class="rule-card"><div class="rule-icon">1</div><div class="rule-title">Quantity = 1</div><div class="rule-body">Every piece is one of a kind — tool sets this automatically</div></div>
+          <div class="rule-card"><div class="rule-icon">📸</div><div class="rule-title">Photos before listing</div><div class="rule-body">Always photograph before creating a listing</div></div>
+          <div class="rule-card"><div class="rule-icon">✓</div><div class="rule-title">Mark sold same day</div><div class="rule-body">Keep store accurate — mark sold the same day</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="section-title">
+          <div class="section-icon sage">⬡</div>
+          <h2>Quick links on home screen</h2>
+        </div>
+        <div class="links-row">
+          <div class="link-chip">🛒 Shopify admin</div>
+          <div class="link-chip">📊 Airtable</div>
+          <div class="link-chip">🌐 Live store</div>
+          <div class="link-chip">⚡ Health check</div>
+          <div class="link-chip purple">💰 Cost summary</div>
+        </div>
+        <div class="tip" style="margin-top:8px"><strong>Cost summary</strong> shows your year-to-date total broken down by category, mileage tracked separately, and materials subcategory breakdown. Tap it anytime — no data sits on the home screen.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <p>Safari → Share → Add to Home Screen for one-tap access on iPad and iPhone</p>
+    <span class="stamp">Eternal Blooms Designs · June 2026</span>
+  </div>
+
+</div>
+</body>
+</html>
