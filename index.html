@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eternal Blooms — Inventory Tool</title>
+<style>
+  :root {
+    --green: #2d5a27;
+    --green-light: #4a7c42;
+    --green-pale: #eef4ed;
+    --gold: #b5883a;
+    --gold-light: #f5e9d0;
+    --red: #c0392b;
+    --red-pale: #fdecea;
+    --gray: #6b7280;
+    --gray-light: #f3f4f6;
+    --border: #d1d5db;
+    --text: #1f2937;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f7f8f5; color: var(--text); min-height: 100vh; }
+
+  /* ── Header ── */
+  .header { background: var(--green); color: white; padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
+  .header-logo { width: 36px; height: 36px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--green); font-size: 14px; flex-shrink: 0; }
+  .header-title { font-size: 18px; font-weight: 700; }
+  .header-sub { font-size: 12px; opacity: .75; margin-top: 1px; }
+
+  /* ── Stats bar ── */
+  .stats-bar { background: white; border-bottom: 1px solid var(--border); display: flex; }
+  .stat { flex: 1; text-align: center; padding: 12px 8px; border-right: 1px solid var(--border); }
+  .stat:last-child { border-right: none; }
+  .stat-val { font-size: 22px; font-weight: 700; color: var(--green); }
+  .stat-lbl { font-size: 11px; color: var(--gray); margin-top: 2px; text-transform: uppercase; letter-spacing: .4px; }
+
+  /* ── Container ── */
+  .container { max-width: 560px; margin: 0 auto; padding: 20px 16px 60px; }
+
+  /* ── Cards ── */
+  .card { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+  .card-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--gray); margin-bottom: 14px; }
+
+  /* ── Auth ── */
+  #auth-section { }
+  .auth-note { font-size: 13px; color: var(--gray); line-height: 1.5; margin-bottom: 14px; }
+  .auth-note strong { color: var(--text); }
+  .token-hint { font-size: 12px; color: var(--gray); margin-top: 8px; line-height: 1.5; }
+
+  /* ── Status pill ── */
+  .status-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 20px; }
+  .status-pill.connected { background: #d1fae5; color: #065f46; }
+  .status-pill.connecting { background: var(--gold-light); color: #92400e; }
+  .status-pill.disconnected { background: #fee2e2; color: #991b1b; }
+  .pill-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+  /* ── Form ── */
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .form-group { margin-bottom: 14px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 5px; }
+  input[type=text], input[type=number], select, textarea {
+    width: 100%; border: 1.5px solid var(--border); border-radius: 8px;
+    padding: 9px 12px; font-size: 15px; color: var(--text); background: white;
+    -webkit-appearance: none; appearance: none;
+    transition: border-color .15s;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--green); }
+  textarea { resize: vertical; min-height: 70px; font-size: 14px; }
+
+  /* ── EB number display ── */
+  .eb-display { background: var(--green-pale); border: 2px solid var(--green); border-radius: var(--radius); padding: 16px; text-align: center; margin-bottom: 16px; }
+  .eb-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--green); margin-bottom: 4px; }
+  .eb-number { font-size: 28px; font-weight: 900; color: var(--green); letter-spacing: 1px; font-family: 'Courier New', monospace; }
+  .eb-pending { font-size: 15px; color: var(--gray); font-style: italic; }
+
+  /* ── QR section ── */
+  .qr-section { text-align: center; margin-bottom: 16px; }
+  .qr-section canvas, .qr-section img { display: block; margin: 0 auto 10px; border-radius: 8px; }
+  .qr-label { font-size: 12px; color: var(--gray); margin-bottom: 10px; }
+  #qr-placeholder { width: 180px; height: 180px; background: var(--gray-light); border-radius: 8px; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; color: var(--gray); font-size: 13px; border: 2px dashed var(--border); }
+  #qr-image { display: none; width: 180px; height: 180px; border-radius: 8px; }
+
+  /* ── Buttons ── */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 11px 20px; border-radius: 8px; font-size: 15px; font-weight: 600; border: none; cursor: pointer; transition: opacity .15s, transform .1s; text-decoration: none; }
+  .btn:active { transform: scale(.97); }
+  .btn-primary { background: var(--green); color: white; width: 100%; margin-bottom: 10px; }
+  .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-secondary { background: var(--gray-light); color: var(--text); width: 100%; }
+  .btn-gold { background: var(--gold); color: white; width: 100%; margin-bottom: 10px; }
+  .btn-outline { background: white; color: var(--green); border: 1.5px solid var(--green); width: 100%; }
+  .btn-sm { padding: 7px 14px; font-size: 13px; width: auto; }
+  .btn-danger { background: var(--red); color: white; }
+
+  /* ── Steps ── */
+  .step-indicator { display: flex; align-items: center; margin-bottom: 20px; }
+  .step-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .step-dot.done { background: var(--green); color: white; }
+  .step-dot.active { background: var(--green); color: white; box-shadow: 0 0 0 3px var(--green-pale); }
+  .step-dot.pending { background: var(--gray-light); color: var(--gray); }
+  .step-line { flex: 1; height: 2px; background: var(--border); margin: 0 4px; }
+  .step-line.done { background: var(--green); }
+
+  /* ── Recent table ── */
+  .recent-item { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--gray-light); }
+  .recent-item:last-child { border-bottom: none; }
+  .recent-eb { font-family: 'Courier New', monospace; font-size: 14px; font-weight: 700; color: var(--green); flex: 1; }
+  .recent-meta { font-size: 12px; color: var(--gray); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge-stock { background: #d1fae5; color: #065f46; }
+  .badge-listed { background: #dbeafe; color: #1e40af; }
+  .badge-sold { background: #fee2e2; color: #991b1b; }
+
+  /* ── Alerts ── */
+  .alert { border-radius: 8px; padding: 12px 14px; font-size: 14px; line-height: 1.5; margin-bottom: 14px; }
+  .alert-error { background: var(--red-pale); border: 1px solid #fca5a5; color: #991b1b; }
+  .alert-success { background: #d1fae5; border: 1px solid #6ee7b7; color: #065f46; }
+  .alert-info { background: var(--gold-light); border: 1px solid #fcd34d; color: #92400e; }
+
+  /* ── Hidden ── */
+  .hidden { display: none !important; }
+
+  /* ── Spinner ── */
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.4); border-top-color: white; border-radius: 50%; animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Section heading ── */
+  .section-heading { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .section-sub { font-size: 13px; color: var(--gray); margin-bottom: 18px; }
+
+  /* ── Field check ── */
+  .field-check-item { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--gray-light); font-size: 13px; }
+  .field-check-item:last-child { border-bottom: none; }
+  .check-ok { color: #059669; font-size: 16px; }
+  .check-err { color: var(--red); font-size: 16px; }
+  .check-warn { color: var(--gold); font-size: 16px; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-logo">EB</div>
+  <div>
+    <div class="header-title">Eternal Blooms Designs</div>
+    <div class="header-sub">Inventory &amp; EB number generator</div>
+  </div>
+  <div id="header-status" style="margin-left:auto"></div>
+</div>
+
+<!-- Stats -->
+<div class="stats-bar">
+  <div class="stat"><div class="stat-val" id="stat-total">—</div><div class="stat-lbl">Total pieces</div></div>
+  <div class="stat"><div class="stat-val" id="stat-instock">—</div><div class="stat-lbl">In stock</div></div>
+  <div class="stat"><div class="stat-val" id="stat-next">—</div><div class="stat-lbl">Next number</div></div>
+</div>
+
+<div class="container">
+
+  <!-- ══ AUTH SECTION ══ -->
+  <div id="auth-section" class="card">
+    <div class="card-title">Connect to Airtable</div>
+    <p class="auth-note">Paste your Airtable Personal Access Token below. It will be saved in this browser only — it is never stored in this file or sent anywhere except directly to Airtable.</p>
+    <div class="form-group">
+      <label>Personal access token</label>
+      <input type="text" id="token-input" placeholder="patXXXXXXXX..." autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <button class="btn btn-primary" onclick="connectAirtable()">Connect to Airtable →</button>
+    <p class="token-hint">To create a token: go to <strong>airtable.com/create/tokens</strong> → Create token → add scopes <strong>data.records:read</strong> and <strong>data.records:write</strong> → add your <strong>Inventory</strong> base → create and copy.</p>
+  </div>
+
+  <!-- ══ CONNECTED BAR ══ -->
+  <div id="connected-bar" class="card hidden" style="padding:14px 20px; display:flex; align-items:center; justify-content:space-between;">
+    <span class="status-pill connected"><span class="pill-dot"></span>✓ Connected to Airtable — Inventory</span>
+    <button class="btn btn-sm" onclick="disconnect()" style="color:var(--red);background:none;border:none;font-size:13px;cursor:pointer;">Disconnect</button>
+  </div>
+
+  <!-- Connecting spinner -->
+  <div id="connecting-bar" class="card hidden" style="padding:14px 20px;">
+    <span class="status-pill connecting"><span class="spinner"></span>&nbsp;Connecting...</span>
+  </div>
+
+  <!-- Field check (runs once after connect) -->
+  <div id="field-check-section" class="card hidden">
+    <div class="card-title">Airtable field check</div>
+    <div id="field-check-list"></div>
+  </div>
+
+  <!-- ══ GENERATOR FORM ══ -->
+  <div id="generator-section" class="hidden">
+
+    <div class="card">
+      <div class="section-heading">Generate new EB number</div>
+      <div class="section-sub">Every piece starts here. Fill in the details and the next available EB number is assigned automatically. No duplicates, ever.</div>
+
+      <!-- Step indicator -->
+      <div class="step-indicator" id="step-indicator">
+        <div class="step-dot active" id="sdot-1">1</div>
+        <div class="step-line" id="sline-1"></div>
+        <div class="step-dot pending" id="sdot-2">2</div>
+        <div class="step-line" id="sline-2"></div>
+        <div class="step-dot pending" id="sdot-3">3</div>
+        <div class="step-line" id="sline-3"></div>
+        <div class="step-dot pending" id="sdot-4">4</div>
+      </div>
+
+      <!-- STEP 1 — Year / Season / Type -->
+      <div id="step-1">
+        <div class="form-row">
+          <div>
+            <label>Year</label>
+            <select id="f-year" onchange="updateEBPreview()">
+              <option value="26">2026</option>
+              <option value="27">2027</option>
+              <option value="28">2028</option>
+            </select>
+          </div>
+          <div>
+            <label>Season</label>
+            <select id="f-season" onchange="updateEBPreview()">
+              <option value="">— pick —</option>
+              <option value="SP">Spring</option>
+              <option value="SU">Summer</option>
+              <option value="FA">Fall</option>
+              <option value="WI">Winter</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <select id="f-type" onchange="updateEBPreview()">
+            <option value="">— pick —</option>
+            <option value="WR">Wreath</option>
+            <option value="TT">Tabletop</option>
+            <option value="OP">Outdoor pot</option>
+            <option value="CP">Centerpiece</option>
+            <option value="WP">Wall piece</option>
+            <option value="SW">Swag</option>
+            <option value="CU">Custom</option>
+          </select>
+        </div>
+
+        <!-- EB preview -->
+        <div class="eb-display">
+          <div class="eb-label">Generated EB number</div>
+          <div class="eb-number" id="eb-preview-text"><span class="eb-pending">Fill in year, season, and type above</span></div>
+        </div>
+
+        <button class="btn btn-primary" id="btn-step1-next" onclick="goStep2()" disabled>Next →</button>
+      </div>
+
+      <!-- STEP 2 — Holiday + Description -->
+      <div id="step-2" class="hidden">
+        <div class="form-group">
+          <label>Holiday (optional)</label>
+          <select id="f-holiday">
+            <option value="None">None</option>
+            <option value="Christmas">Christmas</option>
+            <option value="Thanksgiving">Thanksgiving</option>
+            <option value="Easter">Easter</option>
+            <option value="Mother's Day">Mother's Day</option>
+            <option value="Fourth of July">Fourth of July</option>
+            <option value="Halloween">Halloween</option>
+            <option value="Valentine's Day">Valentine's Day</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="f-description" placeholder="Colors, materials, style notes…" rows="3"></textarea>
+        </div>
+        <div class="form-row">
+          <button class="btn btn-secondary" onclick="goStep1()">← Back</button>
+          <button class="btn btn-primary" onclick="goStep3()">Next →</button>
+        </div>
+      </div>
+
+      <!-- STEP 3 — Price / Cost / Bin -->
+      <div id="step-3" class="hidden">
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0">
+            <label>Price ($)</label>
+            <input type="number" id="f-price" placeholder="0.00" min="0" step="0.01">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Cost ($)</label>
+            <input type="number" id="f-cost" placeholder="0.00" min="0" step="0.01">
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:14px">
+          <label>Bin location</label>
+          <input type="text" id="f-bin" placeholder="e.g. WR-2">
+        </div>
+        <div id="step3-error" class="alert alert-error hidden"></div>
+        <div class="form-row" style="margin-top:4px">
+          <button class="btn btn-secondary" onclick="goStep2()">← Back</button>
+          <button class="btn btn-gold" id="btn-assign" onclick="assignEBNumber()">Assign EB number ⇓</button>
+        </div>
+      </div>
+
+      <!-- STEP 4 — Confirm + QR -->
+      <div id="step-4" class="hidden">
+        <div class="eb-display">
+          <div class="eb-label">Your EB number</div>
+          <div class="eb-number" id="assigned-eb-number">—</div>
+        </div>
+
+        <div class="qr-section">
+          <div class="qr-label">QR code — print &amp; attach to piece</div>
+          <!-- QR image always present in DOM; hidden until generated -->
+          <div id="qr-placeholder">Generating QR…</div>
+          <img id="qr-image" alt="QR code" style="display:none; width:180px; height:180px; border-radius:8px; margin:0 auto 10px;">
+          <button class="btn btn-outline btn-sm" id="btn-download-qr" onclick="downloadQR()" style="display:none; margin:0 auto;">↓ Download PNG tag</button>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+
+        <div id="step4-error" class="alert alert-error hidden"></div>
+        <div id="step4-success" class="alert alert-success hidden"></div>
+
+        <button class="btn btn-primary" id="btn-save" onclick="saveToAirtable()">⇧ Save to Airtable</button>
+        <button class="btn btn-secondary" onclick="resetForm()">↻ Reset form</button>
+      </div>
+
+    </div><!-- /card -->
+  </div><!-- /generator-section -->
+
+  <!-- ══ RECENT INVENTORY ══ -->
+  <div id="recent-section" class="card hidden">
+    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+      Recent inventory (last 15)
+      <button class="btn btn-sm btn-outline" onclick="loadRecent()" style="width:auto;">↻ Refresh</button>
+    </div>
+    <div id="recent-list"><div style="color:var(--gray);font-size:13px;text-align:center;padding:20px 0;">Loading…</div></div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- QR library (loaded async, used only when QR is needed) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<script>
+// ═══════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════
+const BASE_ID   = 'appHw4SEE5RNT8tCV';
+const TABLE_ID  = 'tbl29ndzXDXXU8f7x';
+const TOKEN_KEY = 'eb_at_token';
+const STORE_URL = 'https://eternalbloomsdesigns.com';
+
+const SEASON_NAMES = { SP:'Spring', SU:'Summer', FA:'Fall', WI:'Winter' };
+const TYPE_NAMES   = { WR:'Wreath', TT:'Tabletop', OP:'Outdoor pot', CP:'Centerpiece', WP:'Wall piece', SW:'Swag', CU:'Custom' };
+
+// ═══════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════
+let token        = '';
+let allRecords   = [];
+let assignedEB   = '';
+let qrDataUrl    = '';
+let currentStep  = 1;
+let ebSequence   = null;  // calculated sequence for current selection
+
+// ═══════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem(TOKEN_KEY);
+  if (saved) {
+    token = saved;
+    showConnecting();
+    loadFromAirtable().then(ok => {
+      if (ok) showConnectedUI();
+      else { token = ''; showAuthUI(); }
+    });
+  } else {
+    showAuthUI();
+  }
+});
+
+// ═══════════════════════════════════════════
+//  AUTH
+// ═══════════════════════════════════════════
+function showAuthUI() {
+  show('auth-section'); hide('connected-bar'); hide('connecting-bar');
+  hide('generator-section'); hide('recent-section'); hide('field-check-section');
+}
+
+function showConnecting() {
+  hide('auth-section'); show('connecting-bar'); hide('connected-bar');
+}
+
+function showConnectedUI() {
+  hide('auth-section'); hide('connecting-bar'); show('connected-bar');
+  show('generator-section'); show('recent-section');
+  updateStatsBar();
+  loadRecent();
+  runFieldCheck();
+}
+
+async function connectAirtable() {
+  const val = document.getElementById('token-input').value.trim();
+  if (!val) { alert('Please paste your Airtable token.'); return; }
+  token = val;
+  showConnecting();
+  const ok = await loadFromAirtable();
+  if (ok) {
+    localStorage.setItem(TOKEN_KEY, token);
+    showConnectedUI();
+  } else {
+    token = '';
+    hide('connecting-bar');
+    show('auth-section');
+    showAlert('auth-section', 'Could not connect. Check your token and try again.', 'error');
+  }
+}
+
+function disconnect() {
+  localStorage.removeItem(TOKEN_KEY);
+  token = ''; allRecords = [];
+  showAuthUI();
+  document.getElementById('token-input').value = '';
+}
+
+// ═══════════════════════════════════════════
+//  AIRTABLE API
+// ═══════════════════════════════════════════
+async function airtableFetch(path, opts = {}) {
+  const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}${path}`;
+  const res = await fetch(url, {
+    ...opts,
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...(opts.headers||{}) }
+  });
+  if (!res.ok) throw new Error(`Airtable error ${res.status}`);
+  return res.json();
+}
+
+async function loadFromAirtable() {
+  try {
+    let records = [], offset = null;
+    do {
+      const q = offset ? `?pageSize=100&offset=${offset}` : '?pageSize=100';
+      const data = await airtableFetch(q);
+      records = records.concat(data.records);
+      offset = data.offset || null;
+    } while (offset);
+    allRecords = records;
+    return true;
+  } catch(e) {
+    console.error('Airtable load error:', e);
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════════
+//  FIELD CHECK
+// ═══════════════════════════════════════════
+async function runFieldCheck() {
+  const required = ['EB Number','Season','Type','Holiday','Date made','Status','Price ($)','Cost ($)','Margin ($)','Shopify tags','Shopify URL','Bin location','Photos done','Listed on Shopify','Description','Notes'];
+  if (!allRecords.length) { hide('field-check-section'); return; }
+  const sampleFields = Object.keys(allRecords[0].fields || {});
+  const list = document.getElementById('field-check-list');
+  list.innerHTML = '';
+  let anyMissing = false;
+  required.forEach(f => {
+    const found = sampleFields.includes(f) || allRecords.some(r => f in (r.fields||{}));
+    if (!found) anyMissing = true;
+    const el = document.createElement('div');
+    el.className = 'field-check-item';
+    el.innerHTML = `<span class="${found ? 'check-ok' : 'check-err'}">${found ? '✓' : '✗'}</span><span>${f}</span>${!found ? '<span style="margin-left:auto;font-size:11px;color:var(--red);">Missing</span>' : ''}`;
+    list.appendChild(el);
+  });
+  // Only show field check if something is wrong
+  if (anyMissing) show('field-check-section');
+}
+
+// ═══════════════════════════════════════════
+//  STATS
+// ═══════════════════════════════════════════
+function updateStatsBar() {
+  const total   = allRecords.length;
+  const inStock = allRecords.filter(r => (r.fields||{})['Status'] === 'In stock').length;
+  document.getElementById('stat-total').textContent   = total;
+  document.getElementById('stat-instock').textContent = inStock;
+  document.getElementById('stat-next').textContent    = total + 1;
+}
+
+// ═══════════════════════════════════════════
+//  RECENT LIST
+// ═══════════════════════════════════════════
+async function loadRecent() {
+  await loadFromAirtable();
+  updateStatsBar();
+  const sorted = [...allRecords].sort((a,b) => {
+    const da = (a.fields||{})['Date made'] || '';
+    const db = (b.fields||{})['Date made'] || '';
+    return db.localeCompare(da);
+  }).slice(0,15);
+
+  const list = document.getElementById('recent-list');
+  if (!sorted.length) { list.innerHTML = '<div style="color:var(--gray);font-size:13px;text-align:center;padding:20px 0;">No records yet.</div>'; return; }
+
+  list.innerHTML = sorted.map(r => {
+    const f = r.fields || {};
+    const eb     = f['EB Number'] || '—';
+    const status = f['Status']    || '';
+    const date   = f['Date made'] ? f['Date made'].slice(0,10) : '';
+    const type   = f['Type']      || '';
+    const badgeClass = status === 'Sold' ? 'badge-sold' : status === 'Listed' ? 'badge-listed' : 'badge-stock';
+    return `<div class="recent-item">
+      <span class="recent-eb">${eb}</span>
+      <span class="recent-meta">${type}${date ? ' · ' + date : ''}</span>
+      <span class="badge ${badgeClass}">${status || 'In stock'}</span>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════
+//  EB PREVIEW
+// ═══════════════════════════════════════════
+function updateEBPreview() {
+  const year   = document.getElementById('f-year').value;
+  const season = document.getElementById('f-season').value;
+  const type   = document.getElementById('f-type').value;
+  const btn    = document.getElementById('btn-step1-next');
+
+  if (!season || !type) {
+    document.getElementById('eb-preview-text').innerHTML = '<span class="eb-pending">Fill in year, season, and type above</span>';
+    document.getElementById('stat-next').textContent = '—';
+    btn.disabled = true;
+    return;
+  }
+
+  // Calculate next sequence
+  const prefix = `EB-${year}${season}-${type}-`;
+  const nums = allRecords
+    .map(r => ((r.fields||{})['EB Number'] || ''))
+    .filter(n => n.startsWith(prefix))
+    .map(n => parseInt(n.replace(prefix,''), 10))
+    .filter(n => !isNaN(n));
+  const next = nums.length ? Math.max(...nums) + 1 : 1;
+  ebSequence = next;
+  const eb = `${prefix}${String(next).padStart(3,'0')}`;
+  document.getElementById('eb-preview-text').textContent = eb;
+  document.getElementById('stat-next').textContent = next;
+  btn.disabled = false;
+}
+
+// ═══════════════════════════════════════════
+//  STEP NAVIGATION
+// ═══════════════════════════════════════════
+function setStep(n) {
+  [1,2,3,4].forEach(i => {
+    const el = document.getElementById(`step-${i}`);
+    if (el) { i === n ? show(el) : hide(el); }
+    const dot = document.getElementById(`sdot-${i}`);
+    if (dot) {
+      dot.className = 'step-dot ' + (i < n ? 'done' : i === n ? 'active' : 'pending');
+      dot.textContent = i < n ? '✓' : i;
+    }
+    if (i < 4) {
+      const line = document.getElementById(`sline-${i}`);
+      if (line) line.className = 'step-line ' + (i < n ? 'done' : '');
+    }
+  });
+  currentStep = n;
+}
+
+function goStep1() { setStep(1); }
+function goStep2() { setStep(2); }
+function goStep3() { setStep(3); }
+
+async function goStep4() {
+  // This is called after EB number is confirmed — generates QR before showing step 4
+  setStep(4);
+  // Now that step-4 is visible, generate QR safely
+  generateQR();
+}
+
+// ═══════════════════════════════════════════
+//  ASSIGN EB NUMBER (step 3 → step 4)
+// ═══════════════════════════════════════════
+async function assignEBNumber() {
+  const btn = document.getElementById('btn-assign');
+  clearAlert('step3-error');
+
+  // Refresh records to get latest sequence
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Checking…';
+  try {
+    await loadFromAirtable();
+  } catch(e) {
+    showElAlert('step3-error', 'Could not refresh records. Check connection.', 'error');
+    btn.disabled = false; btn.textContent = 'Assign EB number ⇓'; return;
+  }
+
+  const year   = document.getElementById('f-year').value;
+  const season = document.getElementById('f-season').value;
+  const type   = document.getElementById('f-type').value;
+  const prefix = `EB-${year}${season}-${type}-`;
+  const nums   = allRecords
+    .map(r => ((r.fields||{})['EB Number'] || ''))
+    .filter(n => n.startsWith(prefix))
+    .map(n => parseInt(n.replace(prefix,''),10))
+    .filter(n => !isNaN(n));
+  const next   = nums.length ? Math.max(...nums) + 1 : 1;
+  assignedEB   = `${prefix}${String(next).padStart(3,'0')}`;
+
+  btn.disabled = false;
+  btn.textContent = 'Assign EB number ⇓';
+
+  document.getElementById('assigned-eb-number').textContent = assignedEB;
+
+  // Reset QR state before showing step 4
+  qrDataUrl = '';
+  const img = document.getElementById('qr-image');
+  const ph  = document.getElementById('qr-placeholder');
+  const dl  = document.getElementById('btn-download-qr');
+  if (img) { img.style.display = 'none'; img.src = ''; }
+  if (ph)  { ph.style.display = 'flex'; ph.textContent = 'Generating QR…'; }
+  if (dl)  { dl.style.display = 'none'; }
+
+  clearAlert('step4-error');
+  clearAlert('step4-success');
+  document.getElementById('btn-save').disabled = false;
+
+  // Show step 4 FIRST, then generate QR (elements must be in DOM)
+  goStep4();
+}
+
+// ═══════════════════════════════════════════
+//  QR CODE GENERATION  ← THE FIXED FUNCTION
+// ═══════════════════════════════════════════
+function generateQR() {
+  const img = document.getElementById('qr-image');
+  const ph  = document.getElementById('qr-placeholder');
+  const dl  = document.getElementById('btn-download-qr');
+
+  // Guard: elements must exist
+  if (!img || !ph) {
+    console.warn('QR elements not found in DOM — skipping generation');
+    return;
+  }
+
+  if (!assignedEB) {
+    ph.textContent = 'No EB number assigned yet.';
+    return;
+  }
+
+  const qrUrl = `${STORE_URL}/products/${assignedEB.toLowerCase().replace(/\s/g,'-')}`;
+
+  // Use QRCode library to render into a temp div, then extract data URL
+  try {
+    const tempDiv = document.createElement('div');
+    tempDiv.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
+    document.body.appendChild(tempDiv);
+
+    new QRCode(tempDiv, {
+      text: qrUrl,
+      width: 180,
+      height: 180,
+      colorDark: '#2d5a27',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.H
+    });
+
+    // QRCode library creates either a canvas or an img — handle both
+    setTimeout(() => {
+      try {
+        const canvas = tempDiv.querySelector('canvas');
+        const qrImg  = tempDiv.querySelector('img');
+        let dataUrl  = '';
+
+        if (canvas) {
+          dataUrl = canvas.toDataURL('image/png');
+        } else if (qrImg && qrImg.src) {
+          dataUrl = qrImg.src;
+        }
+
+        document.body.removeChild(tempDiv);
+
+        if (dataUrl) {
+          qrDataUrl  = dataUrl;
+          img.src    = dataUrl;
+          img.style.display = 'block';
+          ph.style.display  = 'none';
+          if (dl) dl.style.display = 'block';
+        } else {
+          ph.textContent = 'QR generation failed — use qrcodemonkey.com with your EB number';
+        }
+      } catch(innerErr) {
+        console.error('QR extract error:', innerErr);
+        if (ph) { ph.textContent = 'QR error — use qrcodemonkey.com'; }
+        try { document.body.removeChild(tempDiv); } catch(_) {}
+      }
+    }, 120); // small delay lets QRCode lib finish rendering
+
+  } catch(e) {
+    console.error('QR generation error:', e);
+    ph.textContent = 'QR error — use qrcodemonkey.com with: ' + qrUrl;
+  }
+}
+
+// ═══════════════════════════════════════════
+//  DOWNLOAD QR
+// ═══════════════════════════════════════════
+function downloadQR() {
+  if (!qrDataUrl) return;
+  const a = document.createElement('a');
+  a.href     = qrDataUrl;
+  a.download = `${assignedEB}-tag.png`;
+  a.click();
+}
+
+// ═══════════════════════════════════════════
+//  SAVE TO AIRTABLE
+// ═══════════════════════════════════════════
+async function saveToAirtable() {
+  const btn = document.getElementById('btn-save');
+  clearAlert('step4-error');
+  clearAlert('step4-success');
+
+  const price = parseFloat(document.getElementById('f-price').value) || null;
+  const cost  = parseFloat(document.getElementById('f-cost').value)  || null;
+  const year  = '20' + document.getElementById('f-year').value;
+  const seasonCode = document.getElementById('f-season').value;
+  const typeCode   = document.getElementById('f-type').value;
+
+  const fields = {
+    'EB Number':    assignedEB,
+    'Season':       SEASON_NAMES[seasonCode] || seasonCode,
+    'Type':         TYPE_NAMES[typeCode]     || typeCode,
+    'Holiday':      document.getElementById('f-holiday').value     || 'None',
+    'Description':  document.getElementById('f-description').value || '',
+    'Bin location': document.getElementById('f-bin').value         || '',
+    'Status':       'In stock',
+    'Date made':    new Date().toISOString().slice(0,10),
+  };
+  if (price !== null) fields['Price ($)'] = price;
+  if (cost  !== null) fields['Cost ($)']  = cost;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Saving…';
+
+  try {
+    await airtableFetch('', {
+      method: 'POST',
+      body: JSON.stringify({ records: [{ fields }] })
+    });
+    showElAlert('step4-success', `✓ ${assignedEB} saved to Airtable successfully!`, 'success');
+    btn.textContent = '✓ Saved';
+    await loadFromAirtable();
+    updateStatsBar();
+    loadRecent();
+  } catch(e) {
+    console.error('Save error:', e);
+    showElAlert('step4-error', 'Save failed — check your token and connection, then try again.', 'error');
+    btn.disabled = false;
+    btn.textContent = '⇧ Save to Airtable';
+  }
+}
+
+// ═══════════════════════════════════════════
+//  RESET
+// ═══════════════════════════════════════════
+function resetForm() {
+  assignedEB = ''; qrDataUrl = ''; ebSequence = null;
+  document.getElementById('f-season').value      = '';
+  document.getElementById('f-type').value        = '';
+  document.getElementById('f-holiday').value     = 'None';
+  document.getElementById('f-description').value = '';
+  document.getElementById('f-price').value       = '';
+  document.getElementById('f-cost').value        = '';
+  document.getElementById('f-bin').value         = '';
+  document.getElementById('eb-preview-text').innerHTML = '<span class="eb-pending">Fill in year, season, and type above</span>';
+  document.getElementById('btn-step1-next').disabled   = true;
+
+  const img = document.getElementById('qr-image');
+  const ph  = document.getElementById('qr-placeholder');
+  const dl  = document.getElementById('btn-download-qr');
+  if (img) { img.src = ''; img.style.display = 'none'; }
+  if (ph)  { ph.style.display = 'flex'; ph.textContent = 'Generating QR…'; }
+  if (dl)  { dl.style.display = 'none'; }
+
+  clearAlert('step3-error');
+  clearAlert('step4-error');
+  clearAlert('step4-success');
+  setStep(1);
+}
+
+// ═══════════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════════
+function show(id) {
+  const el = typeof id === 'string' ? document.getElementById(id) : id;
+  if (el) el.classList.remove('hidden');
+}
+function hide(id) {
+  const el = typeof id === 'string' ? document.getElementById(id) : id;
+  if (el) el.classList.add('hidden');
+}
+function showElAlert(id, msg, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.className   = `alert alert-${type}`;
+  el.classList.remove('hidden');
+}
+function clearAlert(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('hidden');
+}
+function showAlert(containerId, msg, type) {
+  // append a transient alert to a container
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className   = `alert alert-${type}`;
+  el.textContent = msg;
+  container.prepend(el);
+  setTimeout(() => el.remove(), 5000);
+}
+</script>
+</body>
+</html>
