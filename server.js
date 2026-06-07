@@ -210,7 +210,7 @@ app.get('/drive-list-unsorted', async (req, res) => {
       let url = '/files?pageSize=100'
         + '&q=' + encodeURIComponent(query)
         + '&fields=nextPageToken,files(id,name,mimeType,thumbnailLink,webViewLink,properties,size)'
-        + '&orderBy=name';
+        + '&orderBy=name%20desc';
       if (pageToken) url += '&pageToken=' + pageToken;
       const data = await driveRequest(url);
       files = files.concat(data.files || []);
