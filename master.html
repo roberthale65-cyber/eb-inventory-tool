@@ -834,47 +834,47 @@ button:active{transform:scale(.97)}
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;border-top:1px solid var(--border);padding-top:5px;margin-top:2px"><input type="checkbox" value="All Season" style="accent-color:var(--sage);width:14px;height:14px"> All Season</label>
           </div>
         </div>
-        <div>
-          <div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Type</div>
-          <select id="bl-sel-type" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)">
-            <option value="Wreath" selected>Wreath</option>
-            <option value="Home decor">Home decor</option>
-            <option value="Outdoor planter">Outdoor planter</option>
-            <option value="Centerpiece">Centerpiece</option>
-            <option value="Wall decor">Wall decor</option>
-            <option value="Hanging">Hanging</option>
-            <option value="Swag">Swag</option>
-            <option value="Custom order">Custom order</option>
-          </select>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div>
+            <div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Type</div>
+            <select id="bl-sel-type" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)">
+              <option value="Wreath" selected>Wreath</option>
+              <option value="Home decor">Home decor</option>
+              <option value="Outdoor planter">Outdoor planter</option>
+              <option value="Centerpiece">Centerpiece</option>
+              <option value="Wall decor">Wall decor</option>
+              <option value="Hanging">Hanging</option>
+              <option value="Swag">Swag</option>
+              <option value="Custom order">Custom order</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Holiday</div>
+            <select id="bl-sel-holiday" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)">
+              <option value="None" selected>None</option>
+              <option value="Christmas">Christmas</option>
+              <option value="Thanksgiving">Thanksgiving</option>
+              <option value="Easter">Easter</option>
+              <option value="Mother's Day">Mother's Day</option>
+              <option value="Memorial Day">Memorial Day</option>
+              <option value="Fourth of July">4th of July</option>
+              <option value="Halloween">Halloween</option>
+              <option value="Valentine's Day">Valentine's</option>
+            </select>
+          </div>
         </div>
         <div>
-          <div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Holiday</div>
-          <select id="bl-sel-holiday" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)">
-            <option value="None" selected>None</option>
-            <option value="Christmas">Christmas</option>
-            <option value="Thanksgiving">Thanksgiving</option>
-            <option value="Easter">Easter</option>
-            <option value="Mother's Day">Mother's Day</option>
-            <option value="Memorial Day">Memorial Day</option>
-            <option value="Fourth of July">4th of July</option>
-            <option value="Halloween">Halloween</option>
-            <option value="Valentine's Day">Valentine's</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Status selector (single-select radio, default Photographed) -->
-      <div style="margin-bottom:10px">
-        <div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px">Status</div>
-        <div id="bl-sel-status" style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px">
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="In stock" style="accent-color:var(--sage);width:14px;height:14px"> In stock</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Photographed" checked style="accent-color:var(--sage);width:14px;height:14px"> Photographed</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Ready to list" style="accent-color:var(--sage);width:14px;height:14px"> Ready to list</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Listed" style="accent-color:var(--sage);width:14px;height:14px"> Listed</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Craft Fair" style="accent-color:var(--sage);width:14px;height:14px"> Craft Fair</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Hair Salon" style="accent-color:var(--sage);width:14px;height:14px"> Hair Salon</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Sold" style="accent-color:var(--sage);width:14px;height:14px"> Sold</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Archived" style="accent-color:var(--sage);width:14px;height:14px"> Archived</label>
+          <div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Status</div>
+          <div id="bl-sel-status" style="display:flex;flex-direction:column;gap:5px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="In stock" style="accent-color:var(--sage);width:14px;height:14px"> In stock</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Photographed" checked style="accent-color:var(--sage);width:14px;height:14px"> Photographed</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Ready to list" style="accent-color:var(--sage);width:14px;height:14px"> Ready to list</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Listed" style="accent-color:var(--sage);width:14px;height:14px"> Listed</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Craft Fair" style="accent-color:var(--sage);width:14px;height:14px"> Craft Fair</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Hair Salon" style="accent-color:var(--sage);width:14px;height:14px"> Hair Salon</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Sold" style="accent-color:var(--sage);width:14px;height:14px"> Sold</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Archived" style="accent-color:var(--sage);width:14px;height:14px"> Archived</label>
+          </div>
         </div>
       </div>
 
