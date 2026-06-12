@@ -360,6 +360,15 @@ app.get('/airtable/inventory', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /airtable/inventory/:id — fetch single inventory record
+app.get('/airtable/inventory/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const data = await airtableReq(`${AT_INVENTORY_TBL}/${id}`);
+    res.json(data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // POST /airtable/inventory — create new inventory record
 app.post('/airtable/inventory', async (req, res) => {
   const { fields } = req.body;
