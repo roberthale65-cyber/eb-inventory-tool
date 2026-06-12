@@ -282,7 +282,6 @@ button:active{transform:scale(.97)}
 </style>
 </head>
 <body>
-
 <div class="top-bar">
   <div class="top-bar-brand">
     <div class="brand-mark">EB</div>
@@ -299,7 +298,7 @@ button:active{transform:scale(.97)}
   </div>
 </div>
 
-<!-- ══ HOME SCREEN ══ -->
+<!-- HOME SCREEN -->
 <div id="screen-home" class="screen active">
   <div class="home-hero">
     <div class="hero-greeting">Good to see you</div>
@@ -350,7 +349,7 @@ button:active{transform:scale(.97)}
   </div>
 </div>
 
-<!-- ══ PRINT TAG SCREEN ══ -->
+<!-- PRINT TAG SCREEN -->
 <div id="screen-print-tag" class="screen">
   <div class="wizard-header"><button class="back-btn" onclick="goHome()">←</button><div class="wizard-title">Print tag</div><div class="wizard-step-pill" id="print-tag-pill">All pieces</div></div>
   <div class="wizard-body">
@@ -360,15 +359,13 @@ button:active{transform:scale(.97)}
   </div>
 </div>
 
-<!-- ══ NEW PIECE SCREEN ══ -->
+<!-- NEW PIECE SCREEN -->
 <div id="screen-new-piece" class="screen">
   <div class="wizard-header"><button class="back-btn" onclick="npSaveAndGoHome()">←</button><div class="wizard-title">New piece</div><div class="wizard-step-pill" id="np-step-pill">Step 1 of 4</div></div>
   <div class="wizard-progress"><div class="wizard-progress-bar" id="np-progress" style="width:25%"></div></div>
   <div class="wizard-body">
     <div id="np-wip-banner" class="info-card amber" style="display:none;margin-bottom:12px"></div>
     <div id="status-np" class="status-bar" style="display:none"><div class="sb-dot"></div><span id="status-np-msg"></span></div>
-
-    <!-- STEP 1 -->
     <div class="step-block active" id="np-step-1">
       <div class="section-label">Assign EB number</div>
       <div class="info-card sage"><strong>Every piece starts here.</strong> Fill in the details below and the next available EB number is assigned automatically.</div>
@@ -390,8 +387,6 @@ button:active{transform:scale(.97)}
       <div class="btn-row"><button class="btn-primary btn-full" onclick="npGenerateEB()">✨ Assign EB number →</button></div>
       <button class="btn-save-exit" onclick="wipSaveNP();goHome()">💾 Save &amp; finish later</button>
     </div>
-
-    <!-- STEP 2 -->
     <div class="step-block" id="np-step-2">
       <div id="np-eb-display" class="eb-display"><div class="eb-label">EB Number assigned</div><div class="eb-number" id="np-eb-num">EB-26SP-WR-001</div><div class="eb-sub">Write this on the physical hang tag now</div><div class="qr-container"><img id="np-qr-img" src="" alt="QR code"></div></div>
       <div style="margin-bottom:16px">
@@ -412,8 +407,6 @@ button:active{transform:scale(.97)}
       <div class="btn-row"><button class="btn-primary btn-full" onclick="npSaveDimensions()">Save dimensions →</button></div>
       <button class="btn-save-exit" onclick="wipSaveNP();goHome()">💾 Save &amp; finish later</button>
     </div>
-
-    <!-- STEP 3 -->
     <div class="step-block" id="np-step-3">
       <div class="section-label">Photo checklist</div>
       <div class="info-card teal"><strong>📱 iCloud Photo Workflow</strong> Take photos on iPhone → sync to iCloud → on PC open File Explorer → iCloud Photos → drag into listing tool.</div>
@@ -435,8 +428,6 @@ button:active{transform:scale(.97)}
       <div class="btn-row"><button class="btn btn-full" onclick="npStep(4)">Skip — photos not done yet →</button></div>
       <button class="btn-save-exit" onclick="wipSaveNP();goHome()">💾 Save &amp; finish later</button>
     </div>
-
-    <!-- STEP 4 — completion, no save button needed -->
     <div class="step-block" id="np-step-4">
       <div style="text-align:center;padding:20px 0">
         <div style="font-size:56px;margin-bottom:16px">🌸</div>
@@ -453,8 +444,7 @@ button:active{transform:scale(.97)}
   </div>
 </div>
 
-
-<!-- ══ LIST & PUBLISH SCREEN ══ -->
+<!-- LIST & PUBLISH SCREEN -->
 <div id="screen-list" class="screen">
   <div class="wizard-header"><button class="back-btn" onclick="goHome()">←</button><div class="wizard-title">List & publish</div><div class="wizard-step-pill" id="lp-step-pill">Step 1 of 4</div></div>
   <div class="wizard-progress"><div class="wizard-progress-bar" id="lp-progress" style="width:25%"></div></div>
@@ -540,7 +530,7 @@ button:active{transform:scale(.97)}
   </div>
 </div>
 
-<!-- ══ MARK AS SOLD SCREEN ══ -->
+<!-- MARK AS SOLD SCREEN -->
 <div id="screen-sold" class="screen">
   <div class="wizard-header"><button class="back-btn" onclick="goHome()">←</button><div class="wizard-title">Mark as sold</div><div class="wizard-step-pill" id="ms-step-pill">Step 1 of 2</div></div>
   <div class="wizard-progress"><div class="wizard-progress-bar" id="ms-progress" style="width:50%"></div></div>
@@ -572,7 +562,7 @@ button:active{transform:scale(.97)}
   </div>
 </div>
 
-<!-- ══ CRAFT FAIR SCREEN ══ -->
+<!-- CRAFT FAIR SCREEN -->
 <div id="screen-craft-fair" class="screen">
   <div class="cf-header">
     <div style="display:flex;align-items:center;gap:12px">
@@ -585,7 +575,7 @@ button:active{transform:scale(.97)}
   <div id="cf-inventory" class="cf-inventory"><div style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:12px">🌸</div><div style="font-size:14px">Loading inventory...</div></div></div>
 </div>
 
-<!-- ══ SOLD MODAL ══ -->
+<!-- SOLD MODAL -->
 <div class="modal-overlay" id="sold-modal" onclick="closeSoldModal(event)">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
@@ -609,7 +599,7 @@ button:active{transform:scale(.97)}
   </div>
 </div>
 
-<!-- ══ ADD VIDEO SCREEN ══ -->
+<!-- ADD VIDEO SCREEN -->
 <div id="screen-video" class="screen">
   <div class="wizard-header"><button class="back-btn" onclick="goHome()">←</button><div class="wizard-title">Add video</div><div class="wizard-step-pill">Shopify Media</div></div>
   <div class="wizard-body">
@@ -632,7 +622,7 @@ button:active{transform:scale(.97)}
   </div>
 </div>
 
-<!-- ══ COST SUMMARY SCREEN ══ -->
+<!-- COST SUMMARY SCREEN -->
 <div id="screen-cost-summary" class="screen">
   <div class="wizard-header"><button class="back-btn" onclick="goHome()">←</button><div class="wizard-title">Cost summary</div><div class="wizard-step-pill" id="cost-summary-pill">2026</div></div>
   <div class="wizard-body">
@@ -657,7 +647,7 @@ button:active{transform:scale(.97)}
   </div>
 </div>
 
-<!-- ══ COST TRACKING SCREEN ══ -->
+<!-- COST TRACKING SCREEN -->
 <div id="screen-costs" class="screen">
   <div class="wizard-header"><button class="back-btn" onclick="goHome()">&#x2190;</button><div class="wizard-title">Log a cost</div><div class="wizard-step-pill" id="cost-step-pill">Choose type</div></div>
   <div class="wizard-progress"><div class="wizard-progress-bar" id="cost-progress" style="width:20%"></div></div>
@@ -757,7 +747,7 @@ button:active{transform:scale(.97)}
   </div>
 </div>
 
-<!-- ══ SORT BACKLOG SCREEN ══ -->
+<!-- SORT BACKLOG SCREEN -->
 <div id="screen-backlog" class="screen">
   <div class="wizard-header">
     <button class="back-btn" onclick="goHome()">←</button>
@@ -765,151 +755,57 @@ button:active{transform:scale(.97)}
     <div class="wizard-step-pill" id="bl-progress-pill">0 sorted</div>
   </div>
   <div class="wizard-progress"><div class="wizard-progress-bar" id="bl-progress-bar" style="width:0%"></div></div>
-
   <div id="bl-intro" class="wizard-body">
     <div id="bl-drive-status-card" class="info-card sage" style="margin-bottom:14px">
       <strong id="bl-drive-status-label">⏳ Checking Google Drive connection...</strong>
       <div id="bl-drive-status-sub" style="font-size:12px;margin-top:4px;color:var(--text-muted)"></div>
     </div>
-    <div class="info-card sage">
-      <strong>🏷️ Tag your photo backlog and organize it in Drive.</strong>
-      Select one or more photos of the same piece, pick Season + Type + Holiday, and tap Apply. Files move into the right subfolder in your Listing Photos folder automatically.
-    </div>
+    <div class="info-card sage"><strong>🏷️ Tag your photo backlog and organize it in Drive.</strong> Select one or more photos of the same piece, pick Season + Type + Holiday, and tap Apply. Files move into the right subfolder in your Listing Photos folder automatically.</div>
     <div class="section-label">How it works</div>
     <div style="display:grid;gap:8px;margin-bottom:20px">
-      <div style="background:var(--green-bg);border:1.5px solid var(--green-border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:12px">
-        <span style="font-size:20px;flex-shrink:0">☑️</span>
-        <div><div style="font-size:13px;font-weight:800;color:var(--green-text)">Select photos</div><div style="font-size:12px;color:var(--text-muted);margin-top:1px">Tap one photo or tap multiple that belong to the same piece. Tap again to deselect.</div></div>
-      </div>
-      <div style="background:var(--gold-bg);border:1.5px solid var(--amber-border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:12px">
-        <span style="font-size:20px;flex-shrink:0">🏷️</span>
-        <div><div style="font-size:13px;font-weight:800;color:var(--amber-text)">Set tags & apply</div><div style="font-size:12px;color:var(--text-muted);margin-top:1px">Pick Season, Type, and Holiday. Tap Apply — files move to the right subfolder in Drive and are tagged with properties.</div></div>
-      </div>
-      <div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:12px">
-        <span style="font-size:20px;flex-shrink:0">⏭</span>
-        <div><div style="font-size:13px;font-weight:800;color:var(--text-muted)">Skip</div><div style="font-size:12px;color:var(--text-muted);margin-top:1px">Duplicate or not a piece? Skip it — it stays in place and won't affect your sorted count.</div></div>
-      </div>
+      <div style="background:var(--green-bg);border:1.5px solid var(--green-border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:12px"><span style="font-size:20px;flex-shrink:0">☑️</span><div><div style="font-size:13px;font-weight:800;color:var(--green-text)">Select photos</div><div style="font-size:12px;color:var(--text-muted);margin-top:1px">Tap one photo or tap multiple that belong to the same piece. Tap again to deselect.</div></div></div>
+      <div style="background:var(--gold-bg);border:1.5px solid var(--amber-border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:12px"><span style="font-size:20px;flex-shrink:0">🏷️</span><div><div style="font-size:13px;font-weight:800;color:var(--amber-text)">Set tags & apply</div><div style="font-size:12px;color:var(--text-muted);margin-top:1px">Pick Season, Type, and Holiday. Tap Apply — files move to the right subfolder in Drive and are tagged with properties.</div></div></div>
+      <div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:12px"><span style="font-size:20px;flex-shrink:0">⏭</span><div><div style="font-size:13px;font-weight:800;color:var(--text-muted)">Skip</div><div style="font-size:12px;color:var(--text-muted);margin-top:1px">Duplicate or not a piece? Skip it — it stays in place and won't affect your sorted count.</div></div></div>
     </div>
-    <div class="info-card amber">
-      <strong>📁 Subfolder structure:</strong> Files move into <code>Listing Photos / Season / Type /</code>. Holiday and other details are stored as invisible file properties — queryable by the listing tool but not extra folders.
-    </div>
-    <div class="btn-row">
-      <button class="btn-primary btn-full" id="bl-start-btn" onclick="blStartSorting()" disabled>Load unsorted photos →</button>
-    </div>
+    <div class="info-card amber"><strong>📁 Subfolder structure:</strong> Files move into <code>Listing Photos / Season / Type /</code>. Holiday and other details are stored as invisible file properties — queryable by the listing tool but not extra folders.</div>
+    <div class="btn-row"><button class="btn-primary btn-full" id="bl-start-btn" onclick="blStartSorting()" disabled>Load unsorted photos →</button></div>
   </div>
-
   <div id="bl-sorter" style="display:none;padding:12px 16px;padding-bottom:80px">
     <div id="bl-selection-bar" style="background:var(--sage-bg);border:1.5px solid rgba(92,122,92,0.25);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div>
-        <span id="bl-selection-count" style="font-size:13px;font-weight:800;color:var(--sage)">0 selected</span>
-        <span style="font-size:12px;color:var(--text-muted);margin-left:8px" id="bl-remaining-count"></span>
-      </div>
+      <div><span id="bl-selection-count" style="font-size:13px;font-weight:800;color:var(--sage)">0 selected</span><span style="font-size:12px;color:var(--text-muted);margin-left:8px" id="bl-remaining-count"></span></div>
       <div style="display:flex;gap:8px">
         <button onclick="blSelectAll()" style="font-size:11px;padding:5px 12px;border-radius:99px;border:1.5px solid var(--sage);background:white;color:var(--sage);cursor:pointer;font-weight:700">Select all</button>
         <button onclick="blClearSelection()" style="font-size:11px;padding:5px 12px;border-radius:99px;border:1.5px solid var(--border);background:white;color:var(--text-muted);cursor:pointer;font-weight:700">Clear</button>
       </div>
     </div>
     <div id="bl-photo-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px"></div>
-    <div id="bl-grid-loading" style="text-align:center;padding:40px 20px;color:var(--text-muted)">
-      <div style="width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px"></div>
-      <div style="font-size:14px">Loading from Drive...</div>
-    </div>
-    <div id="bl-grid-empty" style="display:none;text-align:center;padding:40px 20px;color:var(--text-muted)">
-      <div style="font-size:40px;margin-bottom:12px">✅</div>
-      <div style="font-size:15px;font-weight:700;color:var(--sage);margin-bottom:6px">All sorted!</div>
-      <div style="font-size:13px">No unsorted files remain in your Listing Photos folder.</div>
-    </div>
+    <div id="bl-grid-loading" style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px"></div><div style="font-size:14px">Loading from Drive...</div></div>
+    <div id="bl-grid-empty" style="display:none;text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:40px;margin-bottom:12px">✅</div><div style="font-size:15px;font-weight:700;color:var(--sage);margin-bottom:6px">All sorted!</div><div style="font-size:13px">No unsorted files remain in your Listing Photos folder.</div></div>
     <div style="position:sticky;bottom:0;z-index:10;background:var(--ivory);border-top:1.5px solid var(--border);padding:14px 0 0;margin-top:8px">
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
-        <div>
-          <div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Season</div>
-          <div id="bl-sel-season" style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:7px 10px;display:flex;flex-direction:column;gap:5px">
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Spring" style="accent-color:var(--sage);width:14px;height:14px"> Spring</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Summer" style="accent-color:var(--sage);width:14px;height:14px"> Summer</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Fall" style="accent-color:var(--sage);width:14px;height:14px"> Fall</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Winter" style="accent-color:var(--sage);width:14px;height:14px"> Winter</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;border-top:1px solid var(--border);padding-top:5px;margin-top:2px"><input type="checkbox" value="All Season" style="accent-color:var(--sage);width:14px;height:14px"> All Season</label>
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:8px">
-          <div>
-            <div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Type</div>
-            <select id="bl-sel-type" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)">
-              <option value="Wreath" selected>Wreath</option>
-              <option value="Home decor">Home decor</option>
-              <option value="Outdoor planter">Outdoor planter</option>
-              <option value="Centerpiece">Centerpiece</option>
-              <option value="Wall decor">Wall decor</option>
-              <option value="Hanging">Hanging</option>
-              <option value="Swag">Swag</option>
-              <option value="Custom order">Custom order</option>
-            </select>
-          </div>
-          <div>
-            <div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Holiday</div>
-            <select id="bl-sel-holiday" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)">
-              <option value="None" selected>None</option>
-              <option value="Christmas">Christmas</option>
-              <option value="Thanksgiving">Thanksgiving</option>
-              <option value="Easter">Easter</option>
-              <option value="Mother's Day">Mother's Day</option>
-              <option value="Memorial Day">Memorial Day</option>
-              <option value="Fourth of July">4th of July</option>
-              <option value="Halloween">Halloween</option>
-              <option value="Valentine's Day">Valentine's</option>
-            </select>
-          </div>
-        </div>
-        <div>
-          <div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Status</div>
-          <div id="bl-sel-status" style="display:flex;flex-direction:column;gap:5px">
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="In stock" style="accent-color:var(--sage);width:14px;height:14px"> In stock</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Photographed" checked style="accent-color:var(--sage);width:14px;height:14px"> Photographed</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Ready to list" style="accent-color:var(--sage);width:14px;height:14px"> Ready to list</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Listed" style="accent-color:var(--sage);width:14px;height:14px"> Listed</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Craft Fair" style="accent-color:var(--sage);width:14px;height:14px"> Craft Fair</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Hair Salon" style="accent-color:var(--sage);width:14px;height:14px"> Hair Salon</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Sold" style="accent-color:var(--sage);width:14px;height:14px"> Sold</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Archived" style="accent-color:var(--sage);width:14px;height:14px"> Archived</label>
-          </div>
-        </div>
+        <div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Season</div><div id="bl-sel-season" style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:7px 10px;display:flex;flex-direction:column;gap:5px"><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Spring" style="accent-color:var(--sage);width:14px;height:14px"> Spring</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Summer" style="accent-color:var(--sage);width:14px;height:14px"> Summer</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Fall" style="accent-color:var(--sage);width:14px;height:14px"> Fall</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Winter" style="accent-color:var(--sage);width:14px;height:14px"> Winter</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;border-top:1px solid var(--border);padding-top:5px;margin-top:2px"><input type="checkbox" value="All Season" style="accent-color:var(--sage);width:14px;height:14px"> All Season</label></div></div>
+        <div style="display:flex;flex-direction:column;gap:8px"><div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Type</div><select id="bl-sel-type" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)"><option value="Wreath" selected>Wreath</option><option value="Home decor">Home decor</option><option value="Outdoor planter">Outdoor planter</option><option value="Centerpiece">Centerpiece</option><option value="Wall decor">Wall decor</option><option value="Hanging">Hanging</option><option value="Swag">Swag</option><option value="Custom order">Custom order</option></select></div><div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Holiday</div><select id="bl-sel-holiday" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)"><option value="None" selected>None</option><option value="Christmas">Christmas</option><option value="Thanksgiving">Thanksgiving</option><option value="Easter">Easter</option><option value="Mother's Day">Mother's Day</option><option value="Memorial Day">Memorial Day</option><option value="Fourth of July">4th of July</option><option value="Halloween">Halloween</option><option value="Valentine's Day">Valentine's</option></select></div></div>
+        <div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Status</div><div id="bl-sel-status" style="display:flex;flex-direction:column;gap:5px"><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="In stock" style="accent-color:var(--sage);width:14px;height:14px"> In stock</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Photographed" checked style="accent-color:var(--sage);width:14px;height:14px"> Photographed</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Ready to list" style="accent-color:var(--sage);width:14px;height:14px"> Ready to list</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Listed" style="accent-color:var(--sage);width:14px;height:14px"> Listed</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Craft Fair" style="accent-color:var(--sage);width:14px;height:14px"> Craft Fair</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Hair Salon" style="accent-color:var(--sage);width:14px;height:14px"> Hair Salon</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Sold" style="accent-color:var(--sage);width:14px;height:14px"> Sold</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Archived" style="accent-color:var(--sage);width:14px;height:14px"> Archived</label></div></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
-        <button id="bl-apply-btn" onclick="blApplyToSelected()" disabled
-          style="background:#2D5A2D;border:none;border-radius:var(--radius-sm);padding:13px;font-family:var(--font-body);font-size:14px;font-weight:800;color:#fff;cursor:pointer;transition:all .12s;opacity:0.4;pointer-events:none">
-          🏷️ Apply to selected
-        </button>
-        <button onclick="blSkipSelected()"
-          style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:13px 16px;font-family:var(--font-body);font-size:13px;font-weight:700;color:var(--text-muted);cursor:pointer">
-          ⏭ Skip
-        </button>
+        <button id="bl-apply-btn" onclick="blApplyToSelected()" disabled style="background:#2D5A2D;border:none;border-radius:var(--radius-sm);padding:13px;font-family:var(--font-body);font-size:14px;font-weight:800;color:#fff;cursor:pointer;transition:all .12s;opacity:0.4;pointer-events:none">🏷️ Apply to selected</button>
+        <button onclick="blSkipSelected()" style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:13px 16px;font-family:var(--font-body);font-size:13px;font-weight:700;color:var(--text-muted);cursor:pointer">⏭ Skip</button>
       </div>
       <div id="bl-action-status" style="display:none;font-size:12px;text-align:center;padding:8px 0;color:var(--text-muted)"></div>
     </div>
   </div>
-
   <div id="bl-results" style="display:none" class="wizard-body">
-    <div style="text-align:center;margin-bottom:20px">
-      <div style="font-size:40px;margin-bottom:8px">🎉</div>
-      <div style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px">Session complete</div>
-      <div style="font-size:13px;color:var(--text-muted)" id="bl-results-summary"></div>
-    </div>
+    <div style="text-align:center;margin-bottom:20px"><div style="font-size:40px;margin-bottom:8px">🎉</div><div style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px">Session complete</div><div style="font-size:13px;color:var(--text-muted)" id="bl-results-summary"></div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px" id="bl-stat-grid"></div>
     <div id="bl-results-breakdown" style="margin-bottom:20px"></div>
-    <div class="btn-row">
-      <button class="btn-primary btn-full" onclick="blContinueSorting()">← Keep sorting</button>
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-full" onclick="goTo('screen-new-piece')">🌸 Start listing a piece →</button>
-    </div>
+    <div class="btn-row"><button class="btn-primary btn-full" onclick="blContinueSorting()">← Keep sorting</button></div>
+    <div class="btn-row"><button class="btn btn-full" onclick="goTo('screen-new-piece')">🌸 Start listing a piece →</button></div>
   </div>
 </div>
-
 
 <script>
 const BASE_ID    = 'appHw4SEE5RNT8tCV';
 const TABLE_ID   = 'tbl29ndzXDXXU8f7x';
-const TOKEN_KEY  = 'eb_master_token';
 const SERVER_URL = 'https://eb-shopify-server.onrender.com';
 const SHOPIFY_BASE = 'https://eternalbloomsbypatti.com/products/';
 const LISTABLE_STATUSES = ['In stock','Photographed','Ready to list'];
@@ -918,7 +814,6 @@ const SEASON_NAMES = {SP:'Spring',SU:'Summer',FA:'Fall',WI:'Winter',AS:'All Seas
 const COLLECTION_MAP = {'Wreath':'door-wreaths','Home decor':'tabletop-and-centerpieces','Outdoor planter':'outdoor-pot-arrangements','Centerpiece':'tabletop-and-centerpieces','Wall decor':'nature-and-everyday','Hanging':'nature-and-everyday','Swag':'nature-and-everyday','Custom order':'nature-and-everyday'};
 const COLLECTION_LABELS = {'door-wreaths':'Door wreaths','outdoor-pot-arrangements':'Outdoor pot arrangements','tabletop-and-centerpieces':'Tabletop and centerpieces','nature-and-everyday':'Nature and everyday','holiday-and-seasonal':'Holiday and seasonal','sold-portfolio':'Sold — Portfolio'};
 
-let AT_TOKEN = '';
 let allRecords = [];
 let cfCachedRecords = [];
 let npCurrentEB = '';
@@ -939,15 +834,13 @@ let npPhotoStatus = 'needed';
 
 // ── INIT ──
 async function init() {
-  const saved = localStorage.getItem(TOKEN_KEY);
-  if (saved) { AT_TOKEN = saved; await connectAirtable(true); }
-  else promptToken();
+  // CHANGE: removed localStorage token read and promptToken() call
+  // Airtable token now lives on Render server as env var — no browser credential needed
+  await connectAirtable();
   fetch(SERVER_URL + '/health').catch(()=>{});
   document.getElementById('ms-sale-date').value = new Date().toISOString().split('T')[0];
   window.addEventListener('offline', ()=>document.getElementById('cf-offline-banner').style.display='block');
   window.addEventListener('online',  ()=>document.getElementById('cf-offline-banner').style.display='none');
-
-  // ── CHANGE 1: Save state when tab/browser closes ──
   window.addEventListener('beforeunload', () => {
     if (currentNpStep > 1) wipSaveNP();
     wipSaveLP();
@@ -955,18 +848,16 @@ async function init() {
   });
 }
 
-// ── CHANGE 2: npSaveAndGoHome — save then navigate home (used by back button) ──
 function npSaveAndGoHome() {
   wipSaveNP();
   goHome();
 }
 
-function promptToken() {
-  const token = prompt('Paste your Airtable Personal Access Token to connect:');
-  if (token) { AT_TOKEN = token.trim(); localStorage.setItem(TOKEN_KEY, AT_TOKEN); connectAirtable(false); }
-}
+// ── AIRTABLE — all calls proxy through Render server ──
+// CHANGE: removed promptToken() entirely — no token prompt, no localStorage token
 
-async function connectAirtable(silent) {
+// CHANGE: connectAirtable no longer needs silent param or token error fallback
+async function connectAirtable() {
   setServerStatus('loading','Connecting...');
   try {
     await loadAllRecords();
@@ -974,24 +865,40 @@ async function connectAirtable(silent) {
     populateHomeStats(); populateLPSelect(); populateMSSelect(); populateCFInventory();
   } catch(e) {
     setServerStatus('error','Connection failed — tap to retry');
-    if (!silent) alert('Connection failed: ' + e.message);
-    document.getElementById('server-status').onclick = promptToken;
+    document.getElementById('server-status').onclick = connectAirtable;
   }
 }
 
+// CHANGE: airtableFetch now routes all Airtable calls through Render proxy
+// Token lives on server as AIRTABLE_TOKEN env var — never in browser
 async function airtableFetch(path, opts={}) {
-  const url = 'https://api.airtable.com/v0/' + BASE_ID + '/' + TABLE_ID + path;
-  const res = await fetch(url, {headers:{'Authorization':'Bearer '+AT_TOKEN,'Content-Type':'application/json'},...opts});
-  if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error((e.error&&e.error.message)||'Airtable error '+res.status); }
+  const method = (opts.method || 'GET').toUpperCase();
+  let url, fetchOpts;
+  if (method === 'GET') {
+    url = SERVER_URL + '/airtable/inventory' + (path && path.startsWith('/') ? path : '');
+    fetchOpts = { method: 'GET' };
+  } else if (method === 'POST') {
+    url = SERVER_URL + '/airtable/inventory';
+    fetchOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: opts.body };
+  } else if (method === 'PATCH') {
+    const recId = path.startsWith('/') ? path.slice(1) : path;
+    url = SERVER_URL + '/airtable/inventory/' + recId;
+    fetchOpts = { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: opts.body };
+  }
+  const res = await fetch(url, fetchOpts);
+  if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error || 'Server error ' + res.status); }
   return res.json();
 }
 
+// CHANGE: loadAllRecords fetches directly from Render — no field filter params needed
 async function loadAllRecords() {
   let records = [], offset = null;
   do {
-    let url = '?pageSize=100&fields[]=EB%20Number&fields[]=Season&fields[]=Type&fields[]=Holiday&fields[]=Description&fields[]=Price%20(%24)&fields[]=Cost%20(%24)&fields[]=Bin%20location&fields[]=Status&fields[]=Width%20(in)&fields[]=Height%20(in)&fields[]=Depth%20(in)&fields[]=Shopify%20URL&fields[]=Listed%20on%20Shopify';
-    if (offset) url += '&offset='+offset;
-    const data = await airtableFetch(url);
+    let url = SERVER_URL + '/airtable/inventory';
+    if (offset) url += '?offset=' + encodeURIComponent(offset);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Failed to load inventory');
+    const data = await res.json();
     records = records.concat(data.records||[]);
     offset = data.offset||null;
   } while(offset);
@@ -1081,7 +988,6 @@ async function npSaveDimensions() {
   const w=document.getElementById('np-width').value.trim();
   const h=document.getElementById('np-height').value.trim();
   const d=document.getElementById('np-depth').value.trim();
-  // Weight is NOT stored in Airtable — it is entered in List & Publish and sent directly to Shopify
   if (npCurrentRecordId && (w || h || d)) {
     const fields={};
     if(w) fields['Width (in)']=parseInt(w);
@@ -1148,7 +1054,6 @@ function npSetPhotoStatus(status) {
   else{doneBtn.style.borderColor='var(--teal)';doneBtn.style.background='var(--teal-bg)';needBtn.style.borderColor='var(--border)';needBtn.style.background='var(--card)';if(hint)hint.style.display='block';}
 }
 
-
 // ── LIST & PUBLISH WIZARD ──
 function lpStep(n) {
   document.querySelectorAll('#screen-list .step-block').forEach(s=>s.classList.remove('active'));
@@ -1172,15 +1077,13 @@ async function lpOnSelectRecord() {
   const recId = document.getElementById('lp-eb-select').value;
   document.getElementById('lp-next-1-btn').disabled = !recId;
   if (!recId) { document.getElementById('lp-at-preview').style.display='none'; lpSelectedRecord=null; return; }
-  // Start with the cached record so UI appears immediately
   lpSelectedRecord = allRecords.find(r => r.id === recId);
   if (!lpSelectedRecord) return;
   lpRenderLPPreview(lpSelectedRecord.fields);
-  // Re-fetch this record from Airtable to pick up any dims saved in the current session
+  // Re-fetch this record to pick up any dims saved in the current session
   try {
     const fresh = await airtableFetch('/'+recId);
     if (fresh && fresh.fields) {
-      // Merge fresh fields into the cached record so publish also has them
       Object.assign(lpSelectedRecord.fields, fresh.fields);
       lpRenderLPPreview(lpSelectedRecord.fields);
     }
@@ -1389,9 +1292,26 @@ let costPath='', costSelectedCat='', costSelectedSubcat='';
 let costReceiptBase64='', costReceiptMime='';
 let costRecentRecords=[];
 
-function costAirtableFetch(path, opts={}) {
-  const url='https://api.airtable.com/v0/'+BASE_ID+'/'+encodeURIComponent(COSTS_TABLE_ID)+path;
-  return fetch(url,{headers:{'Authorization':'Bearer '+AT_TOKEN,'Content-Type':'application/json'},...opts}).then(async res=>{if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error((e.error&&e.error.message)||'Airtable error '+res.status);}return res.json();});
+// CHANGE: costAirtableFetch now routes through Render proxy — token on server, not in browser
+async function costAirtableFetch(path, opts={}) {
+  const method = (opts.method || 'GET').toUpperCase();
+  let url, fetchOpts;
+  if (method === 'GET') {
+    url = SERVER_URL + '/airtable/costs';
+    const m = (path||'').match(/offset=([^&]+)/);
+    if (m) url += '?offset=' + m[1];
+    fetchOpts = { method: 'GET' };
+  } else if (method === 'POST') {
+    url = SERVER_URL + '/airtable/costs';
+    fetchOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: opts.body };
+  } else if (method === 'PATCH') {
+    const recId = path.startsWith('/') ? path.slice(1) : path;
+    url = SERVER_URL + '/airtable/costs/' + recId;
+    fetchOpts = { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: opts.body };
+  }
+  const res = await fetch(url, fetchOpts);
+  if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error || 'Server error ' + res.status); }
+  return res.json();
 }
 
 function costStep(n){document.querySelectorAll('#screen-costs .step-block').forEach(s=>s.classList.remove('active'));const stepMap={1:'cost-step-1',receipt:'cost-step-receipt',mileage:'cost-step-mileage',manual:'cost-step-manual',review:'cost-step-review',done:'cost-step-done'};const pillMap={1:'Choose type',receipt:'Upload receipt',mileage:'Log mileage',manual:'Enter details',review:'Review & save',done:'Saved ✓'};const pctMap={1:20,receipt:40,mileage:60,manual:60,review:80,done:100};const el=document.getElementById(stepMap[n]);if(el)el.classList.add('active');document.getElementById('cost-step-pill').textContent=pillMap[n]||'';document.getElementById('cost-progress').style.width=(pctMap[n]||20)+'%';window.scrollTo({top:0,behavior:'smooth'});setTimeout(()=>window.scrollTo({top:0,behavior:'smooth'}),150);}
@@ -1459,6 +1379,7 @@ async function ptPromptPhoto(recordId, ebNumber) {
 
 // ══════════════════════════════════════════
 // WORK IN PROGRESS — localStorage persistence
+// (WIP only saves form state/progress, not credentials)
 // ══════════════════════════════════════════
 const WIP_KEYS = { lp: 'eb_wip_lp', np: 'eb_wip_np', cost: 'eb_wip_cost' };
 const WIP = {
@@ -1489,15 +1410,10 @@ function wipLabel(key, saved) {
 function wipDiscard(key) { WIP.clear(key); const banner=document.getElementById(key+'-wip-banner'); if(banner)banner.style.display='none'; }
 function wipRestore(key) { const banner=document.getElementById(key+'-wip-banner'); if(banner)banner.style.display='none'; const saved=WIP.load(key); if(!saved)return; if(key==='lp')wipRestoreLP(saved); if(key==='np')wipRestoreNP(saved); if(key==='cost')wipRestoreCost(saved); }
 function wipRestoreLP(saved) {
-  // saved.ebRecordId is the Airtable record ID (what the select uses as its value)
-  // saved.ebNumber is the human-readable EB number (for display only)
-  const recId = saved.ebRecordId || saved.ebNumber; // fallback for old saves
+  const recId = saved.ebRecordId || saved.ebNumber;
   if (recId) {
     const sel = document.getElementById('lp-eb-select');
-    if (sel) {
-      sel.value = recId;
-      sel.dispatchEvent(new Event('change'));
-    }
+    if (sel) { sel.value = recId; sel.dispatchEvent(new Event('change')); }
   }
   const fields = ['lp-colors','lp-materials','lp-location','lp-weight','lp-meta','lp-special'];
   fields.forEach(id => { const el = document.getElementById(id); if (el && saved[id]) el.value = saved[id]; });
@@ -1527,7 +1443,6 @@ function wipRestoreNP(saved) {
 }
 function wipRestoreCost(saved) { if(saved.path){costChoosePath(saved.path);if(saved.path==='manual'){['man-vendor','man-amount','man-date','man-description'].forEach(id=>{const el=document.getElementById(id);if(el&&saved[id])el.value=saved[id];});if(saved.category){costSelectedCat=saved.category;renderCatGrid('man-cat-grid','man-subcat-wrap','man-subcat-grid');}}else if(saved.path==='mileage'){['mile-description','mile-miles','mile-date'].forEach(id=>{const el=document.getElementById(id);if(el&&saved[id])el.value=saved[id];});}}}
 
-// ── CHANGE 3: Improved wipSaveNP — captures all fields + recordId ──
 function wipSaveNP() {
   WIP.save('np', {
     year:     (document.getElementById('np-year')||{}).value||'',
@@ -1548,16 +1463,14 @@ function wipSaveNP() {
     step: currentNpStep||1
   });
 }
-
 function wipSaveLP() {
   const eb = document.getElementById('lp-eb-select');
   const recId = eb ? eb.value : '';
-  // Resolve the human-readable EB number from the in-memory record so the banner shows it
   const rec = recId ? allRecords.find(r => r.id === recId) : null;
   const ebLabel = (rec && rec.fields['EB Number']) ? rec.fields['EB Number'] : recId;
   WIP.save('lp', {
     ebRecordId:  recId,
-    ebNumber:    ebLabel,   // human-readable for banner display
+    ebNumber:    ebLabel,
     'lp-colors':    (document.getElementById('lp-colors')||{}).value||'',
     'lp-materials': (document.getElementById('lp-materials')||{}).value||'',
     'lp-location':  (document.getElementById('lp-location')||{}).value||'',
