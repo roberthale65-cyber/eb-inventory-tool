@@ -5,19 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Eternal Blooms — System Dashboard</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Mulish:wght@300;400;600;700;800&family=Nunito+Sans:wght@400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Poppins:wght@300;400;500;600;700&display=swap');
+  /* Eternal Blooms design system. Legacy token name --teal* retained but maps to EB rose (primary lead). */
   :root {
-    --teal:#006688;--teal-dark:#004d67;--teal-light:#c2e8ff;--teal-bg:#f0f9ff;
-    --green-bg:#E1F5EE;--green-text:#085041;--green:#1D9E75;
-    --red-bg:#FCEBEB;--red-text:#791F1F;--red:#E24B4A;
-    --amber-bg:#FAEEDA;--amber-text:#633806;--amber:#BA7517;
-    --surface:#f6fafe;--card:#ffffff;--border:rgba(0,0,0,0.1);
-    --text:#171c1f;--text-muted:#40484d;
-    --font-head:'Mulish',Arial,sans-serif;--font-body:'Nunito Sans',Arial,sans-serif;
+    --teal:#bb8588;--teal-dark:#9e6066;--teal-light:#dfc2c2;--teal-bg:#faf6f6;
+    --green-bg:#ecfde8;--green-text:#2f5320;--green:#2fc220;
+    --red-bg:#fdf3f3;--red-text:#791f1f;--red:#e4564f;
+    --amber-bg:#fefbec;--amber-text:#7a4a0a;--amber:#eea211;
+    --surface:#fbfaf9;--card:#ffffff;--border:#e9e6e2;
+    --text:#2b2622;--text-muted:#5b5248;
+    --font-head:'DM Serif Display',Georgia,serif;--font-body:'Poppins',system-ui,sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:var(--font-body);background:var(--surface);color:var(--text);min-height:100vh;padding:0 0 60px}
-  .top-bar{background:var(--teal);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,102,136,0.15)}
+  .top-bar{background:var(--teal);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(43,38,34,0.12)}
   .top-bar-left{display:flex;align-items:center;gap:12px}
   .logo-mark{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-size:18px;font-weight:800}
   .top-bar-title{font-family:var(--font-head);font-size:18px;font-weight:700}
@@ -31,15 +32,15 @@
   .summary-val{font-family:var(--font-head);font-size:28px;font-weight:800;color:var(--teal);line-height:1}
   .summary-label{font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-top:4px}
 
-  .section-title{font-family:var(--font-head);font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--text-muted);text-transform:uppercase;margin-bottom:12px}
+  .section-title{font-family:var(--font-body);font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--text-muted);text-transform:uppercase;margin-bottom:12px}
   .status-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
   .status-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px 20px}
   .status-card.has-error{border-color:var(--red)}
   .status-card.has-warn{border-color:var(--amber)}
   .status-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-  .status-card-name{font-family:var(--font-head);font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px}
+  .status-card-name{font-family:var(--font-body);font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px}
   .status-pill{font-size:11px;font-weight:800;padding:3px 10px;border-radius:99px;white-space:nowrap}
-  .pill-checking{background:#f0f4f8;color:var(--text-muted)}
+  .pill-checking{background:#f2f0ee;color:var(--text-muted)}
   .pill-ok{background:var(--green-bg);color:var(--green-text)}
   .pill-warn{background:var(--amber-bg);color:var(--amber-text)}
   .pill-error{background:var(--red-bg);color:var(--red-text)}
@@ -54,7 +55,7 @@
   .check-pending{color:var(--text-muted)}
 
   .status-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;display:inline-block}
-  .dot-checking{background:#71787d;animation:pulse 1.2s ease-in-out infinite}
+  .dot-checking{background:#817365;animation:pulse 1.2s ease-in-out infinite}
   .dot-ok{background:var(--green)}
   .dot-warn{background:var(--amber)}
   .dot-error{background:var(--red)}
@@ -69,7 +70,7 @@
   .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px}
   .pill-instock{background:var(--green-bg);color:var(--green-text)}
   .pill-listed{background:var(--teal-light);color:var(--teal-dark)}
-  .pill-sold{background:#e5deff;color:#474364}
+  .pill-sold{background:#daede9;color:#2f5653}
   .pill-fair{background:var(--amber-bg);color:var(--amber-text)}
   .pill-archived{background:var(--surface);color:var(--text-muted)}
   .pill-warn-row{background:var(--amber-bg);color:var(--amber-text)}
@@ -78,8 +79,8 @@
   button:hover{background:var(--surface);border-color:var(--teal);color:var(--teal)}
   .btn-primary{background:var(--teal);color:#fff;border-color:var(--teal)}
   .btn-primary:hover{background:var(--teal-dark);border-color:var(--teal-dark);color:#fff}
-  .btn-email{background:#EA580C;color:#fff;border-color:#EA580C}
-  .btn-email:hover{background:#C2410C;border-color:#C2410C;color:#fff}
+  .btn-email{background:#46867f;color:#fff;border-color:#46867f}
+  .btn-email:hover{background:#366b67;border-color:#366b67;color:#fff}
   .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
 
   .alert{border-radius:12px;padding:12px 16px;font-size:13px;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px;line-height:1.5}
@@ -545,7 +546,8 @@ function renderInventoryTable(records) {
     sorted.map(r => {
       const f = r.fields, s = f['Status']||'';
       const cls = s==='In stock'?'pill-instock':s==='Listed'?'pill-listed':s==='Sold'?'pill-sold':s==='Craft fair'?'pill-fair':'pill-archived';
-      return '<tr><td class="eb-cell">'+(f['EB Number']||'—')+'</td><td>'+(f['Season']||'—')+'</td><td>'+(f['Type']||'—')+'</td>' +
+      const seasonDisp = Array.isArray(f['Season']) ? f['Season'].join('/') : (f['Season']||'—');
+      return '<tr><td class="eb-cell">'+(f['EB Number']||'—')+'</td><td>'+seasonDisp+'</td><td>'+(f['Type']||'—')+'</td>' +
         '<td><span class="pill '+cls+'">'+(s||'—')+'</span></td>' +
         '<td>'+(f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—')+'</td>' +
         '<td>'+(f['Date made']||'—')+'</td></tr>';

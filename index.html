@@ -5,27 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Eternal Blooms — Inventory Tool</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Poppins:wght@300;400;500;600;700&display=swap');
+  /* Eternal Blooms design system. Legacy token names retained; --green* maps to EB rose (primary lead), --gold* to EB amber (info/pending). */
   :root {
-    --green: #2d5a27;
-    --green-light: #4a7c42;
-    --green-pale: #eef4ed;
-    --gold: #b5883a;
-    --gold-light: #f5e9d0;
-    --red: #c0392b;
-    --red-pale: #fdecea;
-    --gray: #6b7280;
-    --gray-light: #f3f4f6;
-    --border: #d1d5db;
-    --text: #1f2937;
+    --green: #bb8588;
+    --green-light: #9e6066;
+    --green-pale: #faf6f6;
+    --gold: #eea211;
+    --gold-light: #fefbec;
+    --red: #e4564f;
+    --red-pale: #fdf3f3;
+    --gray: #5b5248;
+    --gray-light: #f2f0ee;
+    --border: #e9e6e2;
+    --text: #2b2622;
+    --font-display: 'DM Serif Display', Georgia, serif;
+    --font-body: 'Poppins', system-ui, sans-serif;
     --radius: 10px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f7f8f5; color: var(--text); min-height: 100vh; }
+  body { font-family: var(--font-body); background: #fbfaf9; color: var(--text); min-height: 100vh; }
 
   /* ── Header ── */
   .header { background: var(--green); color: white; padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
   .header-logo { width: 36px; height: 36px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--green); font-size: 14px; flex-shrink: 0; }
-  .header-title { font-size: 18px; font-weight: 700; }
+  .header-title { font-family: var(--font-display); font-size: 19px; font-weight: 400; }
   .header-sub { font-size: 12px; opacity: .75; margin-top: 1px; }
 
   /* ── Stats bar ── */
@@ -50,9 +54,9 @@
 
   /* ── Status pill ── */
   .status-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 20px; }
-  .status-pill.connected { background: #d1fae5; color: #065f46; }
-  .status-pill.connecting { background: var(--gold-light); color: #92400e; }
-  .status-pill.disconnected { background: #fee2e2; color: #991b1b; }
+  .status-pill.connected { background: #ecfde8; color: #2f5320; }
+  .status-pill.connecting { background: var(--gold-light); color: #7a4a0a; }
+  .status-pill.disconnected { background: #fdf3f3; color: #791f1f; }
   .pill-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 
   /* ── Form ── */
@@ -108,15 +112,15 @@
   .recent-eb { font-family: 'Courier New', monospace; font-size: 14px; font-weight: 700; color: var(--green); flex: 1; }
   .recent-meta { font-size: 12px; color: var(--gray); }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
-  .badge-stock { background: #d1fae5; color: #065f46; }
-  .badge-listed { background: #dbeafe; color: #1e40af; }
-  .badge-sold { background: #fee2e2; color: #991b1b; }
+  .badge-stock { background: #ecfde8; color: #2f5320; }
+  .badge-listed { background: #f6eded; color: #834d54; }
+  .badge-sold { background: #e9e6e2; color: #474038; }
 
   /* ── Alerts ── */
   .alert { border-radius: 8px; padding: 12px 14px; font-size: 14px; line-height: 1.5; margin-bottom: 14px; }
-  .alert-error { background: var(--red-pale); border: 1px solid #fca5a5; color: #991b1b; }
-  .alert-success { background: #d1fae5; border: 1px solid #6ee7b7; color: #065f46; }
-  .alert-info { background: var(--gold-light); border: 1px solid #fcd34d; color: #92400e; }
+  .alert-error { background: var(--red-pale); border: 1px solid #e4564f; color: #791f1f; }
+  .alert-success { background: #ecfde8; border: 1px solid #2fc220; color: #2f5320; }
+  .alert-info { background: var(--gold-light); border: 1px solid #eea211; color: #7a4a0a; }
 
   /* ── Hidden ── */
   .hidden { display: none !important; }
@@ -126,13 +130,13 @@
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ── Section heading ── */
-  .section-heading { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .section-heading { font-family: var(--font-display); font-size: 18px; font-weight: 400; color: var(--text); margin-bottom: 4px; }
   .section-sub { font-size: 13px; color: var(--gray); margin-bottom: 18px; }
 
   /* ── Field check ── */
   .field-check-item { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--gray-light); font-size: 13px; }
   .field-check-item:last-child { border-bottom: none; }
-  .check-ok { color: #059669; font-size: 16px; }
+  .check-ok { color: #2fc220; font-size: 16px; }
   .check-err { color: var(--red); font-size: 16px; }
   .check-warn { color: var(--gold); font-size: 16px; }
 </style>
@@ -250,11 +254,11 @@
         <button class="btn btn-primary" id="btn-step1-next" onclick="goStep2()" disabled>Next →</button>
       </div>
 
-      <!-- STEP 2 — Holiday + Description -->
+      <!-- STEP 2 — Occasion + Description -->
       <div id="step-2" class="hidden">
         <div class="form-group">
-          <label>Holiday (optional)</label>
-          <select id="f-holiday">
+          <label>Occasion (optional)</label>
+          <select id="f-occasion">
             <option value="None">None</option>
             <option value="Christmas">Christmas</option>
             <option value="Thanksgiving">Thanksgiving</option>
@@ -263,6 +267,14 @@
             <option value="Fourth of July">Fourth of July</option>
             <option value="Halloween">Halloween</option>
             <option value="Valentine's Day">Valentine's Day</option>
+            <option value="Memorial Day">Memorial Day</option>
+            <option value="Congratulations">Congratulations</option>
+            <option value="Sympathy">Sympathy</option>
+            <option value="Funeral">Funeral</option>
+            <option value="Wedding">Wedding</option>
+            <option value="Bridal Shower">Bridal Shower</option>
+            <option value="Baby Shower">Baby Shower</option>
+            <option value="Graduation">Graduation</option>
           </select>
         </div>
         <div class="form-group">
@@ -456,7 +468,7 @@ async function loadFromAirtable() {
 //  FIELD CHECK
 // ═══════════════════════════════════════════
 async function runFieldCheck() {
-  const required = ['EB Number','Season','Type','Holiday','Date made','Status','Price ($)','Cost ($)','Margin ($)','Shopify tags','Shopify URL','Bin location','Photos done','Listed on Shopify','Description','Notes'];
+  const required = ['EB Number','Season','Type','Occasion','Date made','Status','Price ($)','Cost ($)','Margin ($)','Shopify tags','Shopify URL','Bin location','Photos done','Listed on Shopify','Description','Notes'];
   if (!allRecords.length) { hide('field-check-section'); return; }
   const sampleFields = Object.keys(allRecords[0].fields || {});
   const list = document.getElementById('field-check-list');
@@ -659,7 +671,7 @@ function generateQR() {
       text: qrUrl,
       width: 180,
       height: 180,
-      colorDark: '#2d5a27',
+      colorDark: '#341d21',
       colorLight: '#ffffff',
       correctLevel: QRCode.CorrectLevel.H
     });
@@ -728,9 +740,9 @@ async function saveToAirtable() {
 
   const fields = {
     'EB Number':    assignedEB,
-    'Season':       SEASON_NAMES[seasonCode] || seasonCode,
+    'Season':       [SEASON_NAMES[seasonCode] || seasonCode],
     'Type':         TYPE_NAMES[typeCode]     || typeCode,
-    'Holiday':      document.getElementById('f-holiday').value     || 'None',
+    'Occasion':     document.getElementById('f-occasion').value    || 'None',
     'Description':  document.getElementById('f-description').value || '',
     'Bin location': document.getElementById('f-bin').value         || '',
     'Status':       'In stock',
@@ -767,7 +779,7 @@ function resetForm() {
   assignedEB = ''; qrDataUrl = ''; ebSequence = null;
   document.getElementById('f-season').value      = '';
   document.getElementById('f-type').value        = '';
-  document.getElementById('f-holiday').value     = 'None';
+  document.getElementById('f-occasion').value    = 'None';
   document.getElementById('f-description').value = '';
   document.getElementById('f-price').value       = '';
   document.getElementById('f-cost').value        = '';

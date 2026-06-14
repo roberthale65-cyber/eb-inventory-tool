@@ -5,30 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Eternal Blooms — Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Nunito+Sans:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --ivory:#FAF7F2;--ivory-dark:#F2EDE4;--sage:#5C7A5C;--sage-light:#8BA88B;--sage-bg:#EEF4EE;
-  --rose:#C4797A;--rose-light:#F2DCDC;--rose-bg:#FDF5F5;
-  --gold:#B8935A;--gold-light:#F5E6D0;--gold-bg:#FDF6EE;
-  --teal:#2D6E7E;--teal-light:#C2DFE6;--teal-bg:#EDF6F9;
-  --purple:#6D28D9;--purple-bg:#F3F0FF;--purple-light:#C4B5FD;
-  --text:#2C2416;--text-mid:#5C4F3A;--text-muted:#8C7E6A;
-  --card:#FFFFFF;--border:rgba(92,74,58,0.12);--border-strong:rgba(92,74,58,0.22);
-  --green-bg:#E8F5EE;--green-text:#1A5C35;--green-border:#6DBF8A;
-  --red-bg:#FCEBEB;--red-text:#791F1F;--red-border:#E24B4A;
-  --amber-bg:#FDF3E0;--amber-text:#7A4A0A;--amber-border:#E8A830;
-  --shadow-sm:0 1px 3px rgba(44,36,22,0.08);
-  --shadow-md:0 4px 16px rgba(44,36,22,0.10);
-  --shadow-lg:0 8px 32px rgba(44,36,22,0.13);
-  --font-display:'Playfair Display',Georgia,serif;
-  --font-body:'Nunito Sans',system-ui,sans-serif;
+  /* Eternal Blooms design system — rose leads, sage supports, teal punctuates, over warm neutrals */
+  --ivory:#fbfaf9;--ivory-dark:#f2f0ee;--sage:#688b58;--sage-light:#8bac7c;--sage-bg:#f6f9f4;
+  --rose:#bb8588;--rose-light:#eddede;--rose-bg:#faf6f6;
+  --gold:#817365;--gold-light:#e9e6e2;--gold-bg:#f2f0ee;
+  --teal:#46867f;--teal-light:#b6d9d2;--teal-bg:#f4f9f8;
+  --purple:#46867f;--purple-bg:#f4f9f8;--purple-light:#89bfb7;
+  --text:#2b2622;--text-mid:#5b5248;--text-muted:#817365;
+  --card:#ffffff;--border:#e9e6e2;--border-strong:#d9d4ce;
+  --green-bg:#ecfde8;--green-text:#2f5320;--green-border:#2fc220;
+  --red-bg:#fdf3f3;--red-text:#791f1f;--red-border:#e4564f;
+  --amber-bg:#fefbec;--amber-text:#7a4a0a;--amber-border:#eea211;
+  --shadow-sm:0 1px 4px rgba(43,38,34,0.06);
+  --shadow-md:0 4px 16px rgba(43,38,34,0.10);
+  --shadow-lg:0 8px 32px rgba(43,38,34,0.13);
+  --font-display:'DM Serif Display',Georgia,serif;
+  --font-body:'Poppins',system-ui,sans-serif;
   --radius:16px;--radius-sm:10px;--radius-lg:24px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html{scroll-behavior:smooth}
 body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-height:100vh;overflow-x:hidden}
-.top-bar{background:var(--sage);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 12px rgba(44,36,22,0.15)}
+.top-bar{background:var(--rose);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 12px rgba(43,38,34,0.15)}
 .top-bar-brand{display:flex;align-items:center;gap:10px}
 .brand-mark{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:15px;font-weight:700;letter-spacing:-.5px}
 .brand-name{font-family:var(--font-display);font-size:17px;font-weight:600;letter-spacing:.02em}
@@ -39,14 +40,14 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .status-pill.error{background:rgba(226,75,74,0.3);color:#ffd4d4}
 .status-pill.loading{background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.8)}
 .status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.ok .status-dot{background:#6DBF8A}
-.error .status-dot{background:#E24B4A}
+.ok .status-dot{background:#2fc220}
+.error .status-dot{background:#e4564f}
 .loading .status-dot{background:rgba(255,255,255,0.6);animation:pulse 1.2s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .screen{display:none;min-height:calc(100vh - 62px);animation:fadeIn .25s ease}
 .screen.active{display:block}
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-.home-hero{background:linear-gradient(135deg,var(--sage) 0%,#3d5c3d 100%);padding:32px 20px 28px;color:#fff;position:relative;overflow:hidden}
+.home-hero{background:linear-gradient(135deg,var(--rose) 0%,#9e6066 100%);padding:32px 20px 28px;color:#fff;position:relative;overflow:hidden}
 .home-hero::before{content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;border-radius:50%;background:rgba(255,255,255,0.06)}
 .home-hero::after{content:'';position:absolute;bottom:-60px;left:-20px;width:160px;height:160px;border-radius:50%;background:rgba(255,255,255,0.04)}
 .hero-greeting{font-size:13px;font-weight:600;opacity:.8;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
@@ -82,7 +83,7 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .wizard-title{font-family:var(--font-display);font-size:17px;font-weight:600;color:var(--text);flex:1}
 .wizard-step-pill{background:var(--sage-bg);color:var(--sage);font-size:11px;font-weight:800;padding:4px 10px;border-radius:99px;flex-shrink:0}
 .wizard-progress{height:3px;background:var(--ivory-dark);position:sticky;top:112px;z-index:99}
-.wizard-progress-bar{height:100%;background:var(--sage);transition:width .4s ease;border-radius:0 99px 99px 0}
+.wizard-progress-bar{height:100%;background:var(--rose);transition:width .4s ease;border-radius:0 99px 99px 0}
 .wizard-body{padding:20px 16px;max-width:560px;margin:0 auto;padding-bottom:100px}
 .step-block{display:none;animation:fadeIn .2s ease}
 .step-block.active{display:block}
@@ -91,7 +92,7 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
 .field label{font-size:12px;font-weight:700;color:var(--text-muted);letter-spacing:.03em}
 .field input,.field select,.field textarea{font-family:var(--font-body);font-size:14px;padding:10px 13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--text);outline:none;transition:border-color .15s;width:100%}
-.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--sage);box-shadow:0 0 0 3px rgba(92,122,92,0.1)}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--rose);box-shadow:0 0 0 3px rgba(187,133,136,0.18)}
 .field textarea{resize:vertical;min-height:80px;line-height:1.5}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
@@ -116,7 +117,7 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .at-label{font-size:9px;font-weight:800;color:var(--teal);letter-spacing:.05em;text-transform:uppercase;margin-bottom:2px}
 .at-value{font-size:12px;color:var(--text);font-weight:700}
 .at-value.empty{color:var(--text-muted);font-weight:400;font-style:italic;font-size:11px}
-.eb-display{background:linear-gradient(135deg,var(--sage) 0%,#3d5c3d 100%);border-radius:var(--radius);padding:24px;text-align:center;color:#fff;margin-bottom:16px;box-shadow:var(--shadow-md)}
+.eb-display{background:linear-gradient(135deg,var(--rose) 0%,#9e6066 100%);border-radius:var(--radius);padding:24px;text-align:center;color:#fff;margin-bottom:16px;box-shadow:var(--shadow-md)}
 .eb-label{font-size:11px;font-weight:700;opacity:.75;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px}
 .eb-number{font-family:var(--font-display);font-size:36px;font-weight:700;letter-spacing:.05em;margin-bottom:8px}
 .eb-sub{font-size:12px;opacity:.7}
@@ -129,13 +130,13 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .lf-copy{font-size:11px;padding:3px 9px;border-radius:6px;border:1.5px solid var(--border);background:#fff;color:var(--text-muted);cursor:pointer;flex-shrink:0;white-space:nowrap;font-family:var(--font-body);font-weight:700;transition:all .15s}
 .lf-copy:hover{background:var(--sage-bg);color:var(--sage);border-color:var(--sage)}
 .lf-copy.copied{background:var(--green-bg);color:var(--green-text);border-color:var(--green-border)}
-.ai-block{background:linear-gradient(135deg,#F3F0FF 0%,#EDE8FF 100%);border:1.5px solid #C4B5FD;border-radius:var(--radius);padding:18px;margin-top:14px}
-.ai-block-title{font-size:11px;font-weight:800;color:#4C1D95;letter-spacing:.07em;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:7px}
-.desc-textarea{width:100%;font-family:var(--font-body);font-size:13.5px;padding:12px 14px;border:1.5px solid #C4B5FD;border-radius:var(--radius-sm);background:#fff;color:var(--text);outline:none;resize:vertical;min-height:120px;line-height:1.6;transition:border-color .15s}
-.desc-textarea:focus{border-color:#7C3AED;box-shadow:0 0 0 3px rgba(124,58,237,0.1)}
-.desc-textarea::placeholder{color:#A78BFA;font-style:italic}
+.ai-block{background:linear-gradient(135deg,#f4f9f8 0%,#daede9 100%);border:1.5px solid #89bfb7;border-radius:var(--radius);padding:18px;margin-top:14px}
+.ai-block-title{font-size:11px;font-weight:800;color:#2f5653;letter-spacing:.07em;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.desc-textarea{width:100%;font-family:var(--font-body);font-size:13.5px;padding:12px 14px;border:1.5px solid #89bfb7;border-radius:var(--radius-sm);background:#fff;color:var(--text);outline:none;resize:vertical;min-height:120px;line-height:1.6;transition:border-color .15s}
+.desc-textarea:focus{border-color:#46867f;box-shadow:0 0 0 3px rgba(70,134,127,0.12)}
+.desc-textarea::placeholder{color:#6ea9a2;font-style:italic}
 .desc-confirmed-box{background:#fff;border:1.5px solid var(--green-border);border-radius:var(--radius-sm);padding:14px;font-size:13.5px;line-height:1.7;color:var(--text);position:relative;min-height:80px}
-.drop-zone{border:2px dashed rgba(184,147,90,0.4);border-radius:var(--radius);background:#fff;padding:30px 20px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px}
+.drop-zone{border:2px dashed rgba(129,115,101,0.4);border-radius:var(--radius);background:#fff;padding:30px 20px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px}
 .drop-zone:hover,.drop-zone.dragover{border-color:var(--gold);background:var(--gold-bg)}
 .drop-zone input[type=file]{display:none}
 .drop-zone-icon{font-size:36px;margin-bottom:10px}
@@ -150,7 +151,7 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .photo-remove{position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.5);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;padding:0}
 .photo-remove:hover{background:rgba(220,38,38,0.9)}
 .photo-card-footer-opt{padding:4px 6px;font-size:9px;color:var(--text-muted);font-family:'Courier New',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.progress-wrap{background:rgba(184,147,90,0.15);border-radius:99px;height:5px;margin-bottom:12px;overflow:hidden;display:none}
+.progress-wrap{background:rgba(129,115,101,0.15);border-radius:99px;height:5px;margin-bottom:12px;overflow:hidden;display:none}
 .progress-bar{height:100%;background:var(--gold);border-radius:99px;transition:width .3s;width:0%}
 .publish-block{background:var(--green-bg);border:1.5px solid var(--green-border);border-radius:var(--radius);padding:18px;margin-top:14px}
 .publish-check-row{display:flex;gap:6px;align-items:baseline;padding:3px 0;font-size:13px}
@@ -166,13 +167,13 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .channel-icon{font-size:22px;display:block;margin-bottom:5px}
 .channel-label{font-size:12px;font-weight:700;color:var(--text)}
 .channel-btn.selected .channel-label{color:var(--rose)}
-.cf-header{background:linear-gradient(135deg,var(--gold) 0%,#8B6830 100%);padding:20px 16px;color:#fff}
+.cf-header{background:linear-gradient(135deg,var(--gold) 0%,#474038 100%);padding:20px 16px;color:#fff}
 .cf-title{font-family:var(--font-display);font-size:22px;font-weight:700;margin-bottom:4px}
 .cf-sub{font-size:12px;opacity:.8}
 .cf-offline-banner{background:var(--amber-bg);border:1.5px solid var(--amber-border);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--amber-text);margin:12px 16px 0;display:none}
 .cf-search{padding:12px 16px;background:var(--card);border-bottom:1px solid var(--border);position:sticky;top:62px;z-index:50}
 .cf-search input{width:100%;font-family:var(--font-body);font-size:15px;padding:11px 16px;border:1.5px solid var(--border);border-radius:99px;outline:none;background:#fff;transition:border-color .15s}
-.cf-search input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(184,147,90,0.15)}
+.cf-search input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(129,115,101,0.15)}
 .cf-inventory{padding:12px 16px;padding-bottom:80px}
 .cf-piece-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-sm);transition:all .15s;cursor:pointer}
 .cf-piece-card:hover{border-color:var(--gold);box-shadow:var(--shadow-md)}
@@ -196,39 +197,39 @@ button:active{transform:scale(.97)}
 .btn{font-size:13px;font-weight:700;padding:10px 18px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:#fff;color:var(--text)}
 .btn:hover{background:var(--ivory-dark);border-color:var(--border-strong)}
 .btn-primary{background:var(--sage);color:#fff;border-color:var(--sage);font-size:14px;padding:12px 24px;border-radius:var(--radius-sm)}
-.btn-primary:hover{background:#4a6b4a;border-color:#4a6b4a;color:#fff}
+.btn-primary:hover{background:#547346;border-color:#547346;color:#fff}
 .btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .btn-rose{background:var(--rose);color:#fff;border-color:var(--rose)}
-.btn-rose:hover{background:#b06869;border-color:#b06869;color:#fff}
+.btn-rose:hover{background:#9e6066;border-color:#9e6066;color:#fff}
 .btn-rose:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .btn-gold{background:var(--gold);color:#fff;border-color:var(--gold)}
-.btn-gold:hover{background:#9e7e4a;border-color:#9e7e4a;color:#fff}
+.btn-gold:hover{background:#5b5248;border-color:#5b5248;color:#fff}
 .btn-gold:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .btn-teal{background:var(--teal);color:#fff;border-color:var(--teal)}
-.btn-teal:hover{background:#245e6d;border-color:#245e6d;color:#fff}
-.btn-purple{background:#6D28D9;color:#fff;border-color:#6D28D9;font-size:14px;padding:12px 24px;border-radius:var(--radius-sm)}
-.btn-purple:hover{background:#5B21B6;color:#fff;border-color:#5B21B6}
+.btn-teal:hover{background:#366b67;border-color:#366b67;color:#fff}
+.btn-purple{background:#46867f;color:#fff;border-color:#46867f;font-size:14px;padding:12px 24px;border-radius:var(--radius-sm)}
+.btn-purple:hover{background:#366b67;color:#fff;border-color:#366b67}
 .btn-purple:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .btn-amber{background:var(--gold);color:#fff;border-color:var(--gold);font-size:14px;padding:12px 24px;border-radius:var(--radius-sm)}
-.btn-amber:hover{background:#9e7e4a;color:#fff;border-color:#9e7e4a}
+.btn-amber:hover{background:#5b5248;color:#fff;border-color:#5b5248}
 .btn-amber:disabled{opacity:.4;cursor:not-allowed;transform:none}
-.btn-publish{background:#16A34A;color:#fff;border-color:#16A34A;font-size:15px;padding:14px 28px;border-radius:var(--radius-sm);font-weight:800;width:100%}
-.btn-publish:hover{background:#15803D;border-color:#15803D;color:#fff}
+.btn-publish{background:#547346;color:#fff;border-color:#547346;font-size:15px;padding:14px 28px;border-radius:var(--radius-sm);font-weight:800;width:100%}
+.btn-publish:hover{background:#445c39;border-color:#445c39;color:#fff}
 .btn-publish:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
 .btn-full{width:100%;justify-content:center}
 .btn-save-exit{background:var(--ivory-dark);border:1.5px dashed var(--border-strong);color:var(--text-muted);font-size:13px;font-weight:700;padding:10px 18px;border-radius:var(--radius-sm);width:100%;justify-content:center;margin-top:8px}
 .btn-save-exit:hover{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber-text)}
 .status-bar{border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;margin-bottom:14px;display:flex;align-items:center;gap:9px}
-.status-bar.loading{background:#f0f4f8;color:var(--text-muted)}
+.status-bar.loading{background:#f2f0ee;color:var(--text-muted)}
 .status-bar.success{background:var(--green-bg);color:var(--green-text)}
 .status-bar.error{background:var(--red-bg);color:var(--red-text)}
 .status-bar.warn{background:var(--amber-bg);color:var(--amber-text)}
 .sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.status-bar.loading .sb-dot{background:#71787d;animation:pulse 1.2s ease-in-out infinite}
-.status-bar.success .sb-dot{background:#1D9E75}
-.status-bar.error .sb-dot{background:#E24B4A}
-.status-bar.warn .sb-dot{background:#BA7517}
+.status-bar.loading .sb-dot{background:#817365;animation:pulse 1.2s ease-in-out infinite}
+.status-bar.success .sb-dot{background:#2fc220}
+.status-bar.error .sb-dot{background:#e4564f}
+.status-bar.warn .sb-dot{background:#eea211}
 .divider{border:none;border-top:1px solid var(--border);margin:16px 0}
 .mode-card.log-cost{border-top:3px solid var(--purple)}
 .cost-path-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:16px}
@@ -239,8 +240,8 @@ button:active{transform:scale(.97)}
 .cost-path-title{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--text);margin-bottom:3px}
 .cost-path-desc{font-size:12px;color:var(--text-muted);line-height:1.4}
 .cost-path-arrow{font-size:16px;color:var(--border-strong);margin-left:auto;flex-shrink:0}
-.receipt-drop-zone{border:2px dashed rgba(109,40,217,0.35);border-radius:var(--radius);background:var(--purple-bg);padding:36px 20px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px}
-.receipt-drop-zone:hover,.receipt-drop-zone.dragover{border-color:var(--purple);background:#EDE8FF}
+.receipt-drop-zone{border:2px dashed rgba(70,134,127,0.35);border-radius:var(--radius);background:var(--purple-bg);padding:36px 20px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px}
+.receipt-drop-zone:hover,.receipt-drop-zone.dragover{border-color:var(--purple);background:#daede9}
 .receipt-drop-zone input[type=file]{display:none}
 .receipt-drop-icon{font-size:40px;margin-bottom:10px}
 .receipt-drop-text{font-size:15px;font-weight:700;color:var(--purple);margin-bottom:4px}
@@ -279,6 +280,24 @@ button:active{transform:scale(.97)}
   .hero-stats{gap:8px}
   .hero-stat{min-width:60px;padding:8px 10px}
 }
+/* Add/Edit mode toggle + multi-select chips */
+.np-mode-toggle{display:flex;gap:8px;margin-bottom:16px}
+.np-mode-btn{flex:1;background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:11px 10px;font-size:13px;font-weight:800;color:var(--text-muted);cursor:pointer;font-family:var(--font-body);justify-content:center}
+.np-mode-btn:hover{border-color:var(--sage-light)}
+.np-mode-btn.active{background:var(--sage-bg);border-color:var(--sage);color:var(--sage)}
+.chip-checks{display:flex;flex-wrap:wrap;gap:6px}
+.chip-checks label{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--text);background:#fff;border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;transition:all .12s;letter-spacing:0;text-transform:none}
+.chip-checks label:hover{border-color:var(--sage-light)}
+.chip-checks label:has(input:checked){background:var(--sage-bg);border-color:var(--sage);color:var(--sage)}
+.chip-checks input{accent-color:var(--sage);width:14px;height:14px;margin:0}
+/* Collapsible Photo & Video Workflow panel */
+.pv-workflow{background:var(--teal-bg);border:1.5px solid var(--teal-light);border-radius:var(--radius-sm);padding:0;margin-bottom:12px;overflow:hidden}
+.pv-workflow>summary{list-style:none;cursor:pointer;padding:12px 14px;font-family:var(--font-body);font-size:13px;font-weight:800;color:var(--teal);display:flex;align-items:center;gap:7px;user-select:none}
+.pv-workflow>summary::-webkit-details-marker{display:none}
+.pv-workflow>summary::after{content:'▸';margin-left:auto;font-size:12px;transition:transform .2s;color:var(--teal)}
+.pv-workflow[open]>summary::after{transform:rotate(90deg)}
+.pv-steps{margin:0;padding:0 16px 14px 34px;color:var(--text);font-size:13px;line-height:1.7}
+.pv-steps li{margin-bottom:4px}
 </style>
 </head>
 <body>
@@ -316,7 +335,7 @@ button:active{transform:scale(.97)}
     </div>
   </div>
   <div class="home-grid">
-    <div class="mode-card new-piece" onclick="goTo('screen-new-piece')"><span class="mode-icon">🌸</span><div class="mode-title">Step 1 — New piece</div><div class="mode-desc">Assign EB number, log details, generate QR tag</div><div class="mode-arrow">→</div></div>
+    <div class="mode-card new-piece" onclick="goTo('screen-new-piece')"><span class="mode-icon">🌸</span><div class="mode-title">Step 1 — Add or edit inventory</div><div class="mode-desc">Add a new piece or edit an existing one — log details, generate QR tag</div><div class="mode-arrow">→</div></div>
     <div class="mode-card list-publish" onclick="goTo('screen-list')"><span class="mode-icon">📋</span><div class="mode-title">Step 2 — List & publish</div><div class="mode-desc">Photos, AI description, publish to Shopify</div><div class="mode-arrow">→</div></div>
     <div class="mode-card" onclick="goTo('screen-video')" style="border-top:3px solid var(--teal)"><span class="mode-icon">📹</span><div class="mode-title">Step 3 — Add video</div><div class="mode-desc">Open Shopify media page for your last published piece</div><div class="mode-arrow">→</div></div>
     <div class="mode-card mark-sold" onclick="goTo('screen-sold')"><span class="mode-icon">✅</span><div class="mode-title">Mark as sold</div><div class="mode-desc">Record a sale, update Shopify and Airtable instantly</div><div class="mode-arrow">→</div></div>
@@ -361,30 +380,40 @@ button:active{transform:scale(.97)}
 
 <!-- NEW PIECE SCREEN -->
 <div id="screen-new-piece" class="screen">
-  <div class="wizard-header"><button class="back-btn" onclick="npSaveAndGoHome()">←</button><div class="wizard-title">New piece</div><div class="wizard-step-pill" id="np-step-pill">Step 1 of 4</div></div>
+  <div class="wizard-header"><button class="back-btn" onclick="npSaveAndGoHome()">←</button><div class="wizard-title">Add or edit inventory</div><div class="wizard-step-pill" id="np-step-pill">Step 1 of 4</div></div>
   <div class="wizard-progress"><div class="wizard-progress-bar" id="np-progress" style="width:25%"></div></div>
   <div class="wizard-body">
     <div id="np-wip-banner" class="info-card amber" style="display:none;margin-bottom:12px"></div>
     <div id="status-np" class="status-bar" style="display:none"><div class="sb-dot"></div><span id="status-np-msg"></span></div>
     <div class="step-block active" id="np-step-1">
-      <div class="section-label">Assign EB number</div>
-      <div class="info-card sage"><strong>Every piece starts here.</strong> Fill in the details below and the next available EB number is assigned automatically.</div>
+      <div class="np-mode-toggle">
+        <button type="button" id="np-mode-add-btn" class="np-mode-btn active" onclick="npSetMode('add')">➕ Add new</button>
+        <button type="button" id="np-mode-edit-btn" class="np-mode-btn" onclick="npSetMode('edit')">✏️ Edit existing</button>
+      </div>
+      <div class="field" id="np-edit-picker-wrap" style="display:none"><label>Choose a piece to edit</label><select id="np-edit-select"><option value="">— pick a piece —</option></select></div>
+      <div class="section-label" id="np-step1-label">Assign EB number</div>
+      <div class="info-card sage" id="np-add-hint"><strong>Every piece starts here.</strong> Fill in the details below and the next available EB number is assigned automatically.</div>
+      <div class="info-card teal" id="np-edit-hint" style="display:none"><strong>Editing an existing piece.</strong> Update any details and save — the EB number stays the same.</div>
+      <div class="field"><label>Reference name <span style="color:var(--rose)">*</span></label><input type="text" id="np-ref-name" required placeholder="e.g. Cozy autumn door wreath"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">A short, temporary name to recognize this piece in lists.</div></div>
       <div class="grid-2">
         <div class="field"><label>Year</label><select id="np-year"><option value="26">2026</option><option value="27">2027</option><option value="28">2028</option></select></div>
-        <div class="field"><label>Season</label><select id="np-season"><option value="SP">Spring</option><option value="SU">Summer</option><option value="FA">Fall</option><option value="WI">Winter</option><option value="AS">All Season</option></select></div>
+        <div class="field"><label>Type</label><select id="np-type"><option value="WR">Wreath</option><option value="TT">Home decor</option><option value="OP">Outdoor planter</option><option value="CP">Centerpiece</option><option value="WP">Wall decor</option><option value="HA">Hanging</option><option value="SW">Swag</option><option value="CU">Custom order</option></select></div>
       </div>
-      <div class="field"><label>Type</label><select id="np-type"><option value="WR">Wreath</option><option value="TT">Home decor</option><option value="OP">Outdoor planter</option><option value="CP">Centerpiece</option><option value="WP">Wall decor</option><option value="HA">Hanging</option><option value="SW">Swag</option><option value="CU">Custom order</option></select></div>
+      <div class="field"><label>Season</label><div id="np-season" class="chip-checks"></div></div>
       <div class="grid-2">
-        <div class="field"><label>Holiday (optional)</label><select id="np-holiday"><option value="None">None</option><option value="Christmas">Christmas</option><option value="Thanksgiving">Thanksgiving</option><option value="Easter">Easter</option><option value="Mother's Day">Mother's Day</option><option value="Memorial Day">Memorial Day</option><option value="Fourth of July">Fourth of July</option><option value="Halloween">Halloween</option><option value="Valentine's Day">Valentine's Day</option></select></div>
+        <div class="field"><label>Occasion (optional)</label><select id="np-occasion"></select></div>
         <div class="field"><label>Price ($)</label><input type="text" id="np-price" placeholder="e.g. 85.00"></div>
       </div>
       <div class="grid-2">
-        <div class="field"><label>Materials cost ($)</label><input type="text" id="np-cost" placeholder="e.g. 22.50"></div>
-        <div class="field"><label>Bin location</label><input type="text" id="np-bin" placeholder="e.g. WR-2"></div>
+        <div class="field"><label>Florals</label><select id="np-florals"></select></div>
+        <div class="field"><label>Greenery</label><select id="np-greenery"></select></div>
       </div>
-      <div class="field"><label>Notes (optional)</label><textarea id="np-notes" placeholder="Materials used, colors, style notes..."></textarea></div>
+      <div class="field"><label>Style</label><div id="np-style" class="chip-checks"></div></div>
+      <div class="field"><label>Color(s)</label><div id="np-colors" class="chip-checks"></div></div>
+      <div class="field"><label>Key materials</label><div id="np-materials" class="chip-checks"></div></div>
+      <div class="field"><label>Notes (optional)</label><textarea id="np-notes" placeholder="Extra style notes, custom request, materials reminder..."></textarea></div>
       <div id="np-outdoor-warning" style="display:none" class="info-card amber"><strong>⚠ Outdoor pot — local delivery only.</strong></div>
-      <div class="btn-row"><button class="btn-primary btn-full" onclick="npGenerateEB()">✨ Assign EB number →</button></div>
+      <div class="btn-row"><button class="btn-primary btn-full" id="np-primary-btn" onclick="npPrimaryAction()">✨ Assign EB number →</button></div>
       <button class="btn-save-exit" onclick="wipSaveNP();goHome()">💾 Save &amp; finish later</button>
     </div>
     <div class="step-block" id="np-step-2">
@@ -402,14 +431,30 @@ button:active{transform:scale(.97)}
         <div class="field"><label>Height (in)</label><input type="number" id="np-height" placeholder='18'></div>
         <div class="field"><label>Depth (in)</label><input type="number" id="np-depth" placeholder='4'></div>
       </div>
-      <div class="field"><label>Packaged weight (lbs)</label><input type="text" id="np-weight" placeholder="e.g. 3.0"></div>
+      <div class="section-label" style="margin-top:4px">Packaged weight</div>
+      <div class="grid-2">
+        <div class="field"><label>Pounds (lb)</label><input type="number" min="0" step="1" id="np-weight-lb" placeholder="e.g. 3"></div>
+        <div class="field"><label>Ounces (oz)</label><input type="number" min="0" max="15" step="1" id="np-weight-oz" placeholder="e.g. 8"></div>
+      </div>
       <div id="np-photos-done-hint" style="display:none" class="info-card teal"><strong>✅ Skipping photo checklist.</strong> After saving dimensions you'll go straight to List &amp; Publish.</div>
       <div class="btn-row"><button class="btn-primary btn-full" onclick="npSaveDimensions()">Save dimensions →</button></div>
       <button class="btn-save-exit" onclick="wipSaveNP();goHome()">💾 Save &amp; finish later</button>
     </div>
     <div class="step-block" id="np-step-3">
       <div class="section-label">Photo checklist</div>
-      <div class="info-card teal"><strong>📱 iCloud Photo Workflow</strong> Take photos on iPhone → sync to iCloud → on PC open File Explorer → iCloud Photos → drag into listing tool.</div>
+      <details class="pv-workflow">
+        <summary><span style="font-size:13px">📱</span> Photo &amp; Video Workflow</summary>
+        <ol class="pv-steps">
+          <li>Take photos and videos on iPhone</li>
+          <li>Open Google Drive app on iPhone or iPad</li>
+          <li>Navigate to Eternal Blooms Shared → Listing Media</li>
+          <li>Create new subfolder with descriptive name of item</li>
+          <li>Double-click folder to open</li>
+          <li>Click + and select Upload file, then the Photos and Videos folder</li>
+          <li>Select relevant photos and videos</li>
+          <li>Click Upload in the top right</li>
+        </ol>
+      </details>
       <div class="info-card amber"><strong>Before you shoot:</strong> EB tag attached · Piece cleaned · Neutral backdrop · Good lighting · Portrait mode OFF · Grid lines ON</div>
       <div class="section-label" style="margin-top:16px">Shot sequence — tap each when done</div>
       <div class="photo-shot-grid" id="shot-grid">
@@ -435,7 +480,7 @@ button:active{transform:scale(.97)}
         <div style="font-size:14px;color:var(--text-muted);line-height:1.6;margin-bottom:24px"><span id="np-complete-eb" style="font-weight:800;color:var(--sage)"></span> is saved to Airtable. <span id="np-complete-status-msg"></span></div>
       </div>
       <div class="info-card sage"><strong>What's next:</strong> When ready to list, tap <strong>List & publish</strong> and select this EB number.</div>
-      <div class="btn-row"><button class="btn-primary btn-full" onclick="goTo('screen-list')">List this piece now →</button></div>
+      <div class="btn-row"><button class="btn-primary btn-full" onclick="npListNow()">List this piece now →</button></div>
       <div class="btn-row">
         <button class="btn btn-full" onclick="printQRTag(npCurrentEB, (allRecords.find(r=>r.fields['EB Number']===npCurrentEB)||{fields:{}}).fields['Price ($)']||'')">🏷 Print QR tag</button>
         <button class="btn btn-full" onclick="npReset()">← Log another piece</button>
@@ -446,8 +491,8 @@ button:active{transform:scale(.97)}
 
 <!-- LIST & PUBLISH SCREEN -->
 <div id="screen-list" class="screen">
-  <div class="wizard-header"><button class="back-btn" onclick="goHome()">←</button><div class="wizard-title">List & publish</div><div class="wizard-step-pill" id="lp-step-pill">Step 1 of 4</div></div>
-  <div class="wizard-progress"><div class="wizard-progress-bar" id="lp-progress" style="width:25%"></div></div>
+  <div class="wizard-header"><button class="back-btn" onclick="goHome()">←</button><div class="wizard-title">List & publish</div><div class="wizard-step-pill" id="lp-step-pill">Step 1 of 5</div></div>
+  <div class="wizard-progress"><div class="wizard-progress-bar" id="lp-progress" style="width:20%"></div></div>
   <div class="wizard-body">
     <div id="lp-wip-banner" class="info-card amber" style="display:none;margin-bottom:12px"></div>
     <div id="status-lp" class="status-bar" style="display:none"><div class="sb-dot"></div><span id="status-lp-msg"></span></div>
@@ -456,67 +501,72 @@ button:active{transform:scale(.97)}
       <div class="field"><label>Choose EB number</label><select id="lp-eb-select"><option value="">— loading inventory... —</option></select></div>
       <div id="lp-at-preview" style="display:none"></div>
       <div id="lp-outdoor-warning" style="display:none" class="info-card amber"><strong>⚠ Outdoor pot — local delivery only.</strong></div>
-      <div id="lp-dims-warning" style="display:none" class="info-card rose"><strong>⚠ Dimensions missing.</strong> Add Width, Height, Depth to Airtable record, then reload.</div>
+      <div id="lp-dims-editor" style="display:none" class="info-card rose">
+        <strong>⚠ Some physical details are missing.</strong> Add them here and save — they're written straight back to Airtable.
+        <div class="grid-3" style="margin-top:10px">
+          <div class="field"><label>Width (in)</label><input type="number" id="lp-edit-width" placeholder="24"></div>
+          <div class="field"><label>Height (in)</label><input type="number" id="lp-edit-height" placeholder="18"></div>
+          <div class="field"><label>Depth (in)</label><input type="number" id="lp-edit-depth" placeholder="4"></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Packaged weight — lb</label><input type="number" min="0" step="1" id="lp-edit-weight-lb" placeholder="3"></div>
+          <div class="field"><label>oz</label><input type="number" min="0" max="15" step="1" id="lp-edit-weight-oz" placeholder="8"></div>
+        </div>
+        <div id="lp-dims-save-status" style="display:none;font-size:12px;margin-bottom:8px"></div>
+        <div class="btn-row"><button class="btn-primary btn-full" onclick="lpSaveDimsInline()">💾 Save to Airtable</button></div>
+      </div>
       <div class="btn-row"><button class="btn-primary btn-full" id="lp-next-1-btn" onclick="lpStep(2)" disabled>Continue →</button></div>
     </div>
     <div class="step-block" id="lp-step-2">
       <div class="section-label">Listing details</div>
-      <div class="grid-2">
-        <div class="field"><label>Primary colors</label><div style="display:flex;gap:6px;align-items:center"><input type="text" id="lp-colors" placeholder="e.g. burgundy, cream, green" spellcheck="true" style="flex:1"><button class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px" onclick="lpCleanupField('lp-colors')">✓ Fix</button></div></div>
-        <div class="field"><label>Key materials / flowers</label><div style="display:flex;gap:6px;align-items:center"><input type="text" id="lp-materials" placeholder="e.g. silk peonies, velvet ribbon" spellcheck="true" style="flex:1"><button class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px" onclick="lpCleanupField('lp-materials')">✓ Fix</button></div></div>
-      </div>
-      <div class="grid-2">
-        <div class="field"><label>Best display location</label><div style="display:flex;gap:6px;align-items:center"><input type="text" id="lp-location" placeholder="e.g. front door, dining table" spellcheck="true" style="flex:1"><button class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px" onclick="lpCleanupField('lp-location')">✓ Fix</button></div></div>
-        <div class="field"><label>Packaged weight (lbs)</label><input type="text" id="lp-weight" placeholder="e.g. 3.0"></div>
-      </div>
+      <div class="info-card sage" style="margin-bottom:12px"><strong>Colors, materials &amp; weight come from Step 1.</strong> Just add the listing-specific details below.</div>
+      <div class="field"><label>Best display location</label><div style="display:flex;gap:6px;align-items:center"><input type="text" id="lp-location" placeholder="e.g. front door, dining table" spellcheck="true" style="flex:1"><button class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px" onclick="lpCleanupField('lp-location')">✓ Fix</button></div></div>
       <div class="field"><label>Meta description (SEO)</label><input type="text" id="lp-meta" placeholder="1–2 sentences for Google" spellcheck="true"></div>
       <div class="field"><label>Anything special? (optional)</label><div style="display:flex;gap:6px;align-items:flex-start"><textarea id="lp-special" placeholder="Extra full, farmhouse style, great for gifting..." spellcheck="true" style="flex:1"></textarea><button class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px;margin-top:2px" onclick="lpCleanupField('lp-special')">✓ Fix</button></div></div>
-      <div class="btn-row"><button class="btn btn-full" onclick="lpStep(1)">← Back</button><button class="btn-primary" style="flex:1" onclick="lpBuildListing()">Photos & description →</button></div>
+      <div class="btn-row"><button class="btn btn-full" onclick="lpStep(1)">← Back</button><button class="btn-primary" style="flex:1" onclick="lpStep(3)">Photos →</button></div>
     </div>
     <div class="step-block" id="lp-step-3">
-      <div class="section-label">Your Shopify listing</div>
-      <div id="lp-listing-fields" style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:14px"></div>
-      <hr class="divider">
       <div class="section-label">Photos</div>
-      <div class="info-card teal"><strong>📱 Add photos now</strong> — Claude will look at them when writing the description. Hero shot first. Aim for 8+ photos.</div>
-      <div class="drop-zone" id="lp-drop-zone" onclick="document.getElementById('lp-photo-input').click()" ondragover="lpDragOver(event)" ondragleave="lpDragLeave(event)" ondrop="lpDrop(event)">
-        <input type="file" id="lp-photo-input" accept="image/*" multiple onchange="lpFileSelect(event)">
-        <div class="drop-zone-icon">📸</div>
-        <div class="drop-zone-text">Tap to add photos</div>
-        <div class="drop-zone-sub">JPG, PNG, WEBP · Up to 15 photos · Hero shot first</div>
+      <div id="lp-drive-connect" class="info-card amber" style="display:none">
+        <strong>Google Drive isn't connected.</strong> Connect to load this piece's photos from your Listing Media folder.
+        <div class="btn-row"><button class="btn-primary btn-full" onclick="lpDriveConnect()">Connect Google Drive →</button></div>
       </div>
-      <div id="lp-photo-status" style="display:none;font-size:13px;color:var(--text-muted);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between"><span id="lp-photo-count-label">0 photos</span><span id="lp-photo-count-pill" style="background:var(--gold);color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:99px">0/15</span></div>
-      <div class="progress-wrap" id="lp-progress-wrap"><div class="progress-bar" id="lp-progress-bar"></div></div>
-      <div class="photo-grid-opt" id="lp-photo-grid"></div>
-      <div id="lp-photo-instructions" style="display:none;font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.7;background:#fff;border-radius:8px;padding:10px 14px;border:1px solid var(--border)"><strong>↑ Drag to reorder.</strong> First photo = hero shot.</div>
-      <div class="btn-row" id="lp-photo-btns" style="display:none;margin-bottom:14px">
-        <button class="btn-gold" id="lp-download-btn" onclick="lpProcessPhotos()">↓ Optimize & download ZIP</button>
-        <button class="btn" onclick="lpClearPhotos()">✕ Clear</button>
+      <div id="lp-drive-panel" style="display:none">
+        <div class="info-card teal"><strong>📱 Load photos from Drive</strong> — pick this piece's folder under Listing Media, then tap photos in the order you want them (hero first). Linking renames them in Drive to <code>EB…_01</code>, <code>_02</code>, …</div>
+        <div class="field"><label>Photo folder (under Listing Media)</label><div style="display:flex;gap:6px;align-items:center"><select id="lp-drive-folder" onchange="lpDriveLoadImages()" style="flex:1"><option value="">— pick a folder —</option></select><button class="btn" style="flex-shrink:0;font-size:11px;padding:8px 10px" onclick="lpDriveLoadFolders()">↻</button></div></div>
+        <div id="lp-drive-grid-status" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;display:none"></div>
+        <div class="section-label" id="lp-drive-grid-label" style="display:none">Tap to select (in order)</div>
+        <div class="photo-grid-opt" id="lp-drive-grid"></div>
+        <div id="lp-photo-status" style="display:none;font-size:13px;color:var(--text-muted);margin:8px 0;align-items:center;justify-content:space-between"><span id="lp-photo-count-label">0 photos</span><span id="lp-photo-count-pill" style="background:var(--gold);color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:99px">0/15</span></div>
+        <div class="section-label" id="lp-selected-label" style="display:none">Selected for listing — drag to reorder</div>
+        <div class="photo-grid-opt" id="lp-photo-grid"></div>
+        <div id="lp-photo-instructions" style="display:none;font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.7;background:#fff;border-radius:8px;padding:10px 14px;border:1px solid var(--border)"><strong>↑ Drag to reorder.</strong> First photo = hero shot.</div>
+        <div id="lp-drive-link-status" style="display:none;font-size:12px;padding:6px 10px;border-radius:6px;background:var(--ivory-dark);margin-bottom:8px"></div>
+        <div class="btn-row" id="lp-photo-btns" style="display:none;margin-bottom:14px">
+          <button class="btn-primary" id="lp-drive-link-btn" onclick="lpDriveLinkRename()">🔗 Link &amp; rename in Drive</button>
+          <button class="btn" onclick="lpClearPhotos()">✕ Clear</button>
+        </div>
       </div>
-      <div class="btn-row" style="margin-top:14px"><button class="btn btn-full" onclick="lpStep(2)">← Back</button><button class="btn-primary" style="flex:1" onclick="lpStep(4)">Write description →</button></div>
+      <div class="btn-row" style="margin-top:14px"><button class="btn btn-full" onclick="lpStep(2)">← Back</button><button class="btn-primary" style="flex:1" onclick="lpStep(4)">Title &amp; description →</button></div>
     </div>
     <div class="step-block" id="lp-step-4">
-      <div class="info-card amber" id="lp-photos-for-ai-note" style="display:none"><strong>📸 No photos added yet.</strong> Add photos in the previous step for the best AI description.</div>
-      <div class="section-label">Product description</div>
+      <div class="info-card amber" id="lp-photos-for-ai-note" style="display:none"><strong>📸 No photos added yet.</strong> Add photos in the previous step for the best AI title &amp; description.</div>
+      <div class="section-label">Title &amp; description</div>
       <div class="ai-block">
-        <div class="ai-block-title">✨ AI description — reads your photos + notes</div>
+        <div class="ai-block-title">✨ AI listing — reads your photos + Step 1 details</div>
         <div id="lp-ai-photo-count" style="font-size:12px;color:var(--text-muted);margin-bottom:10px"></div>
-        <div class="btn-row" style="margin-bottom:12px">
-          <button class="btn-purple" id="lp-gen-desc-btn" onclick="lpGenerateDescription()">✨ Generate description</button>
-          <button class="btn" onclick="lpRegenerateDesc()">↺ Regenerate</button>
-        </div>
-        <div id="lp-desc-inline-status" style="display:none;font-size:12px;padding:6px 10px;border-radius:6px;background:var(--ivory-dark);margin-bottom:8px"></div>
-        <div id="lp-paste-section">
-          <div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:8px"><textarea class="desc-textarea" id="lp-desc-paste" placeholder="Click Generate above..." spellcheck="true" style="flex:1"></textarea><button class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px;margin-top:2px" onclick="lpCleanupField('lp-desc-paste')">✓ Fix</button></div>
-          <div class="btn-row"><button class="btn-teal" onclick="lpConfirmDesc()">✓ Confirm description</button></div>
-        </div>
-        <div id="lp-desc-confirmed" style="display:none">
-          <div class="desc-confirmed-box" id="lp-desc-confirmed-text" style="position:relative"><button class="lf-copy" style="position:absolute;top:8px;right:8px" onclick="lpCopyDesc()">Copy</button></div>
-          <div class="btn-row" style="margin-top:8px"><button class="btn" onclick="lpEditDesc()">✏ Edit</button><button class="btn" onclick="lpRegenerateDesc()">↺ New version</button></div>
-        </div>
+        <div id="lp-desc-inline-status" style="display:none;font-size:12px;padding:6px 10px;border-radius:6px;background:var(--ivory-dark);margin-bottom:10px"></div>
+        <div class="field"><label>Product title</label><input type="text" id="lp-title" placeholder="Generating title..." spellcheck="true" oninput="lpUpdatePublishSummary()"></div>
+        <div class="field"><label>Description</label><div style="display:flex;gap:6px;align-items:flex-start"><textarea class="desc-textarea" id="lp-desc" placeholder="Generating description..." spellcheck="true" style="flex:1" oninput="lpUpdatePublishSummary()"></textarea><button class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px;margin-top:2px" onclick="lpCleanupField('lp-desc')">✓ Fix</button></div></div>
+        <div class="btn-row"><button class="btn-teal" id="lp-regen-btn" onclick="lpGenerateListing()">↺ Regenerate</button></div>
       </div>
       <hr class="divider">
       <div class="info-card amber"><strong>📹 Video reminder</strong> Upload your 15–30 second video directly in Shopify admin after publishing — go to the product → Media → upload video.</div>
+      <div class="btn-row" style="margin-top:14px"><button class="btn btn-full" onclick="lpStep(3)">← Back</button><button class="btn-primary" style="flex:1" onclick="lpStep(5)">Review &amp; publish →</button></div>
+    </div>
+    <div class="step-block" id="lp-step-5">
+      <div class="section-label">Your Shopify listing</div>
+      <div id="lp-listing-fields" style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:14px"></div>
       <hr class="divider">
       <div class="publish-block">
         <div style="font-size:11px;font-weight:800;color:var(--green-text);letter-spacing:.07em;text-transform:uppercase;margin-bottom:12px">🛍 Publish to Shopify</div>
@@ -525,7 +575,7 @@ button:active{transform:scale(.97)}
         <button class="btn-publish" id="lp-publish-btn" onclick="lpPublish()" disabled>↑ Publish listing to Shopify</button>
         <div id="lp-publish-result" style="display:none" class="publish-result"></div>
       </div>
-      <div class="btn-row" style="margin-top:14px"><button class="btn btn-full" onclick="lpStep(3)">← Back</button><button class="btn btn-full" onclick="lpReset()">← New listing</button></div>
+      <div class="btn-row" style="margin-top:14px"><button class="btn btn-full" onclick="lpStep(4)">← Back</button><button class="btn btn-full" onclick="lpReset()">← New listing</button></div>
     </div>
   </div>
 </div>
@@ -553,6 +603,7 @@ button:active{transform:scale(.97)}
         <div class="channel-btn" onclick="msSelectChannel(this,'Hair Salon')"><span class="channel-icon">💇</span><div class="channel-label">Hair Salon</div></div>
         <div class="channel-btn" onclick="msSelectChannel(this,'Direct')"><span class="channel-icon">🤝</span><div class="channel-label">Direct / other</div></div>
       </div>
+      <div class="info-card teal" style="font-size:12px">Note: Facebook Marketplace sales = Direct / other. Facebook Shop will be added as an option once the Commerce Manager is configured to sell items through the Facebook Business Page.</div>
       <div class="field"><label>Sale price (confirm or adjust)</label><input type="text" id="ms-sale-price" placeholder="e.g. 85.00"></div>
       <div class="field"><label>Date sold</label><input type="date" id="ms-sale-date"></div>
       <div class="info-card sage" style="font-size:12px"><strong>This will:</strong> Set Shopify inventory to 0 · Move to Sold/Portfolio · Update Airtable status to Sold</div>
@@ -589,6 +640,7 @@ button:active{transform:scale(.97)}
       <div class="channel-btn" onclick="modalSelectChannel(this,'Hair Salon')"><span class="channel-icon">💇</span><div class="channel-label">Hair Salon</div></div>
       <div class="channel-btn" onclick="modalSelectChannel(this,'Direct')"><span class="channel-icon">🤝</span><div class="channel-label">Direct</div></div>
     </div>
+    <div class="info-card teal" style="font-size:12px">Note: Facebook Marketplace sales = Direct / other. Facebook Shop will be added as an option once the Commerce Manager is configured to sell items through the Facebook Business Page.</div>
     <div class="field"><label>Sale price</label><input type="text" id="modal-price" placeholder="e.g. 85.00"></div>
     <div id="modal-status" class="status-bar" style="display:none"><div class="sb-dot"></div><span id="modal-status-msg"></span></div>
     <div class="btn-row">
@@ -627,7 +679,7 @@ button:active{transform:scale(.97)}
   <div class="wizard-header"><button class="back-btn" onclick="goHome()">←</button><div class="wizard-title">Cost summary</div><div class="wizard-step-pill" id="cost-summary-pill">2026</div></div>
   <div class="wizard-body">
     <div id="status-costsummary" class="status-bar" style="display:none"><div class="sb-dot"></div><span id="status-costsummary-msg"></span></div>
-    <div style="background:linear-gradient(135deg,var(--purple) 0%,#4C1D95 100%);border-radius:var(--radius);padding:24px;text-align:center;color:#fff;margin-bottom:16px;box-shadow:var(--shadow-md)">
+    <div style="background:linear-gradient(135deg,var(--purple) 0%,#2f5653 100%);border-radius:var(--radius);padding:24px;text-align:center;color:#fff;margin-bottom:16px;box-shadow:var(--shadow-md)">
       <div style="font-size:11px;font-weight:700;opacity:.75;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Year to date costs</div>
       <div style="font-family:var(--font-display);font-size:44px;font-weight:700;letter-spacing:.02em;margin-bottom:4px" id="cs-ytd-total">—</div>
       <div style="font-size:12px;opacity:.7" id="cs-ytd-entries">Loading...</div>
@@ -760,14 +812,14 @@ button:active{transform:scale(.97)}
       <strong id="bl-drive-status-label">⏳ Checking Google Drive connection...</strong>
       <div id="bl-drive-status-sub" style="font-size:12px;margin-top:4px;color:var(--text-muted)"></div>
     </div>
-    <div class="info-card sage"><strong>🏷️ Tag your photo backlog and organize it in Drive.</strong> Select one or more photos of the same piece, pick Season + Type + Holiday, and tap Apply. Files move into the right subfolder in your Listing Photos folder automatically.</div>
+    <div class="info-card sage"><strong>🏷️ Tag your photo backlog and organize it in Drive.</strong> Select one or more photos of the same piece, pick Season + Type + Occasion, and tap Apply. Files move into the right subfolder in your Listing Photos folder automatically.</div>
     <div class="section-label">How it works</div>
     <div style="display:grid;gap:8px;margin-bottom:20px">
       <div style="background:var(--green-bg);border:1.5px solid var(--green-border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:12px"><span style="font-size:20px;flex-shrink:0">☑️</span><div><div style="font-size:13px;font-weight:800;color:var(--green-text)">Select photos</div><div style="font-size:12px;color:var(--text-muted);margin-top:1px">Tap one photo or tap multiple that belong to the same piece. Tap again to deselect.</div></div></div>
-      <div style="background:var(--gold-bg);border:1.5px solid var(--amber-border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:12px"><span style="font-size:20px;flex-shrink:0">🏷️</span><div><div style="font-size:13px;font-weight:800;color:var(--amber-text)">Set tags & apply</div><div style="font-size:12px;color:var(--text-muted);margin-top:1px">Pick Season, Type, and Holiday. Tap Apply — files move to the right subfolder in Drive and are tagged with properties.</div></div></div>
+      <div style="background:var(--gold-bg);border:1.5px solid var(--amber-border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:12px"><span style="font-size:20px;flex-shrink:0">🏷️</span><div><div style="font-size:13px;font-weight:800;color:var(--amber-text)">Set tags & apply</div><div style="font-size:12px;color:var(--text-muted);margin-top:1px">Pick Season, Type, and Occasion. Tap Apply — files move to the right subfolder in Drive and are tagged with properties.</div></div></div>
       <div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:12px"><span style="font-size:20px;flex-shrink:0">⏭</span><div><div style="font-size:13px;font-weight:800;color:var(--text-muted)">Skip</div><div style="font-size:12px;color:var(--text-muted);margin-top:1px">Duplicate or not a piece? Skip it — it stays in place and won't affect your sorted count.</div></div></div>
     </div>
-    <div class="info-card amber"><strong>📁 Subfolder structure:</strong> Files move into <code>Listing Photos / Season / Type /</code>. Holiday and other details are stored as invisible file properties — queryable by the listing tool but not extra folders.</div>
+    <div class="info-card amber"><strong>📁 Subfolder structure:</strong> Files move into <code>Listing Photos / Season / Type /</code>. Occasion and other details are stored as invisible file properties — queryable by the listing tool but not extra folders.</div>
     <div class="btn-row"><button class="btn-primary btn-full" id="bl-start-btn" onclick="blStartSorting()" disabled>Load unsorted photos →</button></div>
   </div>
   <div id="bl-sorter" style="display:none;padding:12px 16px;padding-bottom:80px">
@@ -784,11 +836,11 @@ button:active{transform:scale(.97)}
     <div style="position:sticky;bottom:0;z-index:10;background:var(--ivory);border-top:1.5px solid var(--border);padding:14px 0 0;margin-top:8px">
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
         <div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Season</div><div id="bl-sel-season" style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:7px 10px;display:flex;flex-direction:column;gap:5px"><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Spring" style="accent-color:var(--sage);width:14px;height:14px"> Spring</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Summer" style="accent-color:var(--sage);width:14px;height:14px"> Summer</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Fall" style="accent-color:var(--sage);width:14px;height:14px"> Fall</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Winter" style="accent-color:var(--sage);width:14px;height:14px"> Winter</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;border-top:1px solid var(--border);padding-top:5px;margin-top:2px"><input type="checkbox" value="All Season" style="accent-color:var(--sage);width:14px;height:14px"> All Season</label></div></div>
-        <div style="display:flex;flex-direction:column;gap:8px"><div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Type</div><select id="bl-sel-type" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)"><option value="Wreath" selected>Wreath</option><option value="Home decor">Home decor</option><option value="Outdoor planter">Outdoor planter</option><option value="Centerpiece">Centerpiece</option><option value="Wall decor">Wall decor</option><option value="Hanging">Hanging</option><option value="Swag">Swag</option><option value="Custom order">Custom order</option></select></div><div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Holiday</div><select id="bl-sel-holiday" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)"><option value="None" selected>None</option><option value="Christmas">Christmas</option><option value="Thanksgiving">Thanksgiving</option><option value="Easter">Easter</option><option value="Mother's Day">Mother's Day</option><option value="Memorial Day">Memorial Day</option><option value="Fourth of July">4th of July</option><option value="Halloween">Halloween</option><option value="Valentine's Day">Valentine's</option></select></div></div>
+        <div style="display:flex;flex-direction:column;gap:8px"><div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Type</div><select id="bl-sel-type" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)"><option value="Wreath" selected>Wreath</option><option value="Home decor">Home decor</option><option value="Outdoor planter">Outdoor planter</option><option value="Centerpiece">Centerpiece</option><option value="Wall decor">Wall decor</option><option value="Hanging">Hanging</option><option value="Swag">Swag</option><option value="Custom order">Custom order</option></select></div><div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Occasion</div><select id="bl-sel-occasion" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)"><option value="None" selected>None</option><option value="Christmas">Christmas</option><option value="Thanksgiving">Thanksgiving</option><option value="Easter">Easter</option><option value="Mother's Day">Mother's Day</option><option value="Fourth of July">Fourth of July</option><option value="Halloween">Halloween</option><option value="Valentine's Day">Valentine's Day</option><option value="Memorial Day">Memorial Day</option><option value="Congratulations">Congratulations</option><option value="Sympathy">Sympathy</option><option value="Funeral">Funeral</option><option value="Wedding">Wedding</option><option value="Bridal Shower">Bridal Shower</option><option value="Baby Shower">Baby Shower</option><option value="Graduation">Graduation</option></select></div></div>
         <div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Status</div><div id="bl-sel-status" style="display:flex;flex-direction:column;gap:5px"><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="In stock" style="accent-color:var(--sage);width:14px;height:14px"> In stock</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Photographed" checked style="accent-color:var(--sage);width:14px;height:14px"> Photographed</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Ready to list" style="accent-color:var(--sage);width:14px;height:14px"> Ready to list</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Listed" style="accent-color:var(--sage);width:14px;height:14px"> Listed</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Craft Fair" style="accent-color:var(--sage);width:14px;height:14px"> Craft Fair</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Hair Salon" style="accent-color:var(--sage);width:14px;height:14px"> Hair Salon</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Sold" style="accent-color:var(--sage);width:14px;height:14px"> Sold</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Archived" style="accent-color:var(--sage);width:14px;height:14px"> Archived</label></div></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
-        <button id="bl-apply-btn" onclick="blApplyToSelected()" disabled style="background:#2D5A2D;border:none;border-radius:var(--radius-sm);padding:13px;font-family:var(--font-body);font-size:14px;font-weight:800;color:#fff;cursor:pointer;transition:all .12s;opacity:0.4;pointer-events:none">🏷️ Apply to selected</button>
+        <button id="bl-apply-btn" onclick="blApplyToSelected()" disabled style="background:var(--sage);border:none;border-radius:var(--radius-sm);padding:13px;font-family:var(--font-body);font-size:14px;font-weight:800;color:#fff;cursor:pointer;transition:all .12s;opacity:0.4;pointer-events:none">🏷️ Apply to selected</button>
         <button onclick="blSkipSelected()" style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:13px 16px;font-family:var(--font-body);font-size:13px;font-weight:700;color:var(--text-muted);cursor:pointer">⏭ Skip</button>
       </div>
       <div id="bl-action-status" style="display:none;font-size:12px;text-align:center;padding:8px 0;color:var(--text-muted)"></div>
@@ -811,6 +863,19 @@ const SHOPIFY_BASE = 'https://eternalbloomsbypatti.com/products/';
 const LISTABLE_STATUSES = ['In stock','Photographed','Ready to list'];
 const TYPE_CODES = {WR:'Wreath',TT:'Home decor',OP:'Outdoor planter',CP:'Centerpiece',WP:'Wall decor',HA:'Hanging',SW:'Swag',CU:'Custom order'};
 const SEASON_NAMES = {SP:'Spring',SU:'Summer',FA:'Fall',WI:'Winter',AS:'All Season'};
+// Season name → 2-letter EB code. Multiple seasons → MS (multi-season), or AS when "All Season" is among them.
+const SEASON_CODE = {Spring:'SP',Summer:'SU',Fall:'FA',Winter:'WI','All Season':'AS'};
+// Canonical Airtable field options (Inventory table) — single source of truth for the Step 1.1 selectors.
+const NP_OPTIONS = {
+  season:   ['Spring','Summer','Fall','Winter','All Season'],
+  occasion: ['None','Christmas','Thanksgiving','Easter',"Mother's Day",'Fourth of July','Halloween',"Valentine's Day",'Memorial Day','Congratulations','Sympathy','Funeral','Wedding','Bridal Shower','Baby Shower','Graduation'],
+  florals:  ['None','Real-Feel','Silk'],
+  greenery: ['None','Premium','Standard'],
+  style:    ['Farmhouse','Rustic','Vintage / Antique','Modern / Contemporary','Traditional / Classic','Boho','Cottage','Coastal'],
+  colors:   ['White','Cream','Gray','Black','Silver','Gold','Bronze','Copper','Brown','Burgundy','Red','Rust','Orange','Yellow','Green','Teal','Blue','Purple','Pink','Peach'],
+  materials:['Metal','Wood','Ceramic','Resin','Glass','Grapevine','Galvanized Steel','Pine','Plastic','Basket','Rattan','Candle','Lights','Velvet']
+};
+let npMode = 'add';
 const COLLECTION_MAP = {'Wreath':'door-wreaths','Home decor':'tabletop-and-centerpieces','Outdoor planter':'outdoor-pot-arrangements','Centerpiece':'tabletop-and-centerpieces','Wall decor':'nature-and-everyday','Hanging':'nature-and-everyday','Swag':'nature-and-everyday','Custom order':'nature-and-everyday'};
 const COLLECTION_LABELS = {'door-wreaths':'Door wreaths','outdoor-pot-arrangements':'Outdoor pot arrangements','tabletop-and-centerpieces':'Tabletop and centerpieces','nature-and-everyday':'Nature and everyday','holiday-and-seasonal':'Holiday and seasonal','sold-portfolio':'Sold — Portfolio'};
 
@@ -828,7 +893,8 @@ let msSelectedChannel = '';
 let lpPhotoItems = [];
 let lpDragSrcIdx = null;
 let lpCurrentDesc = '';
-let lpDescConfirmed = false;
+let lpCurrentTitle = '';
+let lpGeneratedFor = '';
 let lastPublishedProduct = null;
 let npPhotoStatus = 'needed';
 
@@ -836,6 +902,7 @@ let npPhotoStatus = 'needed';
 async function init() {
   // CHANGE: removed localStorage token read and promptToken() call
   // Airtable token now lives on Render server as env var — no browser credential needed
+  npInitFields();
   await connectAirtable();
   fetch(SERVER_URL + '/health').catch(()=>{});
   document.getElementById('ms-sale-date').value = new Date().toISOString().split('T')[0];
@@ -957,23 +1024,122 @@ function npStep(n) {
 }
 document.getElementById('np-type').addEventListener('change', function() { document.getElementById('np-outdoor-warning').style.display = this.value==='OP'?'block':'none'; });
 
+// Render the Step 1.1 dropdowns + multi-select chip groups from NP_OPTIONS.
+function npRenderSelect(id,opts){const el=document.getElementById(id);if(!el)return;el.innerHTML=opts.map(o=>'<option value="'+escHtml(o)+'">'+escHtml(o)+'</option>').join('');}
+function npRenderChecks(id,opts){const el=document.getElementById(id);if(!el)return;el.innerHTML=opts.map(o=>'<label><input type="checkbox" value="'+escHtml(o)+'"> '+escHtml(o)+'</label>').join('');}
+function npInitFields(){
+  npRenderChecks('np-season',NP_OPTIONS.season);
+  npRenderSelect('np-occasion',NP_OPTIONS.occasion);
+  npRenderSelect('np-florals',NP_OPTIONS.florals);
+  npRenderSelect('np-greenery',NP_OPTIONS.greenery);
+  npRenderChecks('np-style',NP_OPTIONS.style);
+  npRenderChecks('np-colors',NP_OPTIONS.colors);
+  npRenderChecks('np-materials',NP_OPTIONS.materials);
+}
+function npGetChecks(id){return Array.from(document.querySelectorAll('#'+id+' input[type=checkbox]:checked')).map(c=>c.value);}
+function npSetChecks(id,vals){const set=new Set(vals||[]);document.querySelectorAll('#'+id+' input[type=checkbox]').forEach(c=>{c.checked=set.has(c.value);});}
+// Seasons → EB code: 1 season uses its code; many incl. All Season → AS; many without → MS.
+function npSeasonCode(seasons){
+  if(!seasons.length) return 'AS';
+  if(seasons.length===1) return SEASON_CODE[seasons[0]]||'AS';
+  if(seasons.includes('All Season')) return 'AS';
+  return 'MS';
+}
+
+// ── ADD / EDIT MODE ──
+function npSetMode(mode){
+  npMode=mode;
+  document.getElementById('np-mode-add-btn').classList.toggle('active',mode==='add');
+  document.getElementById('np-mode-edit-btn').classList.toggle('active',mode==='edit');
+  document.getElementById('np-edit-picker-wrap').style.display=mode==='edit'?'block':'none';
+  document.getElementById('np-add-hint').style.display=mode==='edit'?'none':'block';
+  document.getElementById('np-edit-hint').style.display=mode==='edit'?'block':'none';
+  document.getElementById('np-step1-label').textContent=mode==='edit'?'Edit piece details':'Assign EB number';
+  const btn=document.getElementById('np-primary-btn');
+  if(mode==='edit'){ btn.textContent='💾 Save changes →'; btn.disabled=true; npPopulateEditSelect(); }
+  else { btn.textContent='✨ Assign EB number →'; btn.disabled=false; npClearForm(); npCurrentRecordId=null; npCurrentEB=''; npAssignedEB=''; const es=document.getElementById('np-edit-select'); if(es)es.value=''; }
+}
+// Shared label for all "pick a piece" dropdowns: EB number · Reference name.
+function pieceLabel(f){const eb=f['EB Number']||'';const ref=(f['Reference name']||'').trim();return eb+(ref?' · '+ref:'');}
+function npPopulateEditSelect(){
+  const sel=document.getElementById('np-edit-select'); if(!sel)return;
+  const recs=allRecords.filter(r=>r.fields['Status']!=='Archived');
+  sel.innerHTML='<option value="">— pick a piece —</option>'+recs.map(r=>'<option value="'+r.id+'">'+escHtml(pieceLabel(r.fields)||r.id)+'</option>').join('');
+  sel.onchange=npLoadRecordForEdit;
+}
+function npClearForm(){
+  document.getElementById('np-ref-name').value='';
+  document.getElementById('np-price').value='';
+  document.getElementById('np-notes').value='';
+  document.getElementById('np-occasion').value='None';
+  document.getElementById('np-florals').value='None';
+  document.getElementById('np-greenery').value='None';
+  npSetChecks('np-season',[]); npSetChecks('np-style',[]); npSetChecks('np-colors',[]); npSetChecks('np-materials',[]);
+}
+function npLoadRecordForEdit(){
+  const sel=document.getElementById('np-edit-select'), btn=document.getElementById('np-primary-btn');
+  const recId=sel.value;
+  if(!recId){ npCurrentRecordId=null; btn.disabled=true; return; }
+  const rec=allRecords.find(r=>r.id===recId); if(!rec)return;
+  const f=rec.fields;
+  npCurrentRecordId=rec.id; npCurrentEB=f['EB Number']||''; npAssignedEB=npCurrentEB;
+  document.getElementById('np-ref-name').value=f['Reference name']||'';
+  const m=(f['EB Number']||'').match(/^EB-(\d{2})/); if(m){const y=document.getElementById('np-year');if(y)y.value=m[1];}
+  const typeCode=Object.keys(TYPE_CODES).find(k=>TYPE_CODES[k]===f['Type']); if(typeCode)document.getElementById('np-type').value=typeCode;
+  document.getElementById('np-outdoor-warning').style.display=document.getElementById('np-type').value==='OP'?'block':'none';
+  npSetChecks('np-season',Array.isArray(f['Season'])?f['Season']:(f['Season']?[f['Season']]:[]));
+  document.getElementById('np-occasion').value=f['Occasion']||'None';
+  document.getElementById('np-price').value=f['Price ($)']!=null?f['Price ($)']:'';
+  document.getElementById('np-florals').value=f['Florals']||'None';
+  document.getElementById('np-greenery').value=f['Greenery']||'None';
+  npSetChecks('np-style',f['Style']||[]);
+  npSetChecks('np-colors',f['Color(s)']||[]);
+  npSetChecks('np-materials',f['Key Materials']||[]);
+  document.getElementById('np-notes').value=f['Description']||'';
+  // Prefill Step 1.2 physical fields so an edit doesn't blank them on save
+  document.getElementById('np-width').value=f['Width (in)']!=null?f['Width (in)']:'';
+  document.getElementById('np-height').value=f['Height (in)']!=null?f['Height (in)']:'';
+  document.getElementById('np-depth').value=f['Depth (in)']!=null?f['Depth (in)']:'';
+  const ozEdit=f['Packaged weight (oz)'];
+  document.getElementById('np-weight-lb').value=(ozEdit!=null&&ozEdit!=='')?Math.floor(Number(ozEdit)/16):'';
+  document.getElementById('np-weight-oz').value=(ozEdit!=null&&ozEdit!=='')?Number(ozEdit)%16:'';
+  btn.disabled=false;
+}
+function npPrimaryAction(){ return npMode==='edit' ? npSaveEdit() : npGenerateEB(); }
+
+// Build the Airtable field payload shared by create + edit from the Step 1.1 form.
+function npBuildFieldsFromForm(){
+  const seasons=npGetChecks('np-season');
+  const fields={
+    'Season':seasons,
+    'Reference name':document.getElementById('np-ref-name').value.trim(),
+    'Type':TYPE_CODES[document.getElementById('np-type').value],
+    'Occasion':document.getElementById('np-occasion').value,
+    'Florals':document.getElementById('np-florals').value,
+    'Greenery':document.getElementById('np-greenery').value,
+    'Style':npGetChecks('np-style'),
+    'Color(s)':npGetChecks('np-colors'),
+    'Key Materials':npGetChecks('np-materials'),
+    'Description':document.getElementById('np-notes').value.trim()
+  };
+  const price=document.getElementById('np-price').value.trim();
+  if(price) fields['Price ($)']=parseFloat(price);
+  return {fields,seasons};
+}
+
 async function npGenerateEB() {
-  const year=document.getElementById('np-year').value, season=document.getElementById('np-season').value;
-  const type=document.getElementById('np-type').value, holiday=document.getElementById('np-holiday').value;
-  const price=document.getElementById('np-price').value.trim(), cost=document.getElementById('np-cost').value.trim();
-  const bin=document.getElementById('np-bin').value.trim(), notes=document.getElementById('np-notes').value.trim();
+  const year=document.getElementById('np-year').value;
+  const type=document.getElementById('np-type').value;
+  const {fields,seasons}=npBuildFieldsFromForm();
+  if(!fields['Reference name']){alert('Please enter a Reference name.');return;}
+  if(seasons.length===0){alert('Please select at least one season.');return;}
   setStatus('np','Assigning EB number...','loading');
-  const prefix='EB-'+year+season+'-'+type+'-';
+  const prefix='EB-'+year+npSeasonCode(seasons)+'-'+type+'-';
   const existing=allRecords.map(r=>r.fields['EB Number']||'').filter(eb=>eb.startsWith(prefix)).map(eb=>parseInt(eb.split('-').pop())||0);
   const nextNum=existing.length>0?Math.max(...existing)+1:1;
   const ebNumber=prefix+String(nextNum).padStart(3,'0');
   npCurrentEB=ebNumber; npAssignedEB=ebNumber;
-  const fields={'EB Number':ebNumber,'Season':[SEASON_NAMES[season]],'Type':TYPE_CODES[type],'Status':'In stock'};
-  if(holiday!=='None') fields['Holiday']=holiday;
-  if(price) fields['Price ($)']=parseFloat(price);
-  if(cost)  fields['Cost ($)']=parseFloat(cost);
-  if(bin)   fields['Bin location']=bin;
-  if(notes) fields['Description']=notes;
+  fields['EB Number']=ebNumber; fields['Status']='In stock';
   try {
     const result=await airtableFetch('',{method:'POST',body:JSON.stringify({fields})});
     allRecords.push(result); cfCachedRecords=allRecords; populateHomeStats();
@@ -981,6 +1147,23 @@ async function npGenerateEB() {
     document.getElementById('np-qr-img').src=qrUrl;
     document.getElementById('np-eb-num').textContent=ebNumber;
     hideStatus('np'); npStep(2); npCurrentRecordId=result.id;
+  } catch(e) { setStatus('np','Error: '+e.message,'error'); }
+}
+
+async function npSaveEdit() {
+  if(!npCurrentRecordId){alert('Pick a piece to edit first.');return;}
+  const {fields,seasons}=npBuildFieldsFromForm();
+  if(!fields['Reference name']){alert('Please enter a Reference name.');return;}
+  if(seasons.length===0){alert('Please select at least one season.');return;}
+  setStatus('np','Saving changes to Airtable...','loading');
+  try {
+    const result=await airtableFetch('/'+npCurrentRecordId,{method:'PATCH',body:JSON.stringify({fields})});
+    const rec=allRecords.find(r=>r.id===npCurrentRecordId); if(rec)Object.assign(rec.fields,(result&&result.fields)||fields);
+    cfCachedRecords=allRecords; populateHomeStats(); populateLPSelect();
+    const qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=140x140&data='+encodeURIComponent(SHOPIFY_BASE+(npCurrentEB||'').toLowerCase());
+    document.getElementById('np-qr-img').src=qrUrl;
+    document.getElementById('np-eb-num').textContent=npCurrentEB;
+    hideStatus('np'); npStep(2);
   } catch(e) { setStatus('np','Error: '+e.message,'error'); }
 }
 
@@ -1005,13 +1188,39 @@ async function npSaveDimensions() {
       hideStatus('np');
     }
   }
+  // Packaged weight → total ounces. Saved in its own PATCH so a missing
+  // "Packaged weight (oz)" field can never break the dimensions save.
+  await npSaveWeight();
   document.getElementById('np-complete-eb').textContent=npCurrentEB;
-  document.getElementById('np-complete-status-msg').textContent='Status: In stock.';
+  document.getElementById('np-complete-status-msg').textContent=npMode==='edit'?'Changes saved.':'Status: In stock.';
   if (npPhotoStatus === 'done') {
     setTimeout(() => { goTo('screen-list'); const sel=document.getElementById('lp-eb-select'); if(sel&&npCurrentRecordId){sel.value=npCurrentRecordId;if(typeof lpOnSelectRecord==='function')lpOnSelectRecord();const btn=document.getElementById('lp-next-1-btn');if(btn)btn.disabled=false;} }, 800);
   } else {
     npStep(3);
   }
+}
+
+// Combine lb + oz inputs into total ounces (integer). Returns null if both blank.
+function wtInputsToOz(lbId,ozId){
+  const lbEl=document.getElementById(lbId), ozEl=document.getElementById(ozId);
+  const lbRaw=lbEl?lbEl.value.trim():'', ozRaw=ozEl?ozEl.value.trim():'';
+  if(lbRaw===''&&ozRaw==='')return null;
+  const lb=parseInt(lbRaw||'0',10)||0, oz=parseInt(ozRaw||'0',10)||0;
+  return lb*16+oz;
+}
+async function npSaveWeight(){
+  if(!npCurrentRecordId)return;
+  const totalOz=wtInputsToOz('np-weight-lb','np-weight-oz');
+  if(totalOz===null)return;
+  try{
+    await airtableFetch('/'+npCurrentRecordId,{method:'PATCH',body:JSON.stringify({fields:{'Packaged weight (oz)':totalOz}})});
+    const rec=allRecords.find(r=>r.id===npCurrentRecordId); if(rec)rec.fields['Packaged weight (oz)']=totalOz;
+  }catch(e){ console.warn('Weight save skipped (Packaged weight (oz) field may not exist yet):',e.message); }
+}
+function npListNow(){
+  goTo('screen-list');
+  const sel=document.getElementById('lp-eb-select');
+  if(sel&&npCurrentRecordId){ sel.value=npCurrentRecordId; if(typeof lpOnSelectRecord==='function')lpOnSelectRecord(); const btn=document.getElementById('lp-next-1-btn'); if(btn)btn.disabled=false; }
 }
 
 async function npMarkPhotographed() {
@@ -1038,8 +1247,8 @@ function toggleShot(el) {
 }
 
 function npReset() {
-  ['np-price','np-cost','np-bin','np-notes','np-width','np-height','np-depth','np-weight'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('np-holiday').value='None';
+  ['np-width','np-height','np-depth','np-weight-lb','np-weight-oz'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  npSetMode('add');
   document.getElementById('np-outdoor-warning').style.display='none';
   document.querySelectorAll('.shot-card').forEach(c=>{c.classList.remove('done');const num=c.querySelector('.shot-num');num.textContent=num.textContent.replace('✓ SHOT','SHOT');});
   const btn=document.getElementById('np-mark-photo-btn'); btn.disabled=false; btn.textContent='📷 Mark as Photographed in Airtable'; btn.style.background=''; btn.style.borderColor='';
@@ -1058,10 +1267,18 @@ function npSetPhotoStatus(status) {
 function lpStep(n) {
   document.querySelectorAll('#screen-list .step-block').forEach(s=>s.classList.remove('active'));
   document.getElementById('lp-step-'+n).classList.add('active');
-  const pills={1:'Step 1 of 4 — Select piece',2:'Step 2 of 4 — Details',3:'Step 3 of 4 — Photos',4:'Step 4 of 4 — Description & publish'};
-  document.getElementById('lp-step-pill').textContent=pills[n]||('Step '+n+' of 4');
-  document.getElementById('lp-progress').style.width=(n*25)+'%';
-  if(n===4){ const note=document.getElementById('lp-photos-for-ai-note'); if(note) note.style.display=lpPhotoItems.length===0?'block':'none'; const aiCount=document.getElementById('lp-ai-photo-count'); if(aiCount){const n3=Math.min(lpPhotoItems.length,3);aiCount.textContent=lpPhotoItems.length>0?'📸 '+lpPhotoItems.length+' photo'+(lpPhotoItems.length!==1?'s':'')+' ready — Claude will read the first '+n3+' when generating':'No photos added — description will be based on your notes only';} lpUpdatePublishSummary(); }
+  const pills={1:'Step 1 of 5 — Select piece',2:'Step 2 of 5 — Details',3:'Step 3 of 5 — Photos',4:'Step 4 of 5 — Title & description',5:'Step 5 of 5 — Review & publish'};
+  document.getElementById('lp-step-pill').textContent=pills[n]||('Step '+n+' of 5');
+  document.getElementById('lp-progress').style.width=(n*20)+'%';
+  if(n===3){ lpDriveInit(); }
+  if(n===4){
+    const note=document.getElementById('lp-photos-for-ai-note'); if(note) note.style.display=lpPhotoItems.length===0?'block':'none';
+    const aiCount=document.getElementById('lp-ai-photo-count'); if(aiCount){const n3=Math.min(lpPhotoItems.length,3);aiCount.textContent=lpPhotoItems.length>0?'📸 '+lpPhotoItems.length+' photo'+(lpPhotoItems.length!==1?'s':'')+' ready — Claude will read the first '+n3+' when generating':'No photos added — title & description will use your Step 1 details only';}
+    // Auto-generate once per piece; back/forward won't re-bill the API.
+    const eb=lpSelectedRecord?(lpSelectedRecord.fields['EB Number']||lpSelectedRecord.id):'';
+    if(eb && lpGeneratedFor!==eb && !(document.getElementById('lp-desc').value.trim())) lpGenerateListing();
+  }
+  if(n===5){ lpRenderReview(); lpUpdatePublishSummary(); }
   window.scrollTo({top:0,behavior:'smooth'}); wipSaveLP();
 }
 
@@ -1069,7 +1286,7 @@ function populateLPSelect() {
   const listable=allRecords.filter(r=>LISTABLE_STATUSES.includes(r.fields['Status']));
   const sel=document.getElementById('lp-eb-select');
   if(listable.length===0){sel.innerHTML='<option value="">— no pieces ready to list —</option>';return;}
-  sel.innerHTML='<option value="">— pick a piece —</option>'+listable.map(r=>{const f=r.fields,eb=f['EB Number']||r.id,statusTag=f['Status']&&f['Status']!=='In stock'?' ['+f['Status']+']':'';const seasonDisplay=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||'');return '<option value="'+r.id+'">'+eb+statusTag+(seasonDisplay?' · '+seasonDisplay:'')+(f['Type']?' · '+f['Type']:'')+(f['Holiday']&&f['Holiday']!=='None'?' · '+f['Holiday']:'')+'</option>';}).join('');
+  sel.innerHTML='<option value="">— pick a piece —</option>'+listable.map(r=>'<option value="'+r.id+'">'+escHtml(pieceLabel(r.fields)||r.id)+'</option>').join('');
   sel.onchange=lpOnSelectRecord;
 }
 
@@ -1090,35 +1307,83 @@ async function lpOnSelectRecord() {
   } catch(e) { /* non-fatal — cached version still usable */ }
 }
 
+// ── Record-sourced listing data (colors, materials, weight now come from Step 1's Airtable record) ──
+function lpColorsFromRecord(f){const c=f['Color(s)'];return Array.isArray(c)?c.join(', '):(c||'');}
+function lpMaterialsFromRecord(f){const parts=[];const km=f['Key Materials'];if(Array.isArray(km))parts.push(...km);else if(km)parts.push(km);if(f['Florals']&&f['Florals']!=='None')parts.push(f['Florals']);if(f['Greenery']&&f['Greenery']!=='None')parts.push(f['Greenery']);return parts.join(', ');}
+function lpWeightOzFromRecord(f){const o=f['Packaged weight (oz)'];return (o===''||o==null)?null:Number(o);}
+function ozToLbOzStr(oz){oz=Number(oz);const lb=Math.floor(oz/16),r=oz%16;return (lb?lb+' lb':'')+(lb&&r?' ':'')+(r||!lb?r+' oz':'');}
+
 function lpRenderLPPreview(f) {
   const dimW=f['Width (in)'],dimH=f['Height (in)'],dimD=f['Depth (in)'];
   const dims=(dimW||dimH||dimD)?`${dimW||'?'}" W × ${dimH||'?'}" H × ${dimD||'?'}" D`:null;
   const seasonDisplay=Array.isArray(f['Season'])?f['Season'].join(', '):(f['Season']||null);
-  const previewFields=[{l:'EB Number',v:f['EB Number']},{l:'Status',v:f['Status']},{l:'Season',v:seasonDisplay},{l:'Type',v:f['Type']},{l:'Holiday',v:f['Holiday']&&f['Holiday']!=='None'?f['Holiday']:null},{l:'Price',v:f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):null},{l:'Dimensions',v:dims},{l:'Bin',v:f['Bin location']}];
+  const oz=lpWeightOzFromRecord(f), weightDisplay=oz!=null?ozToLbOzStr(oz):null;
+  const previewFields=[{l:'EB Number',v:f['EB Number']},{l:'Status',v:f['Status']},{l:'Season',v:seasonDisplay},{l:'Type',v:f['Type']},{l:'Occasion',v:f['Occasion']&&f['Occasion']!=='None'?f['Occasion']:null},{l:'Price',v:f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):null},{l:'Dimensions',v:dims},{l:'Weight',v:weightDisplay},{l:'Bin',v:f['Bin location']}];
   document.getElementById('lp-at-preview').style.display='block';
   document.getElementById('lp-at-preview').innerHTML='<div class="at-preview"><div class="at-preview-title">Pulled from Airtable</div><div class="at-grid">'+previewFields.map(fld=>'<div class="at-field"><div class="at-label">'+fld.l+'</div><div class="at-value'+(fld.v?'':' empty')+'">'+escHtml(fld.v||'not set')+'</div></div>').join('')+'</div></div>';
   document.getElementById('lp-outdoor-warning').style.display=f['Type']==='Outdoor planter'?'block':'none';
-  document.getElementById('lp-dims-warning').style.display=(!dimW&&!dimH&&!dimD)?'block':'none';
+  // Inline backfill editor: show when dimensions OR weight are missing; prefill whatever exists.
+  const missingDims=(!dimW&&!dimH&&!dimD), missingWeight=(oz==null);
+  const editor=document.getElementById('lp-dims-editor');
+  if(editor){
+    editor.style.display=(missingDims||missingWeight)?'block':'none';
+    document.getElementById('lp-edit-width').value=dimW!=null?dimW:'';
+    document.getElementById('lp-edit-height').value=dimH!=null?dimH:'';
+    document.getElementById('lp-edit-depth').value=dimD!=null?dimD:'';
+    document.getElementById('lp-edit-weight-lb').value=oz!=null?Math.floor(oz/16):'';
+    document.getElementById('lp-edit-weight-oz').value=oz!=null?oz%16:'';
+    const ss=document.getElementById('lp-dims-save-status'); if(ss)ss.style.display='none';
+  }
 }
 
-function lpBuildListing() {
+async function lpSaveDimsInline(){
+  if(!lpSelectedRecord){alert('Select a piece first.');return;}
+  const ss=document.getElementById('lp-dims-save-status');
+  const w=document.getElementById('lp-edit-width').value.trim();
+  const h=document.getElementById('lp-edit-height').value.trim();
+  const d=document.getElementById('lp-edit-depth').value.trim();
+  const dimFields={};
+  if(w)dimFields['Width (in)']=parseInt(w);
+  if(h)dimFields['Height (in)']=parseInt(h);
+  if(d)dimFields['Depth (in)']=parseInt(d);
+  const totalOz=wtInputsToOz('lp-edit-weight-lb','lp-edit-weight-oz');
+  if(ss){ss.style.display='block';ss.style.color='var(--text-muted)';ss.textContent='Saving to Airtable...';}
+  let ok=true;
+  if(Object.keys(dimFields).length){
+    try{ await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:dimFields})}); Object.assign(lpSelectedRecord.fields,dimFields); const rec=allRecords.find(r=>r.id===lpSelectedRecord.id); if(rec)Object.assign(rec.fields,dimFields); }
+    catch(e){ ok=false; if(ss){ss.style.color='var(--rose)';ss.textContent='⚠ Dimensions: '+e.message;} }
+  }
+  if(totalOz!==null){
+    try{ await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:{'Packaged weight (oz)':totalOz}})}); lpSelectedRecord.fields['Packaged weight (oz)']=totalOz; const rec=allRecords.find(r=>r.id===lpSelectedRecord.id); if(rec)rec.fields['Packaged weight (oz)']=totalOz; }
+    catch(e){ ok=false; if(ss){ss.style.color='var(--rose)';ss.textContent='⚠ Weight field may not exist in Airtable yet: '+e.message;} }
+  }
+  lpRenderLPPreview(lpSelectedRecord.fields);
+  if(ok&&ss){ss.style.display='block';ss.style.color='var(--green-text)';ss.textContent='✓ Saved to Airtable';setTimeout(()=>{ss.style.display='none';},2500);}
+}
+
+// Step 2.5 review — renders the final Shopify listing fields. Title comes from the AI
+// generation (editable in Step 2.4); weight/dims/colors come from the Airtable record.
+function lpRenderReview() {
   if(!lpSelectedRecord)return;
-  const f=lpSelectedRecord.fields, colors=document.getElementById('lp-colors').value.trim();
-  const weight=document.getElementById('lp-weight').value.trim(), meta=document.getElementById('lp-meta').value.trim();
+  const f=lpSelectedRecord.fields, meta=document.getElementById('lp-meta').value.trim();
   const dimW=f['Width (in)'],dimH=f['Height (in)'],dimD=f['Depth (in)'];
   const dims=(dimW||dimH||dimD)?`${dimW||'?'}" W × ${dimH||'?'}" H × ${dimD||'?'}" D`:'';
-  const title=lpBuildTitle(f,colors), tags=lpBuildTags(f), sku=f['EB Number']||'', price=f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—';
+  const oz=lpWeightOzFromRecord(f);
+  const titleEl=document.getElementById('lp-title');
+  const title=(titleEl&&titleEl.value.trim())||lpCurrentTitle||lpFallbackTitle(f);
+  const tags=lpBuildTags(f), sku=f['EB Number']||'', price=f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—';
   const collections=lpBuildCollections(f), collLabel=collections.map(h=>COLLECTION_LABELS[h]||h).join(' + ')||'—';
-  const fields=[{l:'Product title',v:title},{l:'SKU',v:sku},{l:'Price',v:price},{l:'Tags',v:tags},{l:'Collection(s)',v:collLabel},{l:'Quantity',v:'1'},{l:'Dimensions',v:dims||'— not set'},{l:'Weight (lbs)',v:weight||'— enter above'},{l:'Meta description',v:meta||'— enter above'},{l:'Shopify URL (after live)',v:sku?SHOPIFY_BASE+sku.toLowerCase():'—'}];
+  const fields=[{l:'Product title',v:title},{l:'SKU',v:sku},{l:'Price',v:price},{l:'Tags',v:tags},{l:'Collection(s)',v:collLabel},{l:'Quantity',v:'1'},{l:'Dimensions',v:dims||'— add in Step 1'},{l:'Weight',v:oz!=null?ozToLbOzStr(oz):'— add in Step 1'},{l:'Meta description',v:meta||'— optional'},{l:'Shopify URL (after live)',v:sku?SHOPIFY_BASE+sku.toLowerCase():'—'}];
   document.getElementById('lp-listing-fields').innerHTML=fields.map((fld,i)=>'<div class="listing-field-row"><span class="lf-label">'+fld.l+'</span><span class="lf-value" id="lpf-'+i+'">'+escHtml(fld.v||'—')+'</span><button class="lf-copy" id="lpfb-'+i+'" onclick="lpCopyField(\'lpf-'+i+'\',\'lpfb-'+i+'\')">Copy</button></div>').join('');
-  lpStep(3); lpUpdatePublishSummary(); wipSaveLP();
 }
 
-function lpBuildTitle(f,colors){
+// Formulaic title — used only as a fallback if the AI generation fails.
+function lpFallbackTitle(f){
   const type=f['Type']||'arrangement';
   const seasonRaw=f['Season'];
   const season=Array.isArray(seasonRaw)?seasonRaw[0]||'':(seasonRaw||'');
-  const holiday=f['Holiday']&&f['Holiday']!=='None'?f['Holiday']+' ':'';
+  const holiday=f['Occasion']&&f['Occasion']!=='None'?f['Occasion']+' ':'';
+  const colors=lpColorsFromRecord(f);
   const colorPart=colors?colors.split(',')[0].trim()+' ':'';
   return(colorPart.charAt(0).toUpperCase()+colorPart.slice(1)+holiday+season+' '+type).trim();
 }
@@ -1128,30 +1393,41 @@ function lpBuildTags(f){
   const seasons=Array.isArray(seasonRaw)?seasonRaw:(seasonRaw?seasonRaw.split(',').map(s=>s.trim()):[]);
   seasons.forEach(s=>{if(s)tags.push('Season_'+s);});
   if(f['Type'])tags.push('Type_'+f['Type'].replace(/\s/g,'_'));
-  if(f['Holiday']&&f['Holiday']!=='None')tags.push('Holiday_'+f['Holiday'].replace(/\s/g,'_'));
+  if(f['Occasion']&&f['Occasion']!=='None')tags.push('Holiday_'+f['Occasion'].replace(/\s/g,'_'));
   tags.push('one-of-a-kind','handmade','faux-floral','Omaha');
   return tags.join(', ');
 }
-function lpBuildCollections(f){const handles=[];const h=COLLECTION_MAP[f['Type']];if(h)handles.push(h);if(f['Holiday']&&f['Holiday']!=='None')handles.push('holiday-and-seasonal');return handles;}
+function lpBuildCollections(f){const handles=[];const h=COLLECTION_MAP[f['Type']];if(h)handles.push(h);if(f['Occasion']&&f['Occasion']!=='None')handles.push('holiday-and-seasonal');return handles;}
 
-async function lpGenerateDescription(){
-  if(!lpSelectedRecord){alert('No piece selected.');return;}
+// Auto-generates a Shopify-optimized title + description via Claude. Colors/materials
+// are sourced from the Step 1 Airtable record (no longer manual inputs).
+async function lpGenerateListing(){
+  if(!lpSelectedRecord){return;}
   const f=lpSelectedRecord.fields, dimW=f['Width (in)'],dimH=f['Height (in)'],dimD=f['Depth (in)'];
   const dims=(dimW||dimH||dimD)?`${dimW||'?'}" W × ${dimH||'?'}" H × ${dimD||'?'}" D`:'';
-  const btn=document.getElementById('lp-gen-desc-btn'); btn.disabled=true; btn.textContent='⏳ Writing...';
+  const btn=document.getElementById('lp-regen-btn'); if(btn){btn.disabled=true;btn.textContent='⏳ Writing...';}
+  const titleEl=document.getElementById('lp-title'), descEl=document.getElementById('lp-desc');
   const inlineStatus=document.getElementById('lp-desc-inline-status');
-  if(inlineStatus){inlineStatus.style.display='block';inlineStatus.textContent='Sending to Claude AI...';inlineStatus.style.color='var(--text-muted)';}
+  if(inlineStatus){inlineStatus.style.display='block';inlineStatus.textContent='✨ Generating title & description with Claude...';inlineStatus.style.color='var(--text-muted)';}
   try {
     const photoImages=[];
-    for(const item of lpPhotoItems.slice(0,3)){try{const smallBlob=await lpResizeImage(item.dataUrl,800,150);const smallDataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(smallBlob);});photoImages.push({data:smallDataUrl.split(',')[1],mime:'image/jpeg'});}catch(e){console.warn('Skipping photo:',e.message);}}
+    for(const item of lpPhotoItems.slice(0,3)){try{await lpEnsureDriveBytes(item);const smallBlob=await lpResizeImage(item.dataUrl,800,150);const smallDataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(smallBlob);});photoImages.push({data:smallDataUrl.split(',')[1],mime:'image/jpeg'});}catch(e){console.warn('Skipping photo:',e.message);}}
     const seasonVal=Array.isArray(f['Season'])?f['Season'].join(', '):(f['Season']||'');
-    const res=await fetch(SERVER_URL+'/generate-description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:f['EB Number'],type:f['Type'],season:seasonVal,holiday:f['Holiday'],colors:document.getElementById('lp-colors').value.trim(),dimensions:dims,materials:document.getElementById('lp-materials').value.trim(),location:document.getElementById('lp-location').value.trim(),special:document.getElementById('lp-special').value.trim(),notes:f['Description'],images:photoImages})});
+    const res=await fetch(SERVER_URL+'/generate-description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:f['EB Number'],reference_name:f['Reference name'],type:f['Type'],season:seasonVal,holiday:f['Occasion'],colors:lpColorsFromRecord(f),dimensions:dims,materials:lpMaterialsFromRecord(f),location:document.getElementById('lp-location').value.trim(),special:document.getElementById('lp-special').value.trim(),notes:f['Description'],images:photoImages})});
     const data=await res.json(); if(!res.ok||!data.success) throw new Error(data.error||'Server returned error');
-    document.getElementById('lp-desc-paste').value=data.description; lpCurrentDesc=data.description;
+    lpCurrentTitle=((data.title||'').trim())||lpFallbackTitle(f);
+    lpCurrentDesc=(data.description||'').trim();
+    if(titleEl)titleEl.value=lpCurrentTitle;
+    if(descEl)descEl.value=lpCurrentDesc;
+    lpGeneratedFor=f['EB Number']||lpSelectedRecord.id;
     if(inlineStatus)inlineStatus.style.display='none';
-    setStatus('lp','Description ready — review and confirm below','success'); setTimeout(()=>hideStatus('lp'),4000);
-  } catch(e){ if(inlineStatus){inlineStatus.style.display='block';inlineStatus.textContent='⚠ '+e.message;inlineStatus.style.color='var(--rose)';} setStatus('lp','Generation failed: '+e.message,'error'); }
-  finally{btn.disabled=false;btn.textContent='✨ Generate description';}
+    setStatus('lp','Title & description ready — edit if you like','success'); setTimeout(()=>hideStatus('lp'),4000);
+  } catch(e){
+    if(inlineStatus){inlineStatus.style.display='block';inlineStatus.textContent='⚠ '+e.message+' — using a basic title; edit below.';inlineStatus.style.color='var(--rose)';}
+    if(titleEl&&!titleEl.value.trim()){lpCurrentTitle=lpFallbackTitle(f);titleEl.value=lpCurrentTitle;}
+    setStatus('lp','Generation failed: '+e.message,'error');
+  }
+  finally{ if(btn){btn.disabled=false;btn.textContent='↺ Regenerate';} lpUpdatePublishSummary(); wipSaveLP(); }
 }
 
 async function lpCleanupField(fieldId){
@@ -1160,56 +1436,122 @@ async function lpCleanupField(fieldId){
   try{ const res=await fetch(SERVER_URL+'/cleanup-text',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:el.value.trim()})}); const data=await res.json(); if(data.text)el.value=data.text; if(cleanBtn){cleanBtn.textContent='✓ Done';setTimeout(()=>{cleanBtn.disabled=false;cleanBtn.textContent='✓ Fix';},2000);} }
   catch(e){ if(cleanBtn){cleanBtn.disabled=false;cleanBtn.textContent='✓ Fix';} }
 }
-function lpConfirmDesc(){const text=document.getElementById('lp-desc-paste').value.trim();if(!text){alert('Generate or write a description first.');return;}lpCurrentDesc=text;lpDescConfirmed=true;document.getElementById('lp-paste-section').style.display='none';document.getElementById('lp-desc-confirmed').style.display='block';document.getElementById('lp-desc-confirmed-text').innerHTML='<button class="lf-copy" style="position:absolute;top:8px;right:8px" onclick="lpCopyDesc()">Copy</button>'+escHtml(text);setStatus('lp','Description confirmed ✓','success');setTimeout(()=>hideStatus('lp'),3000);lpUpdatePublishSummary();wipSaveLP();}
-function lpEditDesc(){const el=document.getElementById('lp-desc-confirmed-text'),btn=el.querySelector('.lf-copy');document.getElementById('lp-desc-paste').value=el.textContent.replace(btn?btn.textContent:'','').trim();document.getElementById('lp-desc-confirmed').style.display='none';document.getElementById('lp-paste-section').style.display='block';lpDescConfirmed=false;lpUpdatePublishSummary();}
-function lpRegenerateDesc(){lpDescConfirmed=false;document.getElementById('lp-desc-paste').value='';document.getElementById('lp-desc-confirmed').style.display='none';document.getElementById('lp-paste-section').style.display='block';lpGenerateDescription();}
-function lpCopyDesc(){const el=document.getElementById('lp-desc-confirmed-text'),btn=el.querySelector('.lf-copy');navigator.clipboard.writeText(el.textContent.replace(btn?btn.textContent:'','').trim());btn.textContent='✓';setTimeout(()=>btn.textContent='Copy',2000);}
 function lpCopyField(vid,bid){navigator.clipboard.writeText(document.getElementById(vid).textContent.trim()).then(()=>{const b=document.getElementById(bid),o=b.textContent;b.textContent='✓';b.classList.add('copied');setTimeout(()=>{b.textContent=o;b.classList.remove('copied');},2000);});}
 
-function lpDragOver(e){e.preventDefault();document.getElementById('lp-drop-zone').classList.add('dragover')}
-function lpDragLeave(){document.getElementById('lp-drop-zone').classList.remove('dragover')}
-function lpDrop(e){e.preventDefault();document.getElementById('lp-drop-zone').classList.remove('dragover');lpAddFiles(Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/')));}
-function lpFileSelect(e){lpAddFiles(Array.from(e.target.files));e.target.value='';}
-function lpAddFiles(files){const remaining=15-lpPhotoItems.length;files.slice(0,remaining).forEach(file=>{const reader=new FileReader();reader.onload=ev=>{lpPhotoItems.push({file,dataUrl:ev.target.result,outputName:''});lpRenderPhotos();};reader.readAsDataURL(file);});}
-function lpRenderPhotos(){const grid=document.getElementById('lp-photo-grid'),count=lpPhotoItems.length;const statusRow=document.getElementById('lp-photo-status');statusRow.style.display=count>0?'flex':'none';document.getElementById('lp-photo-instructions').style.display=count>0?'block':'none';document.getElementById('lp-photo-btns').style.display=count>0?'flex':'none';const pill=document.getElementById('lp-photo-count-pill');pill.textContent=count+'/15';pill.style.background=count<8?'var(--gold)':'var(--sage)';document.getElementById('lp-photo-count-label').textContent=count+' photo'+(count!==1?'s':'')+' added'+(count<8?' — aim for 8+':' ✓');grid.innerHTML=lpPhotoItems.map((item,i)=>'<div class="photo-card-opt" id="lpc-'+i+'" draggable="true" ondragstart="lpPhotoDragStart('+i+')" ondragover="lpPhotoDragOver(event,'+i+')" ondragleave="lpPhotoDragLeave('+i+')" ondrop="lpPhotoDrop(event,'+i+')"><span class="photo-badge">'+(i===0?'HERO':i+1)+'</span><button class="photo-remove" onclick="lpRemovePhoto('+i+')">✕</button><img src="'+item.dataUrl+'" alt="photo '+(i+1)+'"><div class="photo-card-footer-opt">'+item.file.name+'</div></div>').join('');lpUpdatePublishSummary();}
-function lpRemovePhoto(i){lpPhotoItems.splice(i,1);lpRenderPhotos();}
-function lpClearPhotos(){lpPhotoItems=[];lpRenderPhotos();}
+// ── Step 2.3 photos: loaded from the piece's Google Drive (Listing Media) folder ──
+async function lpDriveInit(){
+  const connect=document.getElementById('lp-drive-connect'), panel=document.getElementById('lp-drive-panel');
+  try{
+    const r=await fetch(SERVER_URL+'/drive-status'); const d=await r.json();
+    if(d.connected){ connect.style.display='none'; panel.style.display='block'; const sel=document.getElementById('lp-drive-folder'); if(sel&&sel.options.length<=1) lpDriveLoadFolders(); }
+    else { connect.style.display='block'; panel.style.display='none'; }
+  }catch(e){ connect.style.display='block'; panel.style.display='none'; }
+}
+function lpDriveConnect(){ window.open(SERVER_URL+'/drive-auth','_blank'); setStatus('lp','After connecting in the new tab, come back and tap “Photos” again.','loading'); setTimeout(()=>{hideStatus('lp');lpDriveInit();},4000); }
+async function lpDriveLoadFolders(){
+  const sel=document.getElementById('lp-drive-folder'); sel.innerHTML='<option value="">— loading folders… —</option>';
+  try{
+    const r=await fetch(SERVER_URL+'/drive-list-subfolders?parentId='+encodeURIComponent(LISTING_MEDIA_FOLDER_ID)); const d=await r.json();
+    if(!r.ok) throw new Error(d.error||'Could not list folders');
+    sel.innerHTML='<option value="">— pick a folder —</option>'+(d.folders||[]).map(f=>'<option value="'+f.id+'">'+escHtml(f.name)+'</option>').join('');
+  }catch(e){ sel.innerHTML='<option value="">— '+escHtml(e.message)+' —</option>'; }
+}
+async function lpDriveLoadImages(){
+  const folderId=document.getElementById('lp-drive-folder').value;
+  const status=document.getElementById('lp-drive-grid-status'), label=document.getElementById('lp-drive-grid-label');
+  lpDriveImages=[]; lpPhotoItems=[]; lpDriveLinked=false; lpRenderDriveGrid(); lpRenderPhotos();
+  if(!folderId){ status.style.display='none'; label.style.display='none'; return; }
+  status.style.display='block'; status.style.color='var(--text-muted)'; status.textContent='Loading photos from Drive…'; label.style.display='none';
+  try{
+    const r=await fetch(SERVER_URL+'/drive-folder-images?folderId='+encodeURIComponent(folderId)); const d=await r.json();
+    if(!r.ok) throw new Error(d.error||'Could not list images');
+    lpDriveImages=d.files||[];
+    if(lpDriveImages.length===0){ status.style.display='block'; status.textContent='No images found in this folder.'; label.style.display='none'; }
+    else { status.style.display='none'; label.style.display='block'; }
+    lpRenderDriveGrid();
+  }catch(e){ status.style.display='block'; status.style.color='var(--rose)'; status.textContent='⚠ '+e.message; }
+}
+function lpDriveSelectedIndex(id){ return lpPhotoItems.findIndex(it=>it.driveFileId===id); }
+function lpDriveToggle(id){
+  const idx=lpDriveSelectedIndex(id);
+  if(idx>=0){ lpPhotoItems.splice(idx,1); }
+  else { if(lpPhotoItems.length>=15){alert('Up to 15 photos.');return;} const img=lpDriveImages.find(f=>f.id===id); if(!img)return; lpPhotoItems.push({driveFileId:img.id,name:img.name,thumbnailLink:img.thumbnailLink,mime:img.mimeType,dataUrl:null}); }
+  lpDriveLinked=false; lpRenderDriveGrid(); lpRenderPhotos();
+}
+function lpRenderDriveGrid(){
+  const grid=document.getElementById('lp-drive-grid'); if(!grid)return;
+  grid.innerHTML=lpDriveImages.map(img=>{const ord=lpDriveSelectedIndex(img.id),sel=ord>=0;return '<div class="photo-card-opt" style="cursor:pointer'+(sel?';outline:3px solid var(--sage);outline-offset:-3px':'')+'" onclick="lpDriveToggle(\''+img.id+'\')">'+(sel?'<span class="photo-badge" style="background:var(--sage)">'+(ord===0?'HERO':ord+1)+'</span>':'')+'<img src="'+(img.thumbnailLink||'')+'" alt="'+escHtml(img.name)+'" referrerpolicy="no-referrer"><div class="photo-card-footer-opt">'+escHtml(img.name)+'</div></div>';}).join('');
+}
+function lpRenderPhotos(){
+  const grid=document.getElementById('lp-photo-grid'),count=lpPhotoItems.length;
+  const statusRow=document.getElementById('lp-photo-status'); if(statusRow)statusRow.style.display=count>0?'flex':'none';
+  const sl=document.getElementById('lp-selected-label'); if(sl)sl.style.display=count>0?'block':'none';
+  const ins=document.getElementById('lp-photo-instructions'); if(ins)ins.style.display=count>0?'block':'none';
+  const btns=document.getElementById('lp-photo-btns'); if(btns)btns.style.display=count>0?'flex':'none';
+  const pill=document.getElementById('lp-photo-count-pill'); if(pill){pill.textContent=count+'/15';pill.style.background=count<8?'var(--gold)':'var(--sage)';}
+  const lbl=document.getElementById('lp-photo-count-label'); if(lbl)lbl.textContent=count+' photo'+(count!==1?'s':'')+' selected'+(count<8?' — aim for 8+':' ✓');
+  if(grid)grid.innerHTML=lpPhotoItems.map((item,i)=>'<div class="photo-card-opt" id="lpc-'+i+'" draggable="true" ondragstart="lpPhotoDragStart('+i+')" ondragover="lpPhotoDragOver(event,'+i+')" ondragleave="lpPhotoDragLeave('+i+')" ondrop="lpPhotoDrop(event,'+i+')"><span class="photo-badge">'+(i===0?'HERO':i+1)+'</span><button class="photo-remove" onclick="lpRemovePhoto('+i+')">✕</button><img src="'+(item.thumbnailLink||item.dataUrl||'')+'" alt="photo '+(i+1)+'" referrerpolicy="no-referrer"><div class="photo-card-footer-opt">'+escHtml(item.name||'')+'</div></div>').join('');
+  lpUpdatePublishSummary();
+}
+function lpRemovePhoto(i){lpPhotoItems.splice(i,1);lpDriveLinked=false;lpRenderDriveGrid();lpRenderPhotos();}
+function lpClearPhotos(){lpPhotoItems=[];lpDriveLinked=false;lpRenderDriveGrid();lpRenderPhotos();}
 function lpPhotoDragStart(i){lpDragSrcIdx=i;document.getElementById('lpc-'+i).classList.add('dragging');}
 function lpPhotoDragOver(e,i){e.preventDefault();if(i!==lpDragSrcIdx)document.getElementById('lpc-'+i).classList.add('drag-over');}
 function lpPhotoDragLeave(i){document.getElementById('lpc-'+i).classList.remove('drag-over');}
-function lpPhotoDrop(e,i){e.preventDefault();document.getElementById('lpc-'+i).classList.remove('drag-over');if(lpDragSrcIdx===null||lpDragSrcIdx===i){lpDragSrcIdx=null;return;}const moved=lpPhotoItems.splice(lpDragSrcIdx,1)[0];lpPhotoItems.splice(i,0,moved);lpDragSrcIdx=null;lpRenderPhotos();}
+function lpPhotoDrop(e,i){e.preventDefault();document.getElementById('lpc-'+i).classList.remove('drag-over');if(lpDragSrcIdx===null||lpDragSrcIdx===i){lpDragSrcIdx=null;return;}const moved=lpPhotoItems.splice(lpDragSrcIdx,1)[0];lpPhotoItems.splice(i,0,moved);lpDragSrcIdx=null;lpDriveLinked=false;lpRenderDriveGrid();lpRenderPhotos();}
 
-async function lpProcessPhotos(){
-  if(lpPhotoItems.length===0)return;
-  const eb=(lpSelectedRecord&&lpSelectedRecord.fields['EB Number'])||'EB-UNKNOWN';
-  const btn=document.getElementById('lp-download-btn'); btn.disabled=true; btn.textContent='⏳ Processing...';
-  const pw=document.getElementById('lp-progress-wrap'),pb=document.getElementById('lp-progress-bar'); pw.style.display='block';
-  if(!window.JSZip){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
-  const zip=new JSZip();
-  for(let i=0;i<lpPhotoItems.length;i++){const item=lpPhotoItems[i],num=String(i+1).padStart(2,'0'),name=eb.toUpperCase()+'-'+num+'.jpg';lpPhotoItems[i].outputName=name;const blob=await lpResizeImage(item.dataUrl,2048,300);zip.file(name,blob);pb.style.width=Math.round(((i+1)/lpPhotoItems.length)*100)+'%';}
-  const zipBlob=await zip.generateAsync({type:'blob'});const url=URL.createObjectURL(zipBlob);const a=document.createElement('a');a.href=url;a.download=eb.toUpperCase()+'-photos.zip';a.click();URL.revokeObjectURL(url);
-  pw.style.display='none';pb.style.width='0%';btn.disabled=false;btn.textContent='✓ Downloaded';btn.style.background='var(--sage)';btn.style.borderColor='var(--sage)';setTimeout(()=>{btn.textContent='↓ Optimize & download ZIP';btn.style.background='';btn.style.borderColor='';},5000);lpRenderPhotos();
+// Fetch full image bytes from Drive on demand (for AI vision + Shopify upload).
+async function lpEnsureDriveBytes(item){
+  if(item.dataUrl) return item.dataUrl;
+  if(!item.driveFileId) return null;
+  const r=await fetch(SERVER_URL+'/drive-file-content?fileId='+encodeURIComponent(item.driveFileId));
+  const d=await r.json(); if(!r.ok) throw new Error(d.error||'Drive download failed');
+  item.dataUrl='data:'+(d.mime||'image/jpeg')+';base64,'+d.data;
+  return item.dataUrl;
+}
+
+// Rename the selected photos in Drive to EB…_01, _02, … in listing order.
+async function lpDriveLinkRename(){
+  if(!lpSelectedRecord){alert('Select a piece first.');return;}
+  if(lpPhotoItems.length===0){alert('Select at least one photo.');return;}
+  const eb=lpSelectedRecord.fields['EB Number']||'';
+  const btn=document.getElementById('lp-drive-link-btn'), st=document.getElementById('lp-drive-link-status'), orig=btn.textContent;
+  btn.disabled=true; btn.textContent='⏳ Renaming in Drive…';
+  if(st){st.style.display='block';st.style.color='var(--text-muted)';st.textContent='Renaming '+lpPhotoItems.length+' file'+(lpPhotoItems.length!==1?'s':'')+' in Drive…';}
+  try{
+    const fileIds=lpPhotoItems.map(it=>it.driveFileId);
+    const r=await fetch(SERVER_URL+'/drive-assign-eb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileIds,ebNumber:eb})});
+    const d=await r.json(); if(!r.ok||!d.success) throw new Error(((d.results||[]).find(x=>!x.success)||{}).error||d.error||'Rename failed');
+    (d.results||[]).forEach((res,i)=>{ if(res.success&&lpPhotoItems[i]) lpPhotoItems[i].name=res.newName; });
+    lpDriveLinked=true; lpRenderPhotos(); lpRenderDriveGrid();
+    if(st){st.style.color='var(--green-text)';st.textContent='✓ Renamed in Drive: '+eb+'_01 … '+eb+'_'+String(lpPhotoItems.length).padStart(2,'0');}
+  }catch(e){ if(st){st.style.color='var(--rose)';st.textContent='⚠ '+e.message;} }
+  finally{ btn.disabled=false; btn.textContent=orig; }
 }
 
 function lpResizeImage(dataUrl,targetSize,maxKB){return new Promise(resolve=>{const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');canvas.width=targetSize;canvas.height=targetSize;const ctx=canvas.getContext('2d');ctx.fillStyle='#ffffff';ctx.fillRect(0,0,targetSize,targetSize);const scale=Math.min(targetSize/img.width,targetSize/img.height);const w=img.width*scale,h=img.height*scale;ctx.drawImage(img,(targetSize-w)/2,(targetSize-h)/2,w,h);let quality=0.88;const tryExport=()=>{canvas.toBlob(blob=>{if(blob.size/1024<=maxKB||quality<=0.5)resolve(blob);else{quality-=0.08;tryExport();}},'image/jpeg',quality);};tryExport();};img.src=dataUrl;});}
 
 function lpUpdatePublishSummary(){
   if(!lpSelectedRecord)return;
-  const f=lpSelectedRecord.fields, colors=document.getElementById('lp-colors').value.trim();
-  const weight=document.getElementById('lp-weight').value.trim(), title=lpBuildTitle(f,colors), sku=f['EB Number']||'', price=f['Price ($)'];
+  const f=lpSelectedRecord.fields, sku=f['EB Number']||'', price=f['Price ($)'];
+  const titleEl=document.getElementById('lp-title'), descEl=document.getElementById('lp-desc');
+  const title=(titleEl&&titleEl.value.trim())||lpCurrentTitle||'';
+  const desc=descEl?descEl.value.trim():'';
+  const oz=lpWeightOzFromRecord(f), hasWeight=oz!=null;
   const dimW=f['Width (in)'],dimH=f['Height (in)'],dimD=f['Depth (in)'],hasDims=dimW&&dimH&&dimD;
   const photoCount=lpPhotoItems.length;
   const checkRow=(label,value,ok)=>'<div class="publish-check-row"><span style="font-size:13px;flex-shrink:0">'+(ok?'✅':'⚠️')+'</span><span><strong>'+label+'</strong> '+escHtml(value)+'</span></div>';
   const blocks=[];
   if(!sku) blocks.push('EB number not selected');
   if(!price||Number(price)<=0) blocks.push('Price not set in Airtable');
-  if(!weight) blocks.push('Weight not entered');
-  if(!hasDims) blocks.push('Dimensions missing from Airtable record');
-  if(!lpDescConfirmed) blocks.push('Description not confirmed');
+  if(!hasWeight) blocks.push('Packaged weight missing — add it in Step 1 or Step 2.1');
+  if(!hasDims) blocks.push('Dimensions missing — add them in Step 2.1');
+  if(!title) blocks.push('Product title is empty');
+  if(!desc) blocks.push('Description is empty');
   if(photoCount===0) blocks.push('No photos added');
   const priceDisplay=price!=null?'$'+Number(price).toFixed(2):'not set';
   const dimsDisplay=hasDims?`${dimW}" W × ${dimH}" H × ${dimD}" D`:'missing';
-  document.getElementById('lp-publish-summary').innerHTML=checkRow('Title',title,!!title)+checkRow('SKU',sku,!!sku)+checkRow('Price',priceDisplay,!!(price&&Number(price)>0))+checkRow('Weight',weight?weight+' lbs':'not entered',!!weight)+checkRow('Dimensions',dimsDisplay,!!hasDims)+checkRow('Description',lpDescConfirmed?'confirmed':'not yet confirmed',lpDescConfirmed)+checkRow('Photos',photoCount>0?photoCount+' added'+(photoCount<8?' (aim for 8)':' ✓'):'none added',photoCount>0);
+  document.getElementById('lp-publish-summary').innerHTML=checkRow('Title',title||'empty',!!title)+checkRow('SKU',sku,!!sku)+checkRow('Price',priceDisplay,!!(price&&Number(price)>0))+checkRow('Weight',hasWeight?ozToLbOzStr(oz):'missing',hasWeight)+checkRow('Dimensions',dimsDisplay,!!hasDims)+checkRow('Description',desc?'ready':'empty',!!desc)+checkRow('Photos',photoCount>0?photoCount+' added'+(photoCount<8?' (aim for 8)':' ✓'):'none added',photoCount>0);
   const blocksEl=document.getElementById('lp-blocks');
   if(blocks.length>0){blocksEl.style.display='block';blocksEl.innerHTML='<strong>Fix before publishing:</strong><br>'+blocks.map(b=>'• '+b).join('<br>');}
   else blocksEl.style.display='none';
@@ -1218,30 +1560,31 @@ function lpUpdatePublishSummary(){
 
 async function lpPublish(){
   if(!lpSelectedRecord)return;
-  const f=lpSelectedRecord.fields, colors=document.getElementById('lp-colors').value.trim();
-  const title=lpBuildTitle(f,colors), tags=lpBuildTags(f), sku=f['EB Number']||'';
+  const f=lpSelectedRecord.fields;
+  const titleEl=document.getElementById('lp-title');
+  const title=(titleEl&&titleEl.value.trim())||lpCurrentTitle||lpFallbackTitle(f), tags=lpBuildTags(f), sku=f['EB Number']||'';
   const price=f['Price ($)']!=null?Number(f['Price ($)']).toFixed(2):'0.00';
-  const collections=lpBuildCollections(f), weight=parseFloat(document.getElementById('lp-weight').value.trim())||null;
+  const collections=lpBuildCollections(f), weightOz=lpWeightOzFromRecord(f);
   const meta=document.getElementById('lp-meta').value.trim();
   const dimW=f['Width (in)'],dimH=f['Height (in)'],dimD=f['Depth (in)'];
   const dims=(dimW||dimH||dimD)?`${dimW||'?'}" W × ${dimH||'?'}" H × ${dimD||'?'}" D`:'';
   const isOutdoor=f['Type']==='Outdoor planter';
-  const el=document.getElementById('lp-desc-confirmed-text'),btn2=el?el.querySelector('.lf-copy'):null;
-  const desc=el?(el.textContent.replace(btn2?btn2.textContent:'','')).trim():'';
+  const descEl=document.getElementById('lp-desc');
+  const desc=descEl?descEl.value.trim():'';
   const btn=document.getElementById('lp-publish-btn'),result=document.getElementById('lp-publish-result');
   btn.disabled=true;btn.textContent='⏳ Preparing photos...';result.style.display='none';
   setStatus('lp','Optimizing photos for Shopify...','loading');
   const images=[];
-  for(let i=0;i<lpPhotoItems.length;i++){try{btn.textContent='⏳ Photo '+(i+1)+' of '+lpPhotoItems.length+'...';const compressed=await lpResizeImage(lpPhotoItems[i].dataUrl,2048,300);const dataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(compressed);});images.push({data:dataUrl.split(',')[1],filename:(sku+'-'+String(i+1).padStart(2,'0')+'.jpg')});}catch(imgErr){console.warn('Skipping photo '+i+':',imgErr.message);}}
+  for(let i=0;i<lpPhotoItems.length;i++){try{btn.textContent='⏳ Photo '+(i+1)+' of '+lpPhotoItems.length+'...';await lpEnsureDriveBytes(lpPhotoItems[i]);const compressed=await lpResizeImage(lpPhotoItems[i].dataUrl,2048,300);const dataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(compressed);});images.push({data:dataUrl.split(',')[1],filename:(sku+'_'+String(i+1).padStart(2,'0')+'.jpg')});}catch(imgErr){console.warn('Skipping photo '+i+':',imgErr.message);}}
   btn.textContent='⏳ Publishing...';setStatus('lp','Publishing to Shopify...','loading');
   try {
     const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),90000);
-    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:desc?'<p>'+desc.replace(/\n/g,'</p><p>')+'</p>':'',sku,price,tags,product_type:f['Type']||'',collections,weight_lbs:weight,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images})});
+    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:desc?'<p>'+desc.replace(/\n/g,'</p><p>')+'</p>':'',sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images})});
     clearTimeout(timeout);const data=await res.json();
     if(!res.ok||!data.success) throw new Error(data.error||'Publish failed');
     try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:photoFields})});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
     WIP.clear('lp');
-    lastPublishedProduct={eb:f['EB Number']||'',detail:(f['Type']||'')+(f['Season']?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Holiday']&&f['Holiday']!=='None'?' · '+f['Holiday']:''),adminUrl:data.admin_url,price:f['Price ($)']!=null?String(f['Price ($)']):''}; 
+    lastPublishedProduct={eb:f['EB Number']||'',detail:(f['Type']||'')+(f['Season']?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Occasion']&&f['Occasion']!=='None'?' · '+f['Occasion']:''),adminUrl:data.admin_url,price:f['Price ($)']!=null?String(f['Price ($)']):''}; 
     result.className='publish-result success';result.style.display='block';
     result.innerHTML='<div style="font-size:15px;font-weight:700;color:var(--sage);margin-bottom:14px">✓ Published successfully!</div><div style="display:grid;gap:8px;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 1 — Airtable</strong><div style="font-size:11px;color:var(--text-muted)">Status set to Listed · Shopify URL saved</div></div></div><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 2 — Shopify</strong><div style="font-size:11px;color:var(--text-muted)">Listing live · inventory set to 1 · collections assigned</div></div></div><a href="'+data.admin_url+'" target="_blank" style="display:flex;align-items:center;gap:10px;background:var(--sage);border-radius:8px;padding:12px;text-decoration:none"><span style="font-size:18px">📹</span><div><strong style="font-size:13px;color:#fff">Step 3 — Add video in Shopify</strong><div style="font-size:11px;color:rgba(255,255,255,0.8)">Tap here → scroll to Media → drag video in → Save</div></div><span style="margin-left:auto;color:rgba(255,255,255,0.8);font-size:16px">→</span></a></div><a href="'+data.shopify_url+'" target="_blank" style="font-size:12px;color:var(--text-muted)">🔗 View live listing</a>';
     btn.textContent='✓ Published!';btn.style.background='var(--sage)';btn.style.borderColor='var(--sage)';
@@ -1249,18 +1592,18 @@ async function lpPublish(){
   } catch(e){result.className='publish-result error';result.style.display='block';result.innerHTML='✗ <strong>Publish failed:</strong> '+escHtml(e.message)+'<br><span style="font-size:12px">Check server: <a href="'+SERVER_URL+'/health" target="_blank">health check</a></span>';btn.disabled=false;btn.textContent='↑ Publish listing to Shopify';btn.style.background='';btn.style.borderColor='';setStatus('lp','Publish failed — see error below','error');}
 }
 
-function lpReset(){lpSelectedRecord=null;lpPhotoItems=[];lpCurrentDesc='';lpDescConfirmed=false;['lp-colors','lp-materials','lp-location','lp-weight','lp-meta','lp-special'].forEach(id=>document.getElementById(id).value='');document.getElementById('lp-eb-select').value='';document.getElementById('lp-at-preview').style.display='none';document.getElementById('lp-outdoor-warning').style.display='none';document.getElementById('lp-dims-warning').style.display='none';document.getElementById('lp-next-1-btn').disabled=true;document.getElementById('lp-desc-paste').value='';document.getElementById('lp-desc-confirmed').style.display='none';document.getElementById('lp-paste-section').style.display='block';document.getElementById('lp-publish-result').style.display='none';lpRenderPhotos();lpStep(1);populateLPSelect();WIP.clear('lp');}
+function lpReset(){lpSelectedRecord=null;lpPhotoItems=[];lpDriveImages=[];lpDriveLinked=false;lpCurrentDesc='';lpCurrentTitle='';lpGeneratedFor='';['lp-location','lp-meta','lp-special','lp-title','lp-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});const df=document.getElementById('lp-drive-folder');if(df)df.value='';const dg=document.getElementById('lp-drive-grid');if(dg)dg.innerHTML='';document.getElementById('lp-eb-select').value='';document.getElementById('lp-at-preview').style.display='none';document.getElementById('lp-outdoor-warning').style.display='none';const ed=document.getElementById('lp-dims-editor');if(ed)ed.style.display='none';document.getElementById('lp-next-1-btn').disabled=true;document.getElementById('lp-publish-result').style.display='none';const pb=document.getElementById('lp-publish-btn');if(pb){pb.disabled=true;pb.textContent='↑ Publish listing to Shopify';pb.style.background='';pb.style.borderColor='';}lpRenderPhotos();lpStep(1);populateLPSelect();WIP.clear('lp');}
 
 
 // ── MARK AS SOLD ──
 function msStep(n){document.querySelectorAll('#screen-sold .step-block').forEach(s=>s.classList.remove('active'));document.getElementById('ms-step-'+n).classList.add('active');document.getElementById('ms-step-pill').textContent='Step '+n+' of 2';document.getElementById('ms-progress').style.width=(n===1?50:100)+'%';window.scrollTo({top:0,behavior:'smooth'});}
-function populateMSSelect(){const listed=allRecords.filter(r=>r.fields['Status']==='Listed'||r.fields['Status']==='In stock');const sel=document.getElementById('ms-eb-select');if(listed.length===0){sel.innerHTML='<option value="">— no listed pieces —</option>';return;}sel.innerHTML='<option value="">— pick a piece —</option>'+listed.map(r=>{const f=r.fields,eb=f['EB Number']||r.id;return '<option value="'+r.id+'">'+eb+(f['Status']?' ['+f['Status']+']':'')+(f['Season']?' · '+f['Season']:'')+(f['Type']?' · '+f['Type']:'')+'</option>';}).join('');sel.onchange=()=>{const recId=sel.value;document.getElementById('ms-next-btn').disabled=!recId;if(!recId){msSelectedRecord=null;document.getElementById('ms-piece-preview').style.display='none';return;}msSelectedRecord=allRecords.find(r=>r.id===recId);if(!msSelectedRecord)return;const f=msSelectedRecord.fields;document.getElementById('ms-piece-preview').style.display='block';document.getElementById('ms-piece-preview').innerHTML='<div class="at-preview"><div class="at-preview-title">Selected piece</div><div class="at-grid"><div class="at-field"><div class="at-label">EB Number</div><div class="at-value">'+escHtml(f['EB Number'])+'</div></div><div class="at-field"><div class="at-label">Type</div><div class="at-value">'+escHtml(f['Type']||'—')+'</div></div><div class="at-field"><div class="at-label">Price</div><div class="at-value">'+(f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—')+'</div></div></div></div>';};}
+function populateMSSelect(){const listed=allRecords.filter(r=>r.fields['Status']==='Listed'||r.fields['Status']==='In stock');const sel=document.getElementById('ms-eb-select');if(listed.length===0){sel.innerHTML='<option value="">— no listed pieces —</option>';return;}sel.innerHTML='<option value="">— pick a piece —</option>'+listed.map(r=>'<option value="'+r.id+'">'+escHtml(pieceLabel(r.fields)||r.id)+'</option>').join('');sel.onchange=()=>{const recId=sel.value;document.getElementById('ms-next-btn').disabled=!recId;if(!recId){msSelectedRecord=null;document.getElementById('ms-piece-preview').style.display='none';return;}msSelectedRecord=allRecords.find(r=>r.id===recId);if(!msSelectedRecord)return;const f=msSelectedRecord.fields;document.getElementById('ms-piece-preview').style.display='block';document.getElementById('ms-piece-preview').innerHTML='<div class="at-preview"><div class="at-preview-title">Selected piece</div><div class="at-grid"><div class="at-field"><div class="at-label">EB Number</div><div class="at-value">'+escHtml(f['EB Number'])+'</div></div><div class="at-field"><div class="at-label">Type</div><div class="at-value">'+escHtml(f['Type']||'—')+'</div></div><div class="at-field"><div class="at-label">Price</div><div class="at-value">'+(f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—')+'</div></div></div></div>';};}
 function msSelectChannel(el,channel){document.querySelectorAll('#screen-sold .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');msSelectedChannel=channel;}
 async function msConfirmSale(){if(!msSelectedRecord||!msSelectedChannel){alert('Select a piece and sale channel.');return;}const salePrice=document.getElementById('ms-sale-price').value.trim();const saleDate=document.getElementById('ms-sale-date').value;const btn=document.getElementById('ms-confirm-btn');btn.disabled=true;btn.textContent='⏳ Recording...';setStatus('ms','Marking as sold...','loading');try{await markSold(msSelectedRecord,msSelectedChannel,salePrice,saleDate);const result=document.getElementById('ms-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(msSelectedRecord.fields['EB Number'])+'</strong> marked as sold via '+msSelectedChannel+'.';btn.textContent='✓ Done!';setStatus('ms','Sale recorded ✓','success');populateHomeStats();populateMSSelect();populateLPSelect();populateCFInventory();setTimeout(()=>hideStatus('ms'),4000);}catch(e){setStatus('ms','Error: '+e.message,'error');btn.disabled=false;btn.textContent='✓ Mark as sold';}}
 async function markSold(record,channel,salePrice,saleDate){const f=record.fields;const atFields={'Status':'Sold','Sales channel':channel};if(salePrice)atFields['Price ($)']=parseFloat(salePrice);if(saleDate)atFields['Date sold']=saleDate;await airtableFetch('/'+record.id,{method:'PATCH',body:JSON.stringify({fields:atFields})});Object.assign(f,atFields);try{await fetch(SERVER_URL+'/mark-sold',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shopify_url:f['Shopify URL'],eb_number:f['EB Number']})});}catch(e){console.warn('Shopify mark sold failed:',e.message);}}
 
 // ── CRAFT FAIR ──
-function populateCFInventory(filter=''){const container=document.getElementById('cf-inventory');const records=cfCachedRecords.filter(r=>{const f=r.fields,status=f['Status']||'';if(status==='Archived')return false;if(!filter)return true;const q=filter.toLowerCase();return(f['EB Number']||'').toLowerCase().includes(q)||(f['Type']||'').toLowerCase().includes(q)||(f['Season']||'').toLowerCase().includes(q)||(f['Holiday']||'').toLowerCase().includes(q);});if(records.length===0){container.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:12px">🔍</div><div style="font-size:14px">No pieces found</div></div>';return;}const order={'In stock':0,'Photographed':0,'Ready to list':0,'Listed':1,'Craft fair':1,'Hair Salon':1,'Sold':2};records.sort((a,b)=>(order[a.fields['Status']]||3)-(order[b.fields['Status']]||3));container.innerHTML=records.map(r=>{const f=r.fields,isSold=f['Status']==='Sold'||f['Status']==='Archived';const price=f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—';const seasonDisplay=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||'');const tags=[seasonDisplay,f['Holiday']&&f['Holiday']!=='None'?f['Holiday']:null,f['Status']].filter(Boolean).join(' · ');return'<div class="cf-piece-card'+(isSold?' sold-out':'')+'" onclick="cfTapPiece(\''+r.id+'\')">'+'<div class="cf-piece-thumb-placeholder">'+cfTypeIcon(f['Type'])+'</div>'+'<div class="cf-piece-info"><div class="cf-piece-eb">'+escHtml(f['EB Number']||'—')+'</div>'+'<div class="cf-piece-type">'+escHtml(f['Type']||'Arrangement')+'</div>'+'<div class="cf-piece-tags">'+escHtml(tags)+'</div></div>'+(isSold?'<div class="cf-sold-badge">SOLD</div>':'<div class="cf-piece-price">'+price+'</div>')+'</div>';}).join('');}
+function populateCFInventory(filter=''){const container=document.getElementById('cf-inventory');const records=cfCachedRecords.filter(r=>{const f=r.fields,status=f['Status']||'';if(status==='Archived')return false;if(!filter)return true;const q=filter.toLowerCase();return(f['EB Number']||'').toLowerCase().includes(q)||(f['Type']||'').toLowerCase().includes(q)||(f['Season']||'').toLowerCase().includes(q)||(f['Occasion']||'').toLowerCase().includes(q);});if(records.length===0){container.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:12px">🔍</div><div style="font-size:14px">No pieces found</div></div>';return;}const order={'In stock':0,'Photographed':0,'Ready to list':0,'Listed':1,'Craft fair':1,'Hair Salon':1,'Sold':2};records.sort((a,b)=>(order[a.fields['Status']]||3)-(order[b.fields['Status']]||3));container.innerHTML=records.map(r=>{const f=r.fields,isSold=f['Status']==='Sold'||f['Status']==='Archived';const price=f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—';const seasonDisplay=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||'');const tags=[seasonDisplay,f['Occasion']&&f['Occasion']!=='None'?f['Occasion']:null,f['Status']].filter(Boolean).join(' · ');return'<div class="cf-piece-card'+(isSold?' sold-out':'')+'" onclick="cfTapPiece(\''+r.id+'\')">'+'<div class="cf-piece-thumb-placeholder">'+cfTypeIcon(f['Type'])+'</div>'+'<div class="cf-piece-info"><div class="cf-piece-eb">'+escHtml(f['EB Number']||'—')+'</div>'+'<div class="cf-piece-type">'+escHtml(f['Type']||'Arrangement')+'</div>'+'<div class="cf-piece-tags">'+escHtml(tags)+'</div></div>'+(isSold?'<div class="cf-sold-badge">SOLD</div>':'<div class="cf-piece-price">'+price+'</div>')+'</div>';}).join('');}
 function cfTypeIcon(type){const icons={'Wreath':'🌿','Home decor':'🌸','Outdoor planter':'🪴','Centerpiece':'💐','Wall decor':'🖼','Swag':'🌾','Custom order':'✨'};return icons[type]||'🌺';}
 function cfFilter(){populateCFInventory(document.getElementById('cf-search').value.trim());}
 function cfTapPiece(recordId){const record=cfCachedRecords.find(r=>r.id===recordId);if(!record)return;const f=record.fields;if(f['Status']==='Sold'||f['Status']==='Archived'){alert(escHtml(f['EB Number'])+' is already sold.');return;}modalSelectedRecord=record;document.getElementById('modal-piece-title').textContent=f['EB Number']||'Mark as sold';document.getElementById('modal-piece-sub').textContent=(f['Type']||'Arrangement')+((f['Season'])?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Price ($)']!=null?' · $'+Number(f['Price ($)']).toFixed(2):'');document.getElementById('modal-price').value=f['Price ($)']!=null?Number(f['Price ($)']).toFixed(2):'';document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>{b.classList.remove('selected');if(b.querySelector('.channel-label').textContent==='Craft fair'){b.classList.add('selected');modalSelectedChannel='Craft fair';}});document.getElementById('modal-status').style.display='none';document.getElementById('modal-confirm-btn').disabled=false;document.getElementById('modal-confirm-btn').textContent='✓ Mark as sold';document.getElementById('sold-modal').classList.add('open');}
@@ -1271,7 +1614,7 @@ async function modalConfirmSale(){if(!modalSelectedRecord||!modalSelectedChannel
 // ── ADD VIDEO SCREEN ──
 function videoScreenInit(){const lastEl=document.getElementById('video-last-published'),noLastEl=document.getElementById('video-no-last');if(lastPublishedProduct&&lastPublishedProduct.adminUrl){lastEl.style.display='block';noLastEl.style.display='none';document.getElementById('video-last-eb').textContent=lastPublishedProduct.eb;document.getElementById('video-last-detail').textContent=lastPublishedProduct.detail;document.getElementById('video-last-btn').href=lastPublishedProduct.adminUrl;const tagBtn=document.getElementById('video-last-tag-btn');if(tagBtn){tagBtn.onclick=()=>printQRTag(lastPublishedProduct.eb,lastPublishedProduct.price||'');}}else{const listed=allRecords.filter(r=>r.fields['Status']==='Listed'&&r.fields['Shopify URL']);if(listed.length>0){const recent=listed[listed.length-1];const f=recent.fields;lastEl.style.display='block';noLastEl.style.display='none';document.getElementById('video-last-eb').textContent=f['EB Number']||'—';document.getElementById('video-last-detail').textContent=(f['Type']||'')+(f['Season']?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'');document.getElementById('video-last-btn').href='https://admin.shopify.com/store/zdzva0-tj/products?query='+encodeURIComponent(f['EB Number']||'');}else{lastEl.style.display='none';noLastEl.style.display='block';}}document.getElementById('video-all-list').style.display='none';document.getElementById('video-see-all-btn').textContent='↓ See all listed pieces';}
 function videoToggleAll(){const list=document.getElementById('video-all-list'),btn=document.getElementById('video-see-all-btn');if(list.style.display==='none'){list.style.display='block';btn.textContent='↑ Hide list';videoRenderAll();}else{list.style.display='none';btn.textContent='↓ See all listed pieces';}}
-function videoRenderAll(){const container=document.getElementById('video-all-items');const listed=allRecords.filter(r=>r.fields['Status']==='Listed'&&r.fields['Shopify URL']);if(!listed.length){container.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No listed pieces found</div>';return;}container.innerHTML=listed.map(r=>{const f=r.fields,eb=f['EB Number']||'—',seasonDisp=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||''),detail=(f['Type']||'')+(seasonDisp?' · '+seasonDisp:'')+(f['Holiday']&&f['Holiday']!=='None'?' · '+f['Holiday']:'');const isLast=lastPublishedProduct&&lastPublishedProduct.eb===eb;const adminHref=isLast?lastPublishedProduct.adminUrl:'https://admin.shopify.com/store/zdzva0-tj/products?query='+encodeURIComponent(eb);return'<div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px"><div><div style="font-size:13px;font-weight:700;color:var(--text)">'+escHtml(eb)+'</div><div style="font-size:11px;color:var(--text-muted)">'+escHtml(detail)+'</div></div><div style="display:flex;gap:6px;flex-shrink:0"><button onclick="printQRTag(\''+escHtml(eb)+'\')" style="background:var(--card);border:1.5px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer">🏷 Tag</button><a href="'+adminHref+'" target="_blank" style="background:var(--sage);color:#fff;text-decoration:none;padding:8px 12px;border-radius:7px;font-size:12px;font-weight:700">📹 Video</a></div></div>';}).join('');}
+function videoRenderAll(){const container=document.getElementById('video-all-items');const listed=allRecords.filter(r=>r.fields['Status']==='Listed'&&r.fields['Shopify URL']);if(!listed.length){container.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No listed pieces found</div>';return;}container.innerHTML=listed.map(r=>{const f=r.fields,eb=f['EB Number']||'—',seasonDisp=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||''),detail=(f['Type']||'')+(seasonDisp?' · '+seasonDisp:'')+(f['Occasion']&&f['Occasion']!=='None'?' · '+f['Occasion']:'');const isLast=lastPublishedProduct&&lastPublishedProduct.eb===eb;const adminHref=isLast?lastPublishedProduct.adminUrl:'https://admin.shopify.com/store/zdzva0-tj/products?query='+encodeURIComponent(eb);return'<div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px"><div><div style="font-size:13px;font-weight:700;color:var(--text)">'+escHtml(eb)+'</div><div style="font-size:11px;color:var(--text-muted)">'+escHtml(detail)+'</div></div><div style="display:flex;gap:6px;flex-shrink:0"><button onclick="printQRTag(\''+escHtml(eb)+'\')" style="background:var(--card);border:1.5px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer">🏷 Tag</button><a href="'+adminHref+'" target="_blank" style="background:var(--sage);color:#fff;text-decoration:none;padding:8px 12px;border-radius:7px;font-size:12px;font-weight:700">📹 Video</a></div></div>';}).join('');}
 
 
 // ══════════════════════════════════════════
@@ -1349,7 +1692,7 @@ function printQRTag(ebNumber, price) {
   var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=' + encodeURIComponent(SHOPIFY_BASE + ebNumber.toLowerCase());
   var priceDisplay = price && parseFloat(price) > 0 ? '$' + parseFloat(price).toFixed(2) : '';
   var win = window.open('', '_blank');
-  var html = ['<!DOCTYPE html><html><head><title>Tag ' + ebNumber + '</title>','<style>','@page { size: 3in 2in; margin: 0; }','* { box-sizing: border-box; margin: 0; padding: 0; }','body { width: 3in; height: 2in; display: flex; flex-direction: row; align-items: center; justify-content: space-between; font-family: Arial, sans-serif; background: #fff; padding: 0.12in 0.15in; }','.left { display: flex; flex-direction: column; justify-content: center; flex: 1; padding-right: 0.1in; }','.brand { font-size: 7pt; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #4A7C59; margin-bottom: 6px; }','.eb { font-size: 13pt; font-weight: 800; letter-spacing: .04em; color: #2C2C2C; line-height: 1.1; margin-bottom: 6px; }','.price { font-size: 16pt; font-weight: 800; color: #4A7C59; }','.sub { font-size: 6.5pt; color: #aaa; margin-top: 5px; letter-spacing: .06em; }','img { width: 1.55in; height: 1.55in; flex-shrink: 0; display: block; }','</style></head><body>','<div class="left">','  <div class="brand">Eternal Blooms</div>','  <div class="eb">' + ebNumber + '</div>',(priceDisplay ? '  <div class="price">' + priceDisplay + '</div>' : ''),'  <div class="sub">eternalbloomsbypatti.com</div>','</div>','<img src="' + qrUrl + '" alt="QR">','<script>window.onload=function(){setTimeout(function(){window.print();},800);};<\/script>','</body></html>'].join('\n');
+  var html = ['<!DOCTYPE html><html><head><title>Tag ' + ebNumber + '</title>','<style>','@page { size: 3in 2in; margin: 0; }','* { box-sizing: border-box; margin: 0; padding: 0; }','body { width: 3in; height: 2in; display: flex; flex-direction: row; align-items: center; justify-content: space-between; font-family: Arial, sans-serif; background: #fff; padding: 0.12in 0.15in; }','.left { display: flex; flex-direction: column; justify-content: center; flex: 1; padding-right: 0.1in; }','.brand { font-size: 7pt; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #bb8588; margin-bottom: 6px; }','.eb { font-size: 13pt; font-weight: 800; letter-spacing: .04em; color: #2b2622; line-height: 1.1; margin-bottom: 6px; }','.price { font-size: 16pt; font-weight: 800; color: #bb8588; }','.sub { font-size: 6.5pt; color: #aea498; margin-top: 5px; letter-spacing: .06em; }','img { width: 1.55in; height: 1.55in; flex-shrink: 0; display: block; }','</style></head><body>','<div class="left">','  <div class="brand">Eternal Blooms</div>','  <div class="eb">' + ebNumber + '</div>',(priceDisplay ? '  <div class="price">' + priceDisplay + '</div>' : ''),'  <div class="sub">eternalbloomsbypatti.com</div>','</div>','<img src="' + qrUrl + '" alt="QR">','<script>window.onload=function(){setTimeout(function(){window.print();},800);};<\/script>','</body></html>'].join('\n');
   win.document.write(html); win.document.close();
 }
 
@@ -1358,12 +1701,12 @@ function ptInit() { document.getElementById('pt-search').value = ''; ptRender(''
 function ptFilter() { ptRender(document.getElementById('pt-search').value.trim()); }
 function ptRender(filter) {
   const container = document.getElementById('pt-list');
-  const sorted = allRecords.filter(r => r.fields['Status'] !== 'Archived').filter(r => { if(!filter)return true; const q=filter.toLowerCase(); return(r.fields['EB Number']||'').toLowerCase().includes(q)||(r.fields['Type']||'').toLowerCase().includes(q)||(r.fields['Season']||'').toLowerCase().includes(q)||(r.fields['Holiday']||'').toLowerCase().includes(q); }).sort((a,b)=>{ const da=a.fields['Date made']||'',db=b.fields['Date made']||''; return db.localeCompare(da); });
+  const sorted = allRecords.filter(r => r.fields['Status'] !== 'Archived').filter(r => { if(!filter)return true; const q=filter.toLowerCase(); return(r.fields['EB Number']||'').toLowerCase().includes(q)||(r.fields['Type']||'').toLowerCase().includes(q)||(r.fields['Season']||'').toLowerCase().includes(q)||(r.fields['Occasion']||'').toLowerCase().includes(q); }).sort((a,b)=>{ const da=a.fields['Date made']||'',db=b.fields['Date made']||''; return db.localeCompare(da); });
   document.getElementById('print-tag-pill').textContent = filter ? sorted.length+' result'+(sorted.length!==1?'s':'') : sorted.length+' pieces';
   if(!sorted.length){container.innerHTML='<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">'+(filter?'No pieces match "'+escHtml(filter)+'"':'No pieces found')+'</div>';return;}
   const statusColor={'In stock':'var(--text-muted)','Photographed':'var(--teal)','Ready to list':'var(--gold)','Listed':'var(--sage)','Sold':'var(--rose)','Craft fair':'var(--gold)'};
   container.innerHTML = sorted.map(r => {
-    const f=r.fields, eb=f['EB Number']||'—', seasonDisp2=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||''), detail=[f['Type'],seasonDisp2,f['Holiday']&&f['Holiday']!=='None'?f['Holiday']:null].filter(Boolean).join(' · '), status=f['Status']||'';
+    const f=r.fields, eb=f['EB Number']||'—', seasonDisp2=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||''), detail=[f['Type'],seasonDisp2,f['Occasion']&&f['Occasion']!=='None'?f['Occasion']:null].filter(Boolean).join(' · '), status=f['Status']||'';
     const dateMade=f['Date made']?new Date(f['Date made']+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
     const color=statusColor[status]||'var(--text-muted)';
     const photoUrl=f['Photo URL']||'';
@@ -1415,25 +1758,29 @@ function wipRestoreLP(saved) {
     const sel = document.getElementById('lp-eb-select');
     if (sel) { sel.value = recId; sel.dispatchEvent(new Event('change')); }
   }
-  const fields = ['lp-colors','lp-materials','lp-location','lp-weight','lp-meta','lp-special'];
-  fields.forEach(id => { const el = document.getElementById(id); if (el && saved[id]) el.value = saved[id]; });
-  if (saved.description) { const ta = document.getElementById('lp-desc-paste'); if (ta) ta.value = saved.description; }
-  if (saved.descConfirmed && saved.description) {
-    lpCurrentDesc = saved.description; lpDescConfirmed = true;
-    const paste = document.getElementById('lp-paste-section'), confirmed = document.getElementById('lp-desc-confirmed'), confirmedText = document.getElementById('lp-desc-confirmed-text');
-    if (paste) paste.style.display = 'none';
-    if (confirmed) confirmed.style.display = 'block';
-    if (confirmedText) confirmedText.textContent = saved.description;
-  }
+  ['lp-location','lp-meta','lp-special'].forEach(id => { const el = document.getElementById(id); if (el && saved[id]) el.value = saved[id]; });
+  if (saved.title) { const t=document.getElementById('lp-title'); if(t)t.value=saved.title; lpCurrentTitle=saved.title; }
+  if (saved.description) { const d=document.getElementById('lp-desc'); if(d)d.value=saved.description; lpCurrentDesc=saved.description; }
+  if (saved.generatedFor) lpGeneratedFor=saved.generatedFor;
   setTimeout(() => { if (saved.step && saved.step > 1) lpStep(saved.step); }, 300);
 }
 function wipRestoreNP(saved) {
+  if(saved.mode)npSetMode(saved.mode);
   if(saved.year){const el=document.getElementById('np-year');if(el)el.value=saved.year;}
-  if(saved.season){const el=document.getElementById('np-season');if(el)el.value=saved.season;}
   if(saved.type){const el=document.getElementById('np-type');if(el)el.value=saved.type;}
+  if(saved.season)npSetChecks('np-season',saved.season);
+  if(saved.occasion){const el=document.getElementById('np-occasion');if(el)el.value=saved.occasion;}
+  if(saved.florals){const el=document.getElementById('np-florals');if(el)el.value=saved.florals;}
+  if(saved.greenery){const el=document.getElementById('np-greenery');if(el)el.value=saved.greenery;}
+  if(saved.style)npSetChecks('np-style',saved.style);
+  if(saved.colors)npSetChecks('np-colors',saved.colors);
+  if(saved.materials)npSetChecks('np-materials',saved.materials);
+  if(saved.price){const el=document.getElementById('np-price');if(el)el.value=saved.price;}
+  if(saved.notes){const el=document.getElementById('np-notes');if(el)el.value=saved.notes;}
+  if(saved.refName){const el=document.getElementById('np-ref-name');if(el)el.value=saved.refName;}
   if(saved.ebNumber){npAssignedEB=saved.ebNumber;npCurrentEB=saved.ebNumber;}
   if(saved.recordId){npCurrentRecordId=saved.recordId;}
-  ['np-width','np-height','np-depth','np-bin','np-weight'].forEach(id=>{const el=document.getElementById(id);if(el&&saved[id])el.value=saved[id];});
+  ['np-width','np-height','np-depth','np-weight-lb','np-weight-oz'].forEach(id=>{const el=document.getElementById(id);if(el&&saved[id])el.value=saved[id];});
   if(saved.ebNumber&&saved.step>=2){
     const ebDisp=document.getElementById('np-eb-num');if(ebDisp)ebDisp.textContent=saved.ebNumber;
     const qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=140x140&data='+encodeURIComponent(SHOPIFY_BASE+saved.ebNumber.toLowerCase());
@@ -1445,20 +1792,26 @@ function wipRestoreCost(saved) { if(saved.path){costChoosePath(saved.path);if(sa
 
 function wipSaveNP() {
   WIP.save('np', {
+    mode:     npMode||'add',
     year:     (document.getElementById('np-year')||{}).value||'',
-    season:   (document.getElementById('np-season')||{}).value||'',
     type:     (document.getElementById('np-type')||{}).value||'',
-    holiday:  (document.getElementById('np-holiday')||{}).value||'',
+    season:   npGetChecks('np-season'),
+    occasion: (document.getElementById('np-occasion')||{}).value||'None',
+    florals:  (document.getElementById('np-florals')||{}).value||'None',
+    greenery: (document.getElementById('np-greenery')||{}).value||'None',
+    style:    npGetChecks('np-style'),
+    colors:   npGetChecks('np-colors'),
+    materials:npGetChecks('np-materials'),
     price:    (document.getElementById('np-price')||{}).value||'',
-    cost:     (document.getElementById('np-cost')||{}).value||'',
-    bin:      (document.getElementById('np-bin')||{}).value||'',
     notes:    (document.getElementById('np-notes')||{}).value||'',
+    refName:  (document.getElementById('np-ref-name')||{}).value||'',
     ebNumber: npAssignedEB||npCurrentEB||'',
     recordId: npCurrentRecordId||'',
     'np-width':  (document.getElementById('np-width')||{}).value||'',
     'np-height': (document.getElementById('np-height')||{}).value||'',
     'np-depth':  (document.getElementById('np-depth')||{}).value||'',
-    'np-weight': (document.getElementById('np-weight')||{}).value||'',
+    'np-weight-lb': (document.getElementById('np-weight-lb')||{}).value||'',
+    'np-weight-oz': (document.getElementById('np-weight-oz')||{}).value||'',
     photoStatus: npPhotoStatus||'needed',
     step: currentNpStep||1
   });
@@ -1471,14 +1824,12 @@ function wipSaveLP() {
   WIP.save('lp', {
     ebRecordId:  recId,
     ebNumber:    ebLabel,
-    'lp-colors':    (document.getElementById('lp-colors')||{}).value||'',
-    'lp-materials': (document.getElementById('lp-materials')||{}).value||'',
     'lp-location':  (document.getElementById('lp-location')||{}).value||'',
-    'lp-weight':    (document.getElementById('lp-weight')||{}).value||'',
     'lp-meta':      (document.getElementById('lp-meta')||{}).value||'',
     'lp-special':   (document.getElementById('lp-special')||{}).value||'',
-    description:    lpCurrentDesc||'',
-    descConfirmed:  lpDescConfirmed||false,
+    title:          (document.getElementById('lp-title')||{}).value||lpCurrentTitle||'',
+    description:    (document.getElementById('lp-desc')||{}).value||lpCurrentDesc||'',
+    generatedFor:   lpGeneratedFor||'',
     step:           parseInt((document.getElementById('lp-step-pill')||{}).textContent)||1,
     photoCount:     lpPhotoItems.length
   });
@@ -1490,6 +1841,10 @@ function wipSaveCost() { WIP.save('cost',{path:costPath||'',category:costSelecte
 // ══════════════════════════════════════════
 
 const BL_LISTING_FOLDER_ID = '1vK41Wo0j5l5V2YfQtDTg1e_7quq0ajrE';
+// Listing Media — the stepped-workflow photo root (per-piece subfolders live here). Backlog sorter still uses Listing Photos above.
+const LISTING_MEDIA_FOLDER_ID = '1iOq19Z76Kw5cpm4w6nCZiwj15p5F0U-f';
+let lpDriveImages = [];   // images in the currently-picked Drive folder
+let lpDriveLinked = false; // whether the current selection has been renamed in Drive
 
 let blFiles         = [];
 let blSelected      = new Set();
@@ -1622,7 +1977,7 @@ async function blApplyToSelected() {
   const seasonValues = Array.from(seasonChecks).map(cb => cb.value);
   const season = seasonValues.length > 0 ? seasonValues.join(', ') : 'All Season';
   const type    = document.getElementById('bl-sel-type').value;
-  const holiday = document.getElementById('bl-sel-holiday').value;
+  const holiday = document.getElementById('bl-sel-occasion').value;
   const selectedStatusEl = document.querySelector('input[name=bl-status]:checked');
   const status = selectedStatusEl ? selectedStatusEl.value : 'Photographed';
   const fileIds = Array.from(blSelected);
