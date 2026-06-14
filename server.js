@@ -147,8 +147,11 @@ app.get('/auth/callback', async (req, res) => {
     if (tokenData.access_token) {
       shopifyAccessToken = tokenData.access_token;
       console.log('✓ Shopify OAuth complete');
-      res.send(`<html><body style="font-family:sans-serif;padding:40px;max-width:500px;margin:0 auto">
-        <h2 style="color:#006688">✓ Shopify Connected!</h2>
+      res.send(`<html><head><meta charset="utf-8">
+        <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
+        <style>body{font-family:'Poppins',system-ui,sans-serif;background:#fbfaf9;color:#2b2622;padding:48px 40px;max-width:500px;margin:0 auto;line-height:1.7}h2{font-family:'DM Serif Display',Georgia,serif;font-weight:400;color:#bb8588;font-size:28px;margin-bottom:10px}p{color:#5b5248;font-size:14px}</style>
+        </head><body>
+        <h2>✓ Shopify connected</h2>
         <p>You can close this tab and return to the listing assistant.</p>
         </body></html>`);
     } else {
@@ -195,11 +198,14 @@ app.get('/drive-auth/callback', async (req, res) => {
       googleRefreshToken = d.refresh_token;
       googleTokenExpiry  = Date.now() + (d.expires_in || 3600) * 1000;
       console.log('✓ Google Drive OAuth complete');
-      res.send(`<html><body style="font-family:sans-serif;padding:40px;max-width:500px;margin:0 auto">
-        <h2 style="color:#5C7A5C">✓ Google Drive Connected!</h2>
+      res.send(`<html><head><meta charset="utf-8">
+        <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
+        <style>body{font-family:'Poppins',system-ui,sans-serif;background:#fbfaf9;color:#2b2622;padding:48px 40px;max-width:500px;margin:0 auto;line-height:1.7}h2{font-family:'DM Serif Display',Georgia,serif;font-weight:400;color:#bb8588;font-size:28px;margin-bottom:10px}p{color:#5b5248;font-size:14px}.muted{font-size:12px;color:#aea498;margin-top:20px}a{color:#bb8588}</style>
+        </head><body>
+        <h2>✓ Google Drive connected</h2>
         <p>The backlog catchup tool can now read and organize your Listing Photos folder.</p>
         <p>You can close this tab and return to the Studio.</p>
-        <p style="font-size:12px;color:#666;margin-top:20px">Health check: <a href="/health">/health</a></p>
+        <p class="muted">Health check: <a href="/health">/health</a></p>
         </body></html>`);
     } else {
       res.status(400).send('Failed to get Google token: ' + JSON.stringify(d));
@@ -326,7 +332,7 @@ app.post('/drive-assign-eb', async (req, res) => {
         const meta = await driveRequest(`/files/${fileId}?fields=name,properties`);
         const ext = meta.name.includes('.') ? '.' + meta.name.split('.').pop().toLowerCase() : '';
         const seq = String(i + 1).padStart(2, '0');
-        const newName = `${ebNumber}-${seq}${ext}`;
+        const newName = `${ebNumber}_${seq}${ext}`;
 
         const updated = await driveRequest(`/files/${fileId}?fields=id,name,properties`, {
           method: 'PATCH',
@@ -345,6 +351,60 @@ app.post('/drive-assign-eb', async (req, res) => {
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── Drive: list subfolders under a parent (for the stepped-workflow folder picker) ──
+app.get('/drive-list-subfolders', async (req, res) => {
+  const { parentId } = req.query;
+  if (!parentId) return res.status(400).json({ error: 'parentId required' });
+  try {
+    const query = `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+    let folders = [], pageToken = null;
+    do {
+      let url = '/files?pageSize=100&q=' + encodeURIComponent(query)
+        + '&fields=nextPageToken,files(id,name)&orderBy=name';
+      if (pageToken) url += '&pageToken=' + pageToken;
+      const data = await driveRequest(url);
+      folders = folders.concat(data.files || []);
+      pageToken = data.nextPageToken || null;
+    } while (pageToken);
+    res.json({ folders, total: folders.length });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Drive: list image files in a specific folder ──
+app.get('/drive-folder-images', async (req, res) => {
+  const { folderId } = req.query;
+  if (!folderId) return res.status(400).json({ error: 'folderId required' });
+  try {
+    const query = `'${folderId}' in parents and mimeType contains 'image/' and trashed = false`;
+    let files = [], pageToken = null;
+    do {
+      let url = '/files?pageSize=100&q=' + encodeURIComponent(query)
+        + '&fields=nextPageToken,files(id,name,mimeType,thumbnailLink)&orderBy=name';
+      if (pageToken) url += '&pageToken=' + pageToken;
+      const data = await driveRequest(url);
+      files = files.concat(data.files || []);
+      pageToken = data.nextPageToken || null;
+    } while (pageToken);
+    res.json({ files, total: files.length });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Drive: fetch full file content as base64 (for the Shopify upload / AI vision) ──
+app.get('/drive-file-content', async (req, res) => {
+  const { fileId } = req.query;
+  if (!fileId) return res.status(400).json({ error: 'fileId required' });
+  try {
+    const token = await getValidGoogleToken();
+    const meta = await driveRequest(`/files/${fileId}?fields=mimeType,name`);
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!r.ok) return res.status(r.status).json({ error: 'Drive download error ' + r.status });
+    const buf = Buffer.from(await r.arrayBuffer());
+    res.json({ data: buf.toString('base64'), mime: meta.mimeType || 'image/jpeg', name: meta.name });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Airtable: inventory endpoints ────────────────────────────
@@ -450,24 +510,28 @@ async function getCollectionId(handle) {
 // ── Generate description ──────────────────────────────────────
 app.post('/generate-description', async (req, res) => {
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server.' });
-  const { eb_number, type, season, holiday, colors, dimensions, materials, location, special, notes, images } = req.body;
-  const textPrompt = `You write product descriptions for Eternal Blooms Designs, a handmade artificial flower arrangement business in Omaha, Nebraska. Each piece is completely one of a kind — no two are ever the same.
+  const { eb_number, reference_name, type, season, holiday, colors, dimensions, materials, location, special, notes, images } = req.body;
+  const textPrompt = `You write product listings for Eternal Blooms Designs, a handmade artificial flower arrangement business in Omaha, Nebraska. Each piece is completely one of a kind — no two are ever the same.
 
-Write a product description for this listing. The tone is elegant and creative — like a boutique shop description. Write ABOUT the piece itself, not about the maker. No first person ("I", "my"), no mention of Patti or the maker at all. Focus entirely on the piece — its colors, textures, mood, and where it belongs in someone's home. Make the reader picture it and want it.
+Write a Shopify product listing for this piece: a TITLE and a DESCRIPTION.
 
-Keep it to 3–4 sentences. Be evocative but not overdone — professional and polished without being stiff or formal. End with a natural one-of-a-kind callout that creates gentle urgency.${images && images.length > 0 ? '\n\nPhoto(s) of the actual piece are attached — use what you can see in the photos to write the most accurate and evocative description possible.' : ''}
+TITLE — a concise, Shopify-SEO-optimized product title, roughly 4 to 9 words. Lead with the most searchable, evocative descriptors a shopper would type (color, style, key flower, occasion, arrangement type). Use Title Case. Do NOT include any EB/SKU code, quotation marks, or the word "title".
+
+DESCRIPTION — elegant and creative, like a boutique shop description. Write ABOUT the piece itself, not about the maker. No first person ("I", "my"), no mention of Patti or the maker at all. Focus entirely on the piece — its colors, textures, mood, and where it belongs in someone's home. Keep it to 3–4 sentences, evocative but professional and polished. End with a natural one-of-a-kind callout that creates gentle urgency.${images && images.length > 0 ? '\n\nPhoto(s) of the actual piece are attached — use what you can see in the photos to write the most accurate and evocative title and description possible.' : ''}
 
 Piece details:
 - Type: ${type || 'arrangement'}
 - Season: ${season || 'all season'}
-- Holiday: ${holiday && holiday !== 'None' ? holiday : 'none'}
+- Occasion: ${holiday && holiday !== 'None' ? holiday : 'none'}
 - Colors: ${colors || 'not specified'}
 - Dimensions: ${dimensions || 'not specified'}
 - Key materials / flowers: ${materials || 'not specified'}
 - Best display location: ${location || 'not specified'}
 - Maker notes: ${(notes || '') + (special ? ' ' + special : '') || 'none'}
+- Maker's working name (internal hint only — do NOT copy this verbatim into the title or description): ${reference_name || 'none'}
 
-Write ONLY the product description. No title, no bullet points, no intro phrase — just the description.`;
+Return ONLY valid JSON in exactly this shape, with no markdown, no code fences, and no text before or after:
+{"title": "...", "description": "..."}`;
 
   let messageContent;
   if (images && images.length > 0) {
@@ -486,12 +550,20 @@ Write ONLY the product description. No title, no bullet points, no intro phrase 
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 300, messages: [{ role: 'user', content: messageContent }] })
+      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 600, messages: [{ role: 'user', content: messageContent }] })
     });
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json({ error: data.error?.message || 'Anthropic API error' });
-    const description = data.content && data.content[0] && data.content[0].text ? data.content[0].text.trim() : '';
-    res.json({ success: true, description });
+    const raw = data.content && data.content[0] && data.content[0].text ? data.content[0].text.trim() : '';
+    // Model is asked for {"title","description"} JSON; parse tolerantly and fall back to raw text as the description.
+    let title = '', description = '';
+    try {
+      const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
+      const parsed = JSON.parse(s >= 0 && e > s ? raw.slice(s, e + 1) : raw);
+      title = (parsed.title || '').trim();
+      description = (parsed.description || '').trim();
+    } catch(_) { description = raw; }
+    res.json({ success: true, title, description });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -619,10 +691,12 @@ app.post('/mark-sold', async (req, res) => {
 // ── Create product ────────────────────────────────────────────
 app.post('/create-product', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized. Visit ' + SERVER_URL + '/auth to complete Shopify OAuth first.' });
-  const { title, body_html, sku, price, tags, product_type, collections, weight_lbs, dimensions, meta_description, requires_shipping, images } = req.body;
+  const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images } = req.body;
   if (!title || !sku) return res.status(400).json({ error: 'title and sku are required' });
   const variant = { sku, price: price || '0.00', inventory_management: 'shopify', inventory_policy: 'deny', fulfillment_service: 'manual', requires_shipping: requires_shipping !== false };
-  if (weight_lbs) { variant.weight = Math.round(weight_lbs * 453.592); variant.weight_unit = 'g'; }
+  // Weight: prefer ounces (Shopify WeightUnit OUNCES) — exact, matches the Airtable "Packaged weight (oz)" field.
+  if (weight_oz != null && weight_oz !== '') { variant.weight = Number(weight_oz); variant.weight_unit = 'oz'; }
+  else if (weight_lbs) { variant.weight = Math.round(weight_lbs * 453.592); variant.weight_unit = 'g'; }
   let fullDescription = body_html || '';
   if (dimensions) fullDescription += '<p><strong>Dimensions:</strong> ' + dimensions + '</p>';
   const productPayload = {
