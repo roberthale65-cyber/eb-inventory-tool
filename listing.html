@@ -383,22 +383,23 @@ const SHOPIFY_BASE = 'https://eternalbloomsbypatti.com/products/';
 const SERVER_URL = 'https://eb-shopify-server.onrender.com';
 
 const TYPE_LABELS = {
-  Wreath:'Wreath',Tabletop:'Tabletop arrangement',
-  'Outdoor pot':'Outdoor pot arrangement',Centerpiece:'Centerpiece',
-  'Wall piece':'Wall piece',Swag:'Swag',Custom:'Custom arrangement'
+  Wreath:'Wreath','Home decor':'Home decor',
+  'Outdoor planter':'Outdoor planter arrangement',Centerpiece:'Centerpiece',
+  'Wall decor':'Wall decor',Hanging:'Hanging arrangement',Swag:'Swag','Custom order':'Custom arrangement'
 };
 
 // ── COLLECTION MAPPING ────────────────────────────────────────
 // Maps Airtable Type values to Shopify collection handles.
 // Must match exactly the collection handles in your Shopify store.
 const COLLECTION_HANDLE_MAP = {
-  'Wreath':       'door-wreaths',
-  'Outdoor pot':  'outdoor-pot-arrangements',
-  'Tabletop':     'tabletop-and-centerpieces',
-  'Centerpiece':  'tabletop-and-centerpieces',
-  'Wall piece':   'nature-and-everyday',
-  'Swag':         'nature-and-everyday',
-  'Custom':       'nature-and-everyday',
+  'Wreath':          'door-wreaths',
+  'Outdoor planter': 'outdoor-pot-arrangements',
+  'Home decor':      'tabletop-and-centerpieces',
+  'Centerpiece':     'tabletop-and-centerpieces',
+  'Wall decor':      'nature-and-everyday',
+  'Hanging':         'nature-and-everyday',
+  'Swag':            'nature-and-everyday',
+  'Custom order':    'nature-and-everyday',
 };
 
 const COLLECTION_LABEL_MAP = {
@@ -529,7 +530,7 @@ function onSelectRecord() {
   document.getElementById('step2-card').style.display = 'block';
   document.getElementById('step3-card').style.display = 'none';
   // Show outdoor pot warning if applicable
-  const isOutdoor = selectedRecord.fields['Type'] === 'Outdoor pot';
+  const isOutdoor = selectedRecord.fields['Type'] === 'Outdoor planter';
   document.getElementById('outdoor-pot-warning').style.display = isOutdoor ? 'block' : 'none';
   window.scrollTo({top: document.getElementById('step2-card').offsetTop - 20, behavior:'smooth'});
 }
@@ -1055,7 +1056,7 @@ async function publishToShopify() {
   const dimH        = f['Height (in)'];
   const dimD        = f['Depth (in)'];
   const dims        = (dimW || dimH || dimD) ? `${dimW || '?'}" W × ${dimH || '?'}" H × ${dimD || '?'}" D` : '';
-  const isOutdoor   = f['Type'] === 'Outdoor pot';
+  const isOutdoor   = f['Type'] === 'Outdoor planter';
   const btn         = document.getElementById('publish-btn');
   const result      = document.getElementById('publish-result');
 
