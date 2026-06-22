@@ -497,6 +497,24 @@ async function loadInventory() {
   populateSelect();
 }
 
+// ── Piece-dropdown ordering: Year (desc) → Type → Season → Number, parsed from the EB number ──
+const EB_TYPE_RANK   = {WR:0,HD:1,TT:1,OP:2,CP:3,WP:4,HA:5,SW:6,CU:7};
+const EB_SEASON_RANK = {SP:0,SU:1,FA:2,WI:3,AS:4,MS:5};
+function ebSortKey(f){
+  const eb=((f&&f['EB Number'])||'').toUpperCase();
+  const m=eb.match(/^EB-(\d{2})([A-Z]{2})-([A-Z]{2,3})-(\d+)/);
+  if(!m) return {year:-1,type:99,season:99,num:1e9,raw:eb};
+  const tr=EB_TYPE_RANK[m[3]], sr=EB_SEASON_RANK[m[2]];
+  return {year:parseInt(m[1],10), type:(tr==null?98:tr), season:(sr==null?98:sr), num:parseInt(m[4],10), raw:eb};
+}
+function ebSortCompare(fa,fb){
+  const a=ebSortKey(fa), b=ebSortKey(fb);
+  if(a.year!==b.year)     return b.year-a.year;
+  if(a.type!==b.type)     return a.type-b.type;
+  if(a.season!==b.season) return a.season-b.season;
+  if(a.num!==b.num)       return a.num-b.num;
+  return a.raw.localeCompare(b.raw);
+}
 function populateSelect() {
   const sel = document.getElementById('eb-select');
   if (allRecords.length === 0) {
@@ -504,7 +522,7 @@ function populateSelect() {
     return;
   }
   sel.innerHTML = '<option value="">— pick a piece —</option>' +
-    allRecords.map(r => {
+    allRecords.slice().sort((x,y)=>ebSortCompare(x.fields||{},y.fields||{})).map(r => {
       const f = r.fields;
       const eb = f['EB Number'] || r.id;
       const ref = (f['Reference name'] || '').trim();
