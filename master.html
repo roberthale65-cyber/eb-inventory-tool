@@ -123,6 +123,8 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .lp-folder-div-line{flex:1;height:1px;background:var(--border)}
 .lp-folder-div-label{font-size:10px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}
 .lp-folder-linked{display:flex;align-items:center;gap:10px;background:var(--teal-bg);border:1.5px solid var(--teal-light);border-radius:var(--radius-sm);padding:11px 13px;margin-bottom:8px}
+.thumb-row{display:flex;gap:6px;overflow-x:auto;padding:2px 0}
+.thumb-row img{width:62px;height:62px;object-fit:cover;border-radius:8px;border:1px solid var(--border);flex-shrink:0;background:#fff}
 /* ── Video panel ── */
 .lp-video-panel{border:1.5px dashed var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;margin-top:10px}
 .lp-video-panel.found{border-color:var(--teal);background:var(--teal-bg)}
@@ -449,6 +451,19 @@ button:active{transform:scale(.97)}
       <div class="section-label" id="np-step1-label">Assign EB number</div>
       <div class="info-card sage" id="np-add-hint"><strong>Every piece starts here.</strong> Fill in the details below and the next available EB number is assigned automatically.</div>
       <div class="info-card teal" id="np-edit-hint" style="display:none"><strong>Editing an existing piece.</strong> Update any details and save — the EB number stays the same.</div>
+      <!-- ── Optional: start from an existing Google Drive photo folder ── -->
+      <div class="field" id="np-folder-field">
+        <label>Already photographed? Start from a Drive folder (optional)</label>
+        <div style="font-size:11px;color:var(--text-muted);margin:-2px 0 6px">Pick this piece's subfolder under your product-media folder — its name fills in the reference name below, and the photos link automatically for Step 2.</div>
+        <div id="np-folder-connect" style="display:none" class="info-card amber">
+          <strong>Google Drive isn't connected.</strong> Connect to pick a photo folder.
+          <div class="btn-row"><button type="button" class="btn-primary btn-full" onclick="npFolderConnect()">Connect Google Drive →</button></div>
+        </div>
+        <div id="np-folder-picker">
+          <div style="display:flex;gap:6px;align-items:center"><select id="np-folder-select" onchange="npFolderOnSelect()" style="flex:1"><option value="">— pick a folder —</option></select><button type="button" class="btn" style="flex-shrink:0;font-size:11px;padding:8px 10px" onclick="npFolderLoad()">↻</button></div>
+          <div id="np-folder-preview" style="display:none"></div>
+        </div>
+      </div>
       <div class="field"><label>Reference name <span style="color:var(--rose)">*</span></label><input type="text" id="np-ref-name" required placeholder="e.g. Cozy autumn door wreath"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">A short, temporary name to recognize this piece in lists.</div></div>
       <div class="grid-2">
         <div class="field"><label>Year</label><select id="np-year"><option value="26">2026</option><option value="27">2027</option><option value="28">2028</option></select></div>
@@ -470,7 +485,8 @@ button:active{transform:scale(.97)}
       <div class="field"><label>Style</label><div id="np-style" class="chip-checks"></div></div>
       <div class="field"><label>Color(s)</label><div id="np-colors" class="chip-checks"></div></div>
       <div class="field"><label>Key materials</label><div id="np-materials" class="chip-checks"></div></div>
-      <div class="field"><label>Notes (optional)</label><textarea id="np-notes" placeholder="Extra style notes, custom request, materials reminder..."></textarea></div>
+      <div class="field"><label>Product description <span style="color:var(--rose)">*</span></label><div style="display:flex;gap:6px;align-items:flex-start"><textarea id="np-description" required placeholder="Extra full, farmhouse style, great for gifting..." spellcheck="true" style="flex:1"></textarea><button type="button" class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px;margin-top:2px" onclick="lpCleanupField('np-description')">✓ Fix</button></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">What makes this piece special — feeds the AI listing title &amp; description.</div></div>
+      <div class="field"><label>Internal notes (optional)</label><textarea id="np-notes" placeholder="Custom request, buyer name, materials reminder..."></textarea></div>
       <div id="np-outdoor-warning" style="display:none" class="info-card amber"><strong>⚠ Outdoor pot — local delivery only.</strong></div>
       <div class="btn-row"><button class="btn-primary btn-full" id="np-primary-btn" onclick="npPrimaryAction()">✨ Assign EB number →</button></div>
       <button class="btn-save-exit" onclick="npSaveAndExitStep1()">💾 Save &amp; finish later</button>
@@ -560,32 +576,6 @@ button:active{transform:scale(.97)}
       <div class="section-label">Select piece to list</div>
       <div class="field"><label>Choose EB number</label><div style="position:relative"><input type="text" id="lp-eb-search" placeholder="🔍 Type EB number or name…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding:11px 14px;font-size:14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);outline:none;color:var(--text);box-sizing:border-box" oninput="lpSearchInput(this.value)" onfocus="lpSearchInput(this.value)" onblur="setTimeout(()=>{const r=document.getElementById('lp-eb-results');if(r)r.style.display='none';},220)"><div id="lp-eb-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);max-height:260px;overflow-y:auto;z-index:500"></div></div><select id="lp-eb-select" style="display:none"><option value="">— loading inventory... —</option></select></div>
       <div id="lp-at-preview" style="display:none"></div>
-      <!-- ── Drive folder association ── -->
-      <div id="lp-folder-section" style="display:none;margin-top:4px">
-        <!-- Linked state -->
-        <div id="lp-folder-linked-panel" class="lp-folder-linked" style="display:none">
-          <span style="font-size:18px;flex-shrink:0">📁</span>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:10px;font-weight:800;color:var(--teal);text-transform:uppercase;letter-spacing:.07em">Photo folder linked</div>
-            <div id="lp-folder-name-display" style="font-size:13px;color:var(--text);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
-          </div>
-          <button onclick="lpShowFolderPicker()" style="font-size:11px;color:var(--teal);background:none;border:none;cursor:pointer;font-weight:800;flex-shrink:0;padding:4px 6px">Change</button>
-        </div>
-        <!-- Picker state -->
-        <div id="lp-folder-picker-panel" style="display:none">
-          <div class="section-label" style="margin-top:6px">Link photo folder</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Matched to this piece — tap to confirm, then continue.</div>
-          <div id="lp-folder-loading" style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px;display:none">Loading folders…</div>
-          <div id="lp-folder-list"></div>
-          <div id="lp-folder-sold-section" style="display:none">
-            <div class="lp-folder-div"><div class="lp-folder-div-line"></div><span class="lp-folder-div-label">Sold — for examples</span><div class="lp-folder-div-line"></div></div>
-            <div id="lp-folder-sold-list"></div>
-          </div>
-          <div id="lp-folder-browse-wrap" style="display:none;text-align:center;margin-top:8px">
-            <button onclick="lpLoadAllFolders(true)" style="background:transparent;border:1.5px dashed var(--border);color:var(--text-muted);border-radius:var(--radius-sm);padding:9px 16px;font-size:12px;cursor:pointer;font-family:inherit;width:100%">Browse all folders</button>
-          </div>
-        </div>
-      </div>
       <div id="lp-outdoor-warning" style="display:none" class="info-card amber"><strong>⚠ Outdoor pot — local delivery only.</strong></div>
       <div id="lp-dims-editor" style="display:none" class="info-card rose">
         <strong>⚠ Some physical details are missing.</strong> Add them here and save — they're written straight back to Airtable.
@@ -605,9 +595,8 @@ button:active{transform:scale(.97)}
     </div>
     <div class="step-block" id="lp-step-2">
       <div class="section-label">Listing details</div>
-      <div class="info-card sage" style="margin-bottom:12px"><strong>Colors, materials &amp; weight come from Step 1.</strong> Just add the listing-specific details below.</div>
+      <div class="info-card sage" style="margin-bottom:12px"><strong>Colors, materials, weight &amp; product description come from Step 1.</strong> Just add the listing-specific details below.</div>
       <div class="field"><label>Best display location</label><div id="lp-location-chips" class="chip-checks" style="display:none;margin-bottom:4px"></div><div id="lp-location-text-wrap" style="display:flex;gap:6px;align-items:center"><input type="text" id="lp-location" placeholder="e.g. front door, dining table" spellcheck="true" style="flex:1"><button class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px" onclick="lpCleanupField('lp-location')">✓ Fix</button></div></div>
-      <div class="field"><label>Anything special? (optional)</label><div style="display:flex;gap:6px;align-items:flex-start"><textarea id="lp-special" placeholder="Extra full, farmhouse style, great for gifting..." spellcheck="true" style="flex:1"></textarea><button class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px;margin-top:2px" onclick="lpCleanupField('lp-special')">✓ Fix</button></div></div>
       <div id="lp-s2-save-status" style="display:none;font-size:12px;padding:7px 10px;border-radius:6px;margin-bottom:8px;text-align:center"></div>
       <button class="btn btn-full" id="lp-s2-save-btn" onclick="lpSaveStepTwo()" style="font-size:12px;margin-bottom:8px">💾 Save details to Airtable</button>
       <div class="btn-row"><button class="btn btn-full" onclick="lpStep(1)">← Back</button><button class="btn-primary" style="flex:1" onclick="lpStep(3)">Photos →</button></div>
@@ -619,8 +608,33 @@ button:active{transform:scale(.97)}
         <div class="btn-row"><button class="btn-primary btn-full" onclick="lpDriveConnect()">Connect Google Drive →</button></div>
       </div>
       <div id="lp-drive-panel" style="display:none">
-        <div class="info-card teal"><strong>📱 Load photos from Drive</strong> — pick this piece's folder under Listing Media, then tap photos in the order you want them (hero first). Linking renames them in Drive to <code>EB…_01</code>, <code>_02</code>, …</div>
-        <div class="field"><label>Photo folder (under Listing Media)</label><div style="display:flex;gap:6px;align-items:center"><select id="lp-drive-folder" onchange="lpDriveLoadImages()" style="flex:1"><option value="">— pick a folder —</option></select><button class="btn" style="flex-shrink:0;font-size:11px;padding:8px 10px" onclick="lpDriveLoadFolders()">↻</button></div></div>
+        <div class="info-card teal"><strong>📱 Load photos from Drive</strong> — pick this piece's folder, then tap photos in the order you want them (hero first). Linking renames them in Drive to <code>EB…_01</code>, <code>_02</code>, …</div>
+        <!-- ── Drive folder association (moved here from Step 1) ── -->
+        <div id="lp-folder-section" style="display:none;margin-bottom:8px">
+          <!-- Linked state -->
+          <div id="lp-folder-linked-panel" class="lp-folder-linked" style="display:none">
+            <span style="font-size:18px;flex-shrink:0">📁</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:10px;font-weight:800;color:var(--teal);text-transform:uppercase;letter-spacing:.07em">Photo folder linked</div>
+              <div id="lp-folder-name-display" style="font-size:13px;color:var(--text);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+            </div>
+            <button onclick="lpShowFolderPicker()" style="font-size:11px;color:var(--teal);background:none;border:none;cursor:pointer;font-weight:800;flex-shrink:0;padding:4px 6px">Change</button>
+          </div>
+          <!-- Picker state -->
+          <div id="lp-folder-picker-panel" style="display:none">
+            <div class="section-label" style="margin-top:6px">Link photo folder</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Matched to this piece — preview to check, then tap to link and load its photos.</div>
+            <div id="lp-folder-loading" style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px;display:none">Loading folders…</div>
+            <div id="lp-folder-list"></div>
+            <div id="lp-folder-sold-section" style="display:none">
+              <div class="lp-folder-div"><div class="lp-folder-div-line"></div><span class="lp-folder-div-label">Sold — for examples</span><div class="lp-folder-div-line"></div></div>
+              <div id="lp-folder-sold-list"></div>
+            </div>
+            <div id="lp-folder-browse-wrap" style="display:none;text-align:center;margin-top:8px">
+              <button onclick="lpLoadAllFolders(true)" style="background:transparent;border:1.5px dashed var(--border);color:var(--text-muted);border-radius:var(--radius-sm);padding:9px 16px;font-size:12px;cursor:pointer;font-family:inherit;width:100%">Browse all folders</button>
+            </div>
+          </div>
+        </div>
         <div id="lp-drive-grid-status" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;display:none"></div>
         <div class="section-label" id="lp-drive-grid-label" style="display:none">Tap to select (in order)</div>
         <div class="photo-grid-opt" id="lp-drive-grid"></div>
@@ -1111,7 +1125,7 @@ const NP_OPTIONS = {
   florals:  ['None','Real-Feel','Silk'],
   greenery: ['None','Premium','Standard'],
   style:    ['Farmhouse','Rustic','Vintage / Antique','Modern / Contemporary','Traditional / Classic','Boho','Cottage','Coastal'],
-  colors:   ['White','Cream','Gray','Black','Silver','Gold','Bronze','Copper','Brown','Burgundy','Red','Rust','Orange','Yellow','Green','Teal','Blue','Purple','Pink','Peach'],
+  colors:   ['White','Cream','Gray','Black','Silver','Gold','Bronze','Copper','Brown','Burgundy','Red','Rust','Orange','Yellow-Orange','Yellow','Green','Teal','Light Blue','Blue','Purple','Lavender','Pink','Peach'],
   materials:['Metal','Wood','Ceramic','Resin','Glass','Grapevine','Galvanized Steel','Pine','Plastic','Basket','Rattan','Candle','Lights','Velvet']
 };
 const LP_DISPLAY_LOCATIONS = {
@@ -1121,6 +1135,8 @@ const LP_DISPLAY_LOCATIONS = {
   'Outdoor planter': ['Front porch','Patio','Deck','Front of garage','Covered porch or patio'],
 };
 let npMode = 'add';
+let npSelectedFolder = null;   // { id, name } chosen in the Step 1.1 Drive folder picker
+let npFolderList = [];         // cached subfolders of the product-media folder
 const COLLECTION_MAP = {'Wreath':'door-wreaths','Home decor':'tabletop-and-centerpieces','Outdoor planter':'outdoor-pot-arrangements','Centerpiece':'tabletop-and-centerpieces','Wall decor':'nature-and-everyday','Hanging':'nature-and-everyday','Swag':'nature-and-everyday','Custom order':'nature-and-everyday'};
 const COLLECTION_LABELS = {'door-wreaths':'Door wreaths','outdoor-pot-arrangements':'Outdoor pot arrangements','tabletop-and-centerpieces':'Tabletop and centerpieces','nature-and-everyday':'Nature and everyday','holiday-and-seasonal':'Holiday and seasonal','sold-portfolio':'Sold — Portfolio'};
 
@@ -1248,6 +1264,7 @@ function goTo(screenId) {
   if(screenId==='screen-backlog') blOnScreenEnter();
   if(screenId==='screen-readiness') readinessRender();
   if(screenId==='screen-bin-mgmt') bmOnScreenEnter();
+  if(screenId==='screen-new-piece') npFolderInit();
   wipShowBanner(screenId);
 }
 function goHome() { stepBackFn = null; updateHeaderBackBtn(); goTo('screen-home'); }
@@ -1581,6 +1598,64 @@ function npSeasonCode(seasons){
   return 'MS';
 }
 
+// ── Step 1.1 optional Drive folder picker (product-media folder) ──
+async function npFolderInit(){
+  const picker=document.getElementById('np-folder-picker'), connect=document.getElementById('np-folder-connect');
+  if(!picker)return;
+  try{
+    const r=await fetch(SERVER_URL+'/drive-status'); const d=await r.json();
+    if(d.connected){
+      connect.style.display='none'; picker.style.display='block';
+      if(!npFolderList.length) npFolderLoad(); else npFolderReflectSelected();
+    } else { picker.style.display='none'; connect.style.display='block'; }
+  }catch(e){ picker.style.display='none'; if(connect)connect.style.display='block'; }
+}
+function npFolderConnect(){ window.open(SERVER_URL+'/drive-auth','_blank'); setStatus('np','After connecting in the new tab, come back to this screen.','loading'); setTimeout(()=>{hideStatus('np');npFolderInit();},4000); }
+async function npFolderLoad(){
+  const sel=document.getElementById('np-folder-select'); if(!sel)return;
+  sel.innerHTML='<option value="">— loading folders… —</option>';
+  try{
+    const r=await fetch(SERVER_URL+'/drive-list-subfolders?parentId='+encodeURIComponent(LISTING_PHOTOS_SORTED_FOLDER_ID));
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not list folders');
+    npFolderList=d.folders||[];
+    sel.innerHTML='<option value="">— pick a folder —</option>'+npFolderList.map(f=>'<option value="'+escHtml(f.id)+'">'+escHtml(f.name)+'</option>').join('');
+    npFolderReflectSelected();
+  }catch(e){ sel.innerHTML='<option value="">— '+escHtml(e.message)+' —</option>'; }
+}
+function npFolderOnSelect(){
+  const sel=document.getElementById('np-folder-select'); if(!sel)return;
+  const id=sel.value;
+  if(!id){ npSelectedFolder=null; npFolderRenderPreview(''); wipSaveNP(); return; }
+  const name=sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:'';
+  npSelectedFolder={id,name};
+  // Autofill the reference name with the folder name (req: folder selected → name the piece after it)
+  const ref=document.getElementById('np-ref-name'); if(ref) ref.value=name;
+  npFolderRenderPreview(id);
+  wipSaveNP();
+}
+// Ensure the dropdown reflects npSelectedFolder (used after async loads / edit prefill / WIP restore).
+function npFolderReflectSelected(){
+  const sel=document.getElementById('np-folder-select'); if(!sel)return;
+  if(!npSelectedFolder){ sel.value=''; npFolderRenderPreview(''); return; }
+  if(![...sel.options].some(o=>o.value===npSelectedFolder.id)){
+    const opt=document.createElement('option'); opt.value=npSelectedFolder.id; opt.text=npSelectedFolder.name||npSelectedFolder.id; sel.appendChild(opt);
+  }
+  sel.value=npSelectedFolder.id; npFolderRenderPreview(npSelectedFolder.id);
+}
+// Thumbnail preview so the user can confirm they picked the right folder.
+async function npFolderRenderPreview(folderId){
+  const box=document.getElementById('np-folder-preview'); if(!box)return;
+  if(!folderId){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='block'; box.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:6px 0">Loading thumbnails…</div>';
+  try{
+    const r=await fetch(SERVER_URL+'/drive-folder-images?folderId='+encodeURIComponent(folderId));
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not load photos');
+    const imgs=(d.files||[]).slice(0,6), total=d.total!=null?d.total:(d.files||[]).length;
+    if(!imgs.length){ box.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:6px 0">No photos in this folder yet.</div>'; return; }
+    box.innerHTML='<div class="thumb-row">'+imgs.map(f=>'<img src="'+(f.thumbnailLink||'')+'" alt="'+escHtml(f.name)+'" referrerpolicy="no-referrer">').join('')+'</div>'+(total>imgs.length?'<div style="font-size:11px;color:var(--text-muted);margin-top:3px">+'+(total-imgs.length)+' more</div>':'');
+  }catch(e){ box.innerHTML='<div style="font-size:11px;color:var(--rose);padding:6px 0">⚠ '+escHtml(e.message)+'</div>'; }
+}
+
 // ── ADD / EDIT MODE ──
 function npSetMode(mode){
   npMode=mode;
@@ -1608,6 +1683,8 @@ function npClearForm(){
   document.getElementById('np-cost').value='';
   document.getElementById('np-cost-pct').value=DEFAULT_COST_PCT;
   document.getElementById('np-notes').value='';
+  document.getElementById('np-description').value='';
+  npSelectedFolder=null; npFolderReflectSelected();
   npSetChecks('np-occasion',[]);
   document.getElementById('np-florals').value='None';
   document.getElementById('np-greenery').value='None';
@@ -1641,6 +1718,9 @@ function npLoadRecordForEdit(){
   npSetChecks('np-colors',f['Color(s)']||[]);
   npSetChecks('np-materials',f['Key Materials']||[]);
   document.getElementById('np-notes').value=f['Description']||'';
+  document.getElementById('np-description').value=f['Listing Special Notes']||'';
+  npSelectedFolder = f['Drive Folder ID'] ? {id:f['Drive Folder ID'], name:f['Drive Folder Name']||f['Drive Folder ID']} : null;
+  npFolderReflectSelected();
   // Prefill Step 1.2 physical fields so an edit doesn't blank them on save
   document.getElementById('np-width').value=f['Width (in)']!=null?f['Width (in)']:'';
   document.getElementById('np-height').value=f['Height (in)']!=null?f['Height (in)']:'';
@@ -1665,8 +1745,13 @@ function npBuildFieldsFromForm(){
     'Style':npGetChecks('np-style'),
     'Color(s)':npGetChecks('np-colors'),
     'Key Materials':npGetChecks('np-materials'),
-    'Description':document.getElementById('np-notes').value.trim()
+    'Description':document.getElementById('np-notes').value.trim(),
+    'Listing Special Notes':document.getElementById('np-description').value.trim()
   };
+  if(npSelectedFolder && npSelectedFolder.id){
+    fields['Drive Folder ID']=npSelectedFolder.id;
+    fields['Drive Folder Name']=npSelectedFolder.name;
+  }
   const price=document.getElementById('np-price').value.trim();
   if(price) fields['Price ($)']=parseFloat(price);
   const cost=document.getElementById('np-cost').value.trim();
@@ -1720,6 +1805,7 @@ async function npGenerateEB() {
   const {fields,seasons}=npBuildFieldsFromForm();
   if(!fields['Reference name']){alert('Please enter a Reference name.');return;}
   if(seasons.length===0){alert('Please select at least one season.');return;}
+  if(!fields['Listing Special Notes']){alert('Please enter a Product description.');return;}
   setStatus('np','Assigning EB number...','loading');
   const prefix='EB-'+year+npSeasonCode(seasons)+'-'+type+'-';
   const existing=allRecords.map(r=>r.fields['EB Number']||'').filter(eb=>eb.startsWith(prefix)).map(eb=>parseInt(eb.split('-').pop())||0);
@@ -1742,6 +1828,7 @@ async function npSaveEdit() {
   const {fields,seasons}=npBuildFieldsFromForm();
   if(!fields['Reference name']){alert('Please enter a Reference name.');return;}
   if(seasons.length===0){alert('Please select at least one season.');return;}
+  if(!fields['Listing Special Notes']){alert('Please enter a Product description.');return;}
   setStatus('np','Saving changes to Airtable...','loading');
   try {
     const result=await airtableFetch('/'+npCurrentRecordId,{method:'PATCH',body:JSON.stringify({fields})});
@@ -1937,14 +2024,12 @@ async function lpOnSelectRecord() {
   // immediately after this returns, so clearing here is safe in that path too.
   if (_prevId !== recId) lpStepTwoCache = {location:'',meta:'',special:''};
   lpRenderLPPreview(lpSelectedRecord.fields);
-  lpRenderFolderSection();
   // Re-fetch this record to pick up any dims saved in the current session
   try {
     const fresh = await airtableFetch('/'+recId);
     if (fresh && fresh.fields) {
       Object.assign(lpSelectedRecord.fields, fresh.fields);
       lpRenderLPPreview(lpSelectedRecord.fields);
-      lpRenderFolderSection();
       // Pre-populate Step 2 cache from any previously-saved Airtable fields
       // so the data is ready whether or not a WIP session exists.
       const _f = fresh.fields;
@@ -2083,7 +2168,7 @@ async function lpGenerateListing(){
     const photoImages=[];
     for(const item of lpPhotoItems.slice(0,3)){try{await lpEnsureDriveBytes(item);const smallBlob=await lpResizeImage(item.dataUrl,800,150);const smallDataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(smallBlob);});photoImages.push({data:smallDataUrl.split(',')[1],mime:'image/jpeg'});}catch(e){console.warn('Skipping photo:',e.message);}}
     const seasonVal=Array.isArray(f['Season'])?f['Season'].join(', '):(f['Season']||'');
-    const res=await fetch(SERVER_URL+'/generate-description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:f['EB Number'],reference_name:f['Reference name'],type:f['Type'],season:seasonVal,holiday:f['Occasion'],colors:lpColorsFromRecord(f),dimensions:dims,materials:lpMaterialsFromRecord(f),location:lpGetLocation()||lpStepTwoCache.location||'',special:(document.getElementById('lp-special').value.trim()||lpStepTwoCache.special||''),notes:f['Description'],images:photoImages})});
+    const res=await fetch(SERVER_URL+'/generate-description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:f['EB Number'],reference_name:f['Reference name'],type:f['Type'],season:seasonVal,holiday:f['Occasion'],colors:lpColorsFromRecord(f),dimensions:dims,materials:lpMaterialsFromRecord(f),location:lpGetLocation()||lpStepTwoCache.location||'',special:(f['Listing Special Notes']||lpStepTwoCache.special||''),notes:f['Description'],images:photoImages})});
     const data=await res.json(); if(!res.ok||!data.success) throw new Error(data.error||'Server returned error');
     lpCurrentTitle=((data.title||'').trim())||lpFallbackTitle(f);
     lpCurrentDesc=(data.description||'').trim();
@@ -2127,47 +2212,34 @@ async function lpCleanupField(fieldId){
 }
 function lpCopyField(vid,bid){navigator.clipboard.writeText(document.getElementById(vid).textContent.trim()).then(()=>{const b=document.getElementById(bid),o=b.textContent;b.textContent='✓';b.classList.add('copied');setTimeout(()=>{b.textContent=o;b.classList.remove('copied');},2000);});}
 
-// ── Step 2.3 photos: loaded from the piece's Google Drive (Listing Media) folder ──
+// ── Step 2.3 photos: pick the piece's Google Drive folder, then select photos ──
+let lpLoadedFolderId=null; // guards against wiping the photo selection on back-navigation
 async function lpDriveInit(){
   const connect=document.getElementById('lp-drive-connect'), panel=document.getElementById('lp-drive-panel');
   try{
     const r=await fetch(SERVER_URL+'/drive-status'); const d=await r.json();
     if(d.connected){
       connect.style.display='none'; panel.style.display='block';
-      const linkedId = lpSelectedRecord && lpSelectedRecord.fields['Drive Folder ID'];
-      const sel=document.getElementById('lp-drive-folder');
-      if(linkedId){
-        const linkedName = (lpSelectedRecord.fields['Drive Folder Name']||'Linked folder');
-        sel.innerHTML='<option value="'+escHtml(linkedId)+'">\u{1F4C1} '+escHtml(linkedName)+'</option>';
-        sel.value=linkedId; lpDriveLoadImages();
-      } else { if(sel&&sel.options.length<=1) lpDriveLoadFolders(); }
-    }
-    else { connect.style.display='block'; panel.style.display='none'; }
+      lpRenderFolderSection(); // shows the linked folder (auto-loading its photos) or the matching picker
+    } else { connect.style.display='block'; panel.style.display='none'; }
   }catch(e){ connect.style.display='block'; panel.style.display='none'; }
 }
 function lpDriveConnect(){ window.open(SERVER_URL+'/drive-auth','_blank'); setStatus('lp','After connecting in the new tab, come back and tap “Photos” again.','loading'); setTimeout(()=>{hideStatus('lp');lpDriveInit();},4000); }
-async function lpDriveLoadFolders(){
-  const sel=document.getElementById('lp-drive-folder'); sel.innerHTML='<option value="">— loading folders… —</option>';
-  try{
-    const r=await fetch(SERVER_URL+'/drive-list-subfolders?parentId='+encodeURIComponent(LISTING_PHOTOS_SORTED_FOLDER_ID)); const d=await r.json();
-    if(!r.ok) throw new Error(d.error||'Could not list folders');
-    sel.innerHTML='<option value="">— pick a folder —</option>'+(d.folders||[]).map(f=>'<option value="'+f.id+'">'+escHtml(f.name)+'</option>').join('');
-  }catch(e){ sel.innerHTML='<option value="">— '+escHtml(e.message)+' —</option>'; }
-}
-async function lpDriveLoadImages(){
-  const folderId=document.getElementById('lp-drive-folder').value;
+async function lpDriveLoadImages(folderId, force){
   const status=document.getElementById('lp-drive-grid-status'), label=document.getElementById('lp-drive-grid-label');
+  if(!folderId){ lpLoadedFolderId=null; lpDriveImages=[]; lpPhotoItems=[]; lpDriveLinked=false; lpRenderDriveGrid(); lpRenderPhotos(); if(status)status.style.display='none'; if(label)label.style.display='none'; return; }
+  // Already loaded this folder — keep the user's current selection/order on back-navigation.
+  if(!force && folderId===lpLoadedFolderId && lpDriveImages.length){ if(label)label.style.display='block'; lpRenderDriveGrid(); lpRenderPhotos(); return; }
   lpDriveImages=[]; lpPhotoItems=[]; lpDriveLinked=false; lpRenderDriveGrid(); lpRenderPhotos();
-  if(!folderId){ status.style.display='none'; label.style.display='none'; return; }
-  status.style.display='block'; status.style.color='var(--text-muted)'; status.textContent='Loading photos from Drive…'; label.style.display='none';
+  if(status){status.style.display='block'; status.style.color='var(--text-muted)'; status.textContent='Loading photos from Drive…';} if(label)label.style.display='none';
   try{
     const r=await fetch(SERVER_URL+'/drive-folder-images?folderId='+encodeURIComponent(folderId)); const d=await r.json();
     if(!r.ok) throw new Error(d.error||'Could not list images');
-    lpDriveImages=d.files||[];
-    if(lpDriveImages.length===0){ status.style.display='block'; status.textContent='No images found in this folder.'; label.style.display='none'; }
-    else { status.style.display='none'; label.style.display='block'; }
+    lpDriveImages=d.files||[]; lpLoadedFolderId=folderId;
+    if(lpDriveImages.length===0){ if(status){status.style.display='block'; status.textContent='No images found in this folder.';} if(label)label.style.display='none'; }
+    else { if(status)status.style.display='none'; if(label)label.style.display='block'; }
     lpRenderDriveGrid();
-  }catch(e){ status.style.display='block'; status.style.color='var(--rose)'; status.textContent='⚠ '+e.message; }
+  }catch(e){ if(status){status.style.display='block'; status.style.color='var(--rose)'; status.textContent='⚠ '+e.message;} }
 }
 function lpDriveSelectedIndex(id){ return lpPhotoItems.findIndex(it=>it.driveFileId===id); }
 function lpDriveToggle(id){
@@ -2393,10 +2465,28 @@ function lpFolderCardHtml(f, isSold) {
     <span class="lp-folder-conf ${confClass}"></span>
     <div style="flex:1;min-width:0">
       <div class="lp-folder-name">${escHtml(f.name)}</div>
-      <div class="lp-folder-meta">${confLabel}${isSold ? ' &nbsp;·&nbsp; <em>sold</em>' : ''}</div>
+      <div class="lp-folder-meta">${confLabel}${isSold ? ' &nbsp;·&nbsp; <em>sold</em>' : ''} &nbsp;·&nbsp; <a href="#" onclick="event.stopPropagation();lpFolderPreview('${f.id}',event);return false;" style="color:var(--teal);font-weight:700">👁 Preview</a></div>
+      <div id="lp-fcp-${f.id}" class="lp-folder-preview" style="display:none;margin-top:6px" onclick="event.stopPropagation()"></div>
     </div>
     <div class="lp-folder-radio" id="lp-fr-${f.id}"></div>
   </div>`;
+}
+
+// Inline thumbnail preview for a folder card — confirm the right folder before linking.
+async function lpFolderPreview(folderId, ev){
+  if(ev && ev.stopPropagation) ev.stopPropagation();
+  const box=document.getElementById('lp-fcp-'+folderId); if(!box)return;
+  if(box.dataset.loaded){ box.style.display = box.style.display==='none' ? 'block' : 'none'; return; }
+  box.style.display='block'; box.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:4px 0">Loading thumbnails…</div>';
+  try{
+    const r=await fetch(SERVER_URL+'/drive-folder-images?folderId='+encodeURIComponent(folderId));
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not load photos');
+    const imgs=(d.files||[]).slice(0,6), total=d.total!=null?d.total:(d.files||[]).length;
+    box.innerHTML = imgs.length
+      ? ('<div class="thumb-row">'+imgs.map(f=>'<img src="'+(f.thumbnailLink||'')+'" alt="'+escHtml(f.name)+'" referrerpolicy="no-referrer">').join('')+'</div>'+(total>imgs.length?'<div style="font-size:11px;color:var(--text-muted);margin-top:3px">+'+(total-imgs.length)+' more</div>':''))
+      : '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">No photos in this folder yet.</div>';
+    box.dataset.loaded='1';
+  }catch(e){ box.innerHTML='<div style="font-size:11px;color:var(--rose);padding:4px 0">⚠ '+escHtml(e.message)+'</div>'; }
 }
 
 function lpHighlightFolder(id) {
@@ -2422,6 +2512,7 @@ async function lpSelectFolder(folderId, folderName) {
     // Still allow continue even if Airtable write fails
     console.warn('Airtable folder save failed:', e.message);
     lpRenderFolderLinkedUI(folderId, folderName);
+    lpDriveLoadImages(folderId);
   }
 }
 
@@ -2445,9 +2536,11 @@ function lpRenderFolderSection() {
   const linkedId = lpSelectedRecord.fields['Drive Folder ID'];
   if (linkedId) {
     lpRenderFolderLinkedUI(linkedId, lpSelectedRecord.fields['Drive Folder Name'] || linkedId);
+    lpDriveLoadImages(linkedId); // load this folder's photos into the grid below
   } else {
     document.getElementById('lp-folder-linked-panel').style.display = 'none';
     document.getElementById('lp-folder-picker-panel').style.display = 'block';
+    lpDriveLoadImages(''); // clear any previously loaded grid until a folder is linked
     lpLoadAllFolders(false);
   }
 }
@@ -2721,7 +2814,7 @@ async function lpAddVideoToShopify() {
 }
 
 
-function lpReset(){lpSelectedRecord=null;lpPhotoItems=[];lpDriveImages=[];lpDriveLinked=false;lpFolderSelected=null;lpAllFolders=[];lpLastProductId=null;lpVideoFileId=null;lpVideoFileName=null;lpStepTwoCache={location:'',meta:'',special:''};const fsec=document.getElementById('lp-folder-section');if(fsec)fsec.style.display='none';const vsec=document.getElementById('lp-video-section');if(vsec)vsec.style.display='none';lpCurrentDesc='';lpCurrentTitle='';lpGeneratedFor='';['lp-location','lp-meta','lp-special','lp-title','lp-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});lpRenderDisplayLocation('');;const df=document.getElementById('lp-drive-folder');if(df)df.value='';const dg=document.getElementById('lp-drive-grid');if(dg)dg.innerHTML='';document.getElementById('lp-eb-select').value='';_clearEbSearch('lp-eb-search','lp-eb-results');document.getElementById('lp-at-preview').style.display='none';document.getElementById('lp-outdoor-warning').style.display='none';const ed=document.getElementById('lp-dims-editor');if(ed)ed.style.display='none';document.getElementById('lp-next-1-btn').disabled=true;document.getElementById('lp-publish-result').style.display='none';const pb=document.getElementById('lp-publish-btn');if(pb){pb.disabled=true;pb.textContent='↑ Publish listing to Shopify';pb.style.background='';pb.style.borderColor='';}lpRenderPhotos();lpStep(1);populateLPSelect();WIP.clear('lp');}
+function lpReset(){lpSelectedRecord=null;lpPhotoItems=[];lpDriveImages=[];lpDriveLinked=false;lpLoadedFolderId=null;lpFolderSelected=null;lpAllFolders=[];lpLastProductId=null;lpVideoFileId=null;lpVideoFileName=null;lpStepTwoCache={location:'',meta:'',special:''};const fsec=document.getElementById('lp-folder-section');if(fsec)fsec.style.display='none';const vsec=document.getElementById('lp-video-section');if(vsec)vsec.style.display='none';lpCurrentDesc='';lpCurrentTitle='';lpGeneratedFor='';['lp-location','lp-meta','lp-special','lp-title','lp-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});lpRenderDisplayLocation('');;const dg=document.getElementById('lp-drive-grid');if(dg)dg.innerHTML='';document.getElementById('lp-eb-select').value='';_clearEbSearch('lp-eb-search','lp-eb-results');document.getElementById('lp-at-preview').style.display='none';document.getElementById('lp-outdoor-warning').style.display='none';const ed=document.getElementById('lp-dims-editor');if(ed)ed.style.display='none';document.getElementById('lp-next-1-btn').disabled=true;document.getElementById('lp-publish-result').style.display='none';const pb=document.getElementById('lp-publish-btn');if(pb){pb.disabled=true;pb.textContent='↑ Publish listing to Shopify';pb.style.background='';pb.style.borderColor='';}lpRenderPhotos();lpStep(1);populateLPSelect();WIP.clear('lp');}
 
 
 // ── MARK AS SOLD ──
@@ -3488,6 +3581,8 @@ function wipRestoreNP(saved) {
   if(saved.cost){const el=document.getElementById('np-cost');if(el)el.value=saved.cost;}
   if(saved.costPct){const el=document.getElementById('np-cost-pct');if(el)el.value=saved.costPct;}
   if(saved.notes){const el=document.getElementById('np-notes');if(el)el.value=saved.notes;}
+  if(saved.description){const el=document.getElementById('np-description');if(el)el.value=saved.description;}
+  if(saved.folderId){npSelectedFolder={id:saved.folderId,name:saved.folderName||saved.folderId};npFolderReflectSelected();}
   if(saved.refName){const el=document.getElementById('np-ref-name');if(el)el.value=saved.refName;}
   if(saved.ebNumber){npAssignedEB=saved.ebNumber;npCurrentEB=saved.ebNumber;}
   if(saved.recordId){npCurrentRecordId=saved.recordId;}
@@ -3517,6 +3612,9 @@ function wipSaveNP() {
     cost:     (document.getElementById('np-cost')||{}).value||'',
     costPct:  (document.getElementById('np-cost-pct')||{}).value||'',
     notes:    (document.getElementById('np-notes')||{}).value||'',
+    description: (document.getElementById('np-description')||{}).value||'',
+    folderId:   npSelectedFolder?npSelectedFolder.id:'',
+    folderName: npSelectedFolder?npSelectedFolder.name:'',
     refName:  (document.getElementById('np-ref-name')||{}).value||'',
     ebNumber: npAssignedEB||npCurrentEB||'',
     recordId: npCurrentRecordId||'',
