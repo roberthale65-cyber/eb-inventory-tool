@@ -1911,9 +1911,19 @@ async function npSaveWeight(){
   }catch(e){ console.warn('Weight save skipped (Packaged weight (oz) field may not exist yet):',e.message); }
 }
 function npListNow(){
+  const recId = npCurrentRecordId;
   goTo('screen-list');
-  const sel=document.getElementById('lp-eb-select');
-  if(sel&&npCurrentRecordId){ sel.value=npCurrentRecordId; if(typeof lpOnSelectRecord==='function')lpOnSelectRecord(); const btn=document.getElementById('lp-next-1-btn'); if(btn)btn.disabled=false; }
+  lpStep(1);                 // start the List & Publish wizard at Step 2.1
+  populateLPSelect();        // rebuild the picker so the piece just created is selectable
+  if(!recId) return;
+  const rec = allRecords.find(r=>r.id===recId);
+  const sel = document.getElementById('lp-eb-select');
+  const search = document.getElementById('lp-eb-search');
+  if(sel) sel.value = recId;
+  if(search && rec) search.value = pieceLabel(rec.fields) || (rec.fields['EB Number']||'');
+  const results = document.getElementById('lp-eb-results'); if(results) results.style.display='none';
+  const btn = document.getElementById('lp-next-1-btn'); if(btn) btn.disabled = false;
+  if(typeof lpOnSelectRecord==='function') lpOnSelectRecord(); // populate preview + folder/dims
 }
 
 async function npMarkPhotographed() {
@@ -3116,7 +3126,7 @@ function ptRender(filter) {
     const color=statusColor[status]||'var(--text-muted)';
     const photoUrl=f['Photo URL']||'';
     const thumb=photoUrl?'<img src="'+photoUrl+'" style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--border);cursor:pointer" onclick="ptPromptPhoto(\''+r.id+'\',\''+escHtml(eb)+'\')" title="Tap to update photo">':'<div onclick="ptPromptPhoto(\''+r.id+'\',\''+escHtml(eb)+'\')" title="Tap to add photo" style="width:48px;height:48px;border-radius:6px;background:var(--ivory-dark);flex-shrink:0;border:1.5px dashed var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px">📷</div>';
-    return'<div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow-sm)">'+thumb+'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800;color:var(--text)">'+escHtml(eb)+'</div>'+(refName?'<div style="font-size:12px;color:var(--text);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(refName)+'</div>':'')+'<div style="font-size:11px;color:var(--text-muted);margin-top:1px">'+escHtml(detail)+'</div><div style="font-size:10px;margin-top:3px;display:flex;gap:8px;align-items:center"><span style="color:'+color+';font-weight:700">'+escHtml(status)+'</span>'+(dateMade?'<span style="color:var(--text-muted)">'+escHtml(dateMade)+'</span>':'')+'<div style="margin-top:6px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="pt-tp-'+r.id+'" '+(f['Tag printed']?'checked':'')+' onchange="ptToggleTagPrinted(\''+r.id+'\',this.checked)" style="width:14px;height:14px;accent-color:var(--sage)"> Tag printed</label></div></div><button onclick="printQRTag(\''+escHtml(eb)+'\',\''+(f['Price ($)']!=null?String(f['Price ($)']):'')+'\')" style="flex-shrink:0;background:var(--sage);color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer">🏷 Print</button></div>';
+    return'<div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow-sm)">'+thumb+'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800;color:var(--text)">'+escHtml(eb)+'</div>'+(refName?'<div style="font-size:12px;color:var(--text);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(refName)+'</div>':'')+'<div style="font-size:11px;color:var(--text-muted);margin-top:1px">'+escHtml(detail)+'</div><div style="font-size:10px;margin-top:3px;display:flex;gap:8px;align-items:center"><span style="color:'+color+';font-weight:700">'+escHtml(status)+'</span>'+(dateMade?'<span style="color:var(--text-muted)">'+escHtml(dateMade)+'</span>':'')+'</div><div style="margin-top:6px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="pt-tp-'+r.id+'" '+(f['Tag printed']?'checked':'')+' onchange="ptToggleTagPrinted(\''+r.id+'\',this.checked)" style="width:14px;height:14px;accent-color:var(--sage)"> Tag printed</label></div></div><button onclick="printQRTag(\''+escHtml(eb)+'\',\''+(f['Price ($)']!=null?String(f['Price ($)']):'')+'\')" style="flex-shrink:0;background:var(--sage);color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer">🏷 Print</button></div>';
   }).join('');
 }
 async function ptToggleTagPrinted(recordId, checked) {
