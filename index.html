@@ -228,6 +228,7 @@
               <option value="SU">Summer</option>
               <option value="FA">Fall</option>
               <option value="WI">Winter</option>
+              <option value="AS">All Season</option>
             </select>
           </div>
         </div>
@@ -236,12 +237,13 @@
           <select id="f-type" onchange="updateEBPreview()">
             <option value="">— pick —</option>
             <option value="WR">Wreath</option>
-            <option value="TT">Tabletop</option>
-            <option value="OP">Outdoor pot</option>
+            <option value="HD">Home decor</option>
+            <option value="OP">Outdoor planter</option>
             <option value="CP">Centerpiece</option>
-            <option value="WP">Wall piece</option>
+            <option value="WP">Wall decor</option>
+            <option value="HA">Hanging</option>
             <option value="SW">Swag</option>
-            <option value="CU">Custom</option>
+            <option value="CU">Custom order</option>
           </select>
         </div>
 
@@ -360,8 +362,8 @@ const TABLE_ID  = 'tbl29ndzXDXXU8f7x';
 const TOKEN_KEY = 'eb_at_token';
 const STORE_URL = 'https://eternalbloomsdesigns.com';
 
-const SEASON_NAMES = { SP:'Spring', SU:'Summer', FA:'Fall', WI:'Winter' };
-const TYPE_NAMES   = { WR:'Wreath', TT:'Tabletop', OP:'Outdoor pot', CP:'Centerpiece', WP:'Wall piece', SW:'Swag', CU:'Custom' };
+const SEASON_NAMES = { SP:'Spring', SU:'Summer', FA:'Fall', WI:'Winter', AS:'All Season' };
+const TYPE_NAMES   = { WR:'Wreath', HD:'Home decor', OP:'Outdoor planter', CP:'Centerpiece', WP:'Wall decor', HA:'Hanging', SW:'Swag', CU:'Custom order' };
 
 // ═══════════════════════════════════════════
 //  STATE
