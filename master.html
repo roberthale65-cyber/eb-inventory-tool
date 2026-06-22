@@ -166,6 +166,11 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .desc-textarea:focus{border-color:#46867f;box-shadow:0 0 0 3px rgba(70,134,127,0.12)}
 .desc-textarea::placeholder{color:#6ea9a2;font-style:italic}
 .desc-textarea[contenteditable]:empty::before{content:attr(data-placeholder);color:#6ea9a2;font-style:italic;pointer-events:none;display:block}
+.rich-toolbar{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:6px}
+.rich-btn{font-family:var(--font-body);font-size:12px;font-weight:700;color:var(--text);background:#fff;border:1.5px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer;line-height:1;transition:all .12s}
+.rich-btn:hover{border-color:var(--teal);color:var(--teal)}
+.desc-html{width:100%;box-sizing:border-box;font-family:'Courier New',ui-monospace,monospace;font-size:12px;padding:12px 14px;border:1.5px solid #89bfb7;border-radius:var(--radius-sm);background:#fbfaf9;color:var(--text);outline:none;resize:vertical;min-height:140px;line-height:1.5}
+.desc-html:focus{border-color:#46867f;box-shadow:0 0 0 3px rgba(70,134,127,0.12)}
 .desc-confirmed-box{background:#fff;border:1.5px solid var(--green-border);border-radius:var(--radius-sm);padding:14px;font-size:13.5px;line-height:1.7;color:var(--text);position:relative;min-height:80px}
 .drop-zone{border:2px dashed rgba(129,115,101,0.4);border-radius:var(--radius);background:#fff;padding:30px 20px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px}
 .drop-zone:hover,.drop-zone.dragover{border-color:var(--gold);background:var(--gold-bg)}
@@ -664,7 +669,19 @@ button:active{transform:scale(.97)}
         <div id="lp-ai-photo-count" style="font-size:12px;color:var(--text-muted);margin-bottom:10px"></div>
         <div id="lp-desc-inline-status" style="display:none;font-size:12px;padding:6px 10px;border-radius:6px;background:var(--ivory-dark);margin-bottom:10px"></div>
         <div class="field"><label>Product title</label><input type="text" id="lp-title" placeholder="Generating title..." spellcheck="true" oninput="lpUpdatePublishSummary()"></div>
-        <div class="field"><label>Description</label><div style="display:flex;gap:6px;align-items:flex-start"><div class="desc-textarea" id="lp-desc" contenteditable="true" spellcheck="true" data-placeholder="Generating description..." style="flex:1;overflow-y:auto" oninput="lpUpdatePublishSummary()"></div><button class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px;margin-top:2px" onclick="lpCleanupField('lp-desc')">✓ Fix</button></div></div>
+        <div class="field"><label>Description</label>
+          <div class="rich-toolbar">
+            <span id="lp-desc-format-tools" style="display:inline-flex;gap:4px">
+              <button type="button" class="rich-btn" title="Bold (select text first)" onmousedown="event.preventDefault()" onclick="lpDescCmd('bold')"><strong>B</strong></button>
+              <button type="button" class="rich-btn" title="Bulleted list" onmousedown="event.preventDefault()" onclick="lpDescCmd('insertUnorderedList')">• List</button>
+            </span>
+            <span style="flex:1"></span>
+            <button type="button" class="rich-btn" title="Clean up spelling &amp; grammar" onclick="lpCleanupField('lp-desc')">✓ Fix</button>
+            <button type="button" class="rich-btn" id="lp-desc-htmlbtn" title="Edit the underlying HTML directly" onclick="lpDescToggleHtml()">&lt;/&gt; HTML</button>
+          </div>
+          <div class="desc-textarea" id="lp-desc" contenteditable="true" spellcheck="true" data-placeholder="Generating description..." style="overflow-y:auto" oninput="lpUpdatePublishSummary()"></div>
+          <textarea class="desc-html" id="lp-desc-html" style="display:none" spellcheck="false" oninput="var d=document.getElementById('lp-desc');if(d)d.innerHTML=this.value;lpUpdatePublishSummary()"></textarea>
+        </div>
         <div class="btn-row"><button class="btn-teal" id="lp-regen-btn" onclick="lpGenerateListing()">↺ Regenerate</button></div>
       </div>
       <hr class="divider">
@@ -1691,9 +1708,32 @@ function npSetMode(mode){
 }
 // Shared label for all "pick a piece" dropdowns: EB number · Reference name.
 function pieceLabel(f){const eb=f['EB Number']||'';const ref=(f['Reference name']||'').trim();return eb+(ref?' · '+ref:'');}
+
+// ── Shared piece-dropdown ordering ──
+// Pieces sort by Year (desc) → Type (Airtable order) → Season (Spring→Multi) → Number (asc),
+// all parsed from the EB number (EB-{YY}{SEASON}-{TYPE}-{NNN}).
+const EB_TYPE_RANK   = {WR:0,HD:1,TT:1,OP:2,CP:3,WP:4,HA:5,SW:6,CU:7};          // TT = legacy Home decor
+const EB_SEASON_RANK = {SP:0,SU:1,FA:2,WI:3,AS:4,MS:5};
+function ebSortKey(f){
+  const eb=((f&&f['EB Number'])||'').toUpperCase();
+  const m=eb.match(/^EB-(\d{2})([A-Z]{2})-([A-Z]{2,3})-(\d+)/);
+  if(!m) return {year:-1,type:99,season:99,num:1e9,raw:eb};
+  const tr=EB_TYPE_RANK[m[3]], sr=EB_SEASON_RANK[m[2]];
+  return {year:parseInt(m[1],10), type:(tr==null?98:tr), season:(sr==null?98:sr), num:parseInt(m[4],10), raw:eb};
+}
+function ebSortCompare(fa,fb){
+  const a=ebSortKey(fa), b=ebSortKey(fb);
+  if(a.year!==b.year)     return b.year-a.year;     // Year: descending
+  if(a.type!==b.type)     return a.type-b.type;     // Type: Airtable order
+  if(a.season!==b.season) return a.season-b.season; // Season: Spring→Multi-season
+  if(a.num!==b.num)       return a.num-b.num;        // Number: ascending
+  return a.raw.localeCompare(b.raw);
+}
+// Sort an array of Airtable records (objects with a .fields) for dropdown display.
+function sortPiecesByEB(records){ return records.slice().sort((x,y)=>ebSortCompare(x.fields||{}, y.fields||{})); }
 function npPopulateEditSelect(){
   const sel=document.getElementById('np-edit-select'); if(!sel)return;
-  const recs=allRecords.filter(r=>r.fields['Status']!=='Archived');
+  const recs=sortPiecesByEB(allRecords.filter(r=>r.fields['Status']!=='Archived'));
   sel.innerHTML='<option value="">— pick a piece —</option>'+recs.map(r=>'<option value="'+r.id+'">'+escHtml(pieceLabel(r.fields)||r.id)+'</option>').join('');
   sel.onchange=npLoadRecordForEdit;
 }
@@ -2042,7 +2082,7 @@ function lpStep(n) {
 }
 
 function populateLPSelect() {
-  const listable=allRecords.filter(r=>LISTABLE_STATUSES.includes(r.fields['Status']));
+  const listable=sortPiecesByEB(allRecords.filter(r=>LISTABLE_STATUSES.includes(r.fields['Status'])));
   lpAllListableOpts = listable.map(r=>({value:r.id,label:pieceLabel(r.fields)||r.id}));
   const sel=document.getElementById('lp-eb-select');
   if(listable.length===0){sel.innerHTML='<option value="">— no pieces ready to list —</option>';return;}
@@ -2213,6 +2253,7 @@ async function lpGenerateListing(){
     lpCurrentDesc=(data.description||'').trim();
     if(titleEl)titleEl.value=lpCurrentTitle;
     if(descEl)descEl.innerHTML=lpCurrentDesc;
+    lpDescSyncHtmlBox();
     // Populate SEO meta if AI returned one
     if(data.seo_meta){
       const metaEl=document.getElementById('lp-meta');
@@ -2253,6 +2294,38 @@ async function lpCleanupField(fieldId){
   catch(e){ if(cleanBtn){cleanBtn.disabled=false;cleanBtn.textContent='✓ Fix';} }
 }
 function lpCopyField(vid,bid){navigator.clipboard.writeText(document.getElementById(vid).textContent.trim()).then(()=>{const b=document.getElementById(bid),o=b.textContent;b.textContent='✓';b.classList.add('copied');setTimeout(()=>{b.textContent=o;b.classList.remove('copied');},2000);});}
+
+// ── Description WYSIWYG editor (rich toolbar + HTML source toggle) ──
+// The contenteditable #lp-desc is the canonical source (everything reads its innerHTML).
+// The HTML toggle swaps it for a raw <textarea> that stays synced both ways.
+let lpDescHtmlMode = false;
+function lpDescCmd(cmd){ const el=document.getElementById('lp-desc'); if(!el)return; el.focus(); try{document.execCommand(cmd,false,null);}catch(_){} lpUpdatePublishSummary(); }
+function lpDescToggleHtml(){
+  const div=document.getElementById('lp-desc'), ta=document.getElementById('lp-desc-html'),
+        btn=document.getElementById('lp-desc-htmlbtn'), tools=document.getElementById('lp-desc-format-tools');
+  if(!div||!ta)return;
+  lpDescHtmlMode=!lpDescHtmlMode;
+  if(lpDescHtmlMode){
+    ta.value=div.innerHTML; div.style.display='none'; ta.style.display='block';
+    if(tools)tools.style.display='none'; if(btn)btn.textContent='✓ Visual';
+  } else {
+    div.innerHTML=ta.value; ta.style.display='none'; div.style.display='block';
+    if(tools)tools.style.display='inline-flex'; if(btn)btn.innerHTML='&lt;/&gt; HTML';
+    lpUpdatePublishSummary();
+  }
+}
+// When content is set programmatically (AI regenerate) while the HTML box is open, keep it in sync.
+function lpDescSyncHtmlBox(){ if(!lpDescHtmlMode)return; const div=document.getElementById('lp-desc'), ta=document.getElementById('lp-desc-html'); if(div&&ta)ta.value=div.innerHTML; }
+// Restore the editor to its default visual state (used on reset).
+function lpDescResetEditor(){
+  lpDescHtmlMode=false;
+  const div=document.getElementById('lp-desc'), ta=document.getElementById('lp-desc-html'),
+        tools=document.getElementById('lp-desc-format-tools'), btn=document.getElementById('lp-desc-htmlbtn');
+  if(ta){ta.value='';ta.style.display='none';}
+  if(div)div.style.display='block';
+  if(tools)tools.style.display='inline-flex';
+  if(btn)btn.innerHTML='&lt;/&gt; HTML';
+}
 
 // ── Step 2.3 photos: pick the piece's Google Drive folder, then select photos ──
 let lpLoadedFolderId=null; // guards against wiping the photo selection on back-navigation
@@ -2859,12 +2932,12 @@ async function lpAddVideoToShopify() {
 }
 
 
-function lpReset(){lpSelectedRecord=null;lpPhotoItems=[];lpDriveImages=[];lpDriveLinked=false;lpLoadedFolderId=null;lpFolderSelected=null;lpAllFolders=[];lpLastProductId=null;lpVideoFileId=null;lpVideoFileName=null;lpStepTwoCache={location:'',meta:'',special:''};const fsec=document.getElementById('lp-folder-section');if(fsec)fsec.style.display='none';const vsec=document.getElementById('lp-video-section');if(vsec)vsec.style.display='none';lpCurrentDesc='';lpCurrentTitle='';lpGeneratedFor='';['lp-location','lp-meta','lp-special','lp-title'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});const _lpd=document.getElementById('lp-desc');if(_lpd)_lpd.innerHTML='';lpRenderDisplayLocation('');;const dg=document.getElementById('lp-drive-grid');if(dg)dg.innerHTML='';document.getElementById('lp-eb-select').value='';_clearEbSearch('lp-eb-search','lp-eb-results');document.getElementById('lp-at-preview').style.display='none';document.getElementById('lp-outdoor-warning').style.display='none';const ed=document.getElementById('lp-dims-editor');if(ed)ed.style.display='none';document.getElementById('lp-next-1-btn').disabled=true;document.getElementById('lp-publish-result').style.display='none';const pb=document.getElementById('lp-publish-btn');if(pb){pb.disabled=true;pb.textContent='↑ Publish listing to Shopify';pb.style.background='';pb.style.borderColor='';}lpRenderPhotos();lpStep(1);populateLPSelect();WIP.clear('lp');}
+function lpReset(){lpSelectedRecord=null;lpPhotoItems=[];lpDriveImages=[];lpDriveLinked=false;lpLoadedFolderId=null;lpFolderSelected=null;lpAllFolders=[];lpLastProductId=null;lpVideoFileId=null;lpVideoFileName=null;lpStepTwoCache={location:'',meta:'',special:''};const fsec=document.getElementById('lp-folder-section');if(fsec)fsec.style.display='none';const vsec=document.getElementById('lp-video-section');if(vsec)vsec.style.display='none';lpCurrentDesc='';lpCurrentTitle='';lpGeneratedFor='';['lp-location','lp-meta','lp-special','lp-title'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});const _lpd=document.getElementById('lp-desc');if(_lpd)_lpd.innerHTML='';lpDescResetEditor();lpRenderDisplayLocation('');;const dg=document.getElementById('lp-drive-grid');if(dg)dg.innerHTML='';document.getElementById('lp-eb-select').value='';_clearEbSearch('lp-eb-search','lp-eb-results');document.getElementById('lp-at-preview').style.display='none';document.getElementById('lp-outdoor-warning').style.display='none';const ed=document.getElementById('lp-dims-editor');if(ed)ed.style.display='none';document.getElementById('lp-next-1-btn').disabled=true;document.getElementById('lp-publish-result').style.display='none';const pb=document.getElementById('lp-publish-btn');if(pb){pb.disabled=true;pb.textContent='↑ Publish listing to Shopify';pb.style.background='';pb.style.borderColor='';}lpRenderPhotos();lpStep(1);populateLPSelect();WIP.clear('lp');}
 
 
 // ── MARK AS SOLD ──
 function msStep(n){stepBackFn=n>1?()=>msStep(n-1):null;updateHeaderBackBtn();document.querySelectorAll('#screen-sold .step-block').forEach(s=>s.classList.remove('active'));document.getElementById('ms-step-'+n).classList.add('active');document.getElementById('ms-step-pill').textContent='Step '+n+' of 2';document.getElementById('ms-progress').style.width=(n===1?50:100)+'%';window.scrollTo({top:0,behavior:'smooth'});}
-function populateMSSelect(){const listed=allRecords.filter(r=>r.fields['Status']==='Listed'||r.fields['Status']==='In stock');msAllOpts=listed.map(r=>({value:r.id,label:pieceLabel(r.fields)||r.id}));const sel=document.getElementById('ms-eb-select');if(listed.length===0){sel.innerHTML='<option value="">— no listed pieces —</option>';return;}sel.innerHTML='<option value="">— pick a piece —</option>'+msAllOpts.map(o=>'<option value="'+escHtml(o.value)+'">'+escHtml(o.label)+'</option>').join('');_clearEbSearch('ms-eb-search','ms-eb-results');sel.onchange=()=>{const recId=sel.value;document.getElementById('ms-next-btn').disabled=!recId;if(!recId){msSelectedRecord=null;document.getElementById('ms-piece-preview').style.display='none';return;}msSelectedRecord=allRecords.find(r=>r.id===recId);if(!msSelectedRecord)return;const f=msSelectedRecord.fields;document.getElementById('ms-piece-preview').style.display='block';document.getElementById('ms-piece-preview').innerHTML='<div class="at-preview"><div class="at-preview-title">Selected piece</div><div class="at-grid"><div class="at-field"><div class="at-label">EB Number</div><div class="at-value">'+escHtml(f['EB Number'])+'</div></div><div class="at-field"><div class="at-label">Type</div><div class="at-value">'+escHtml(f['Type']||'—')+'</div></div><div class="at-field"><div class="at-label">Price</div><div class="at-value">'+(f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—')+'</div></div></div></div>';};}
+function populateMSSelect(){const listed=sortPiecesByEB(allRecords.filter(r=>r.fields['Status']==='Listed'||r.fields['Status']==='In stock'));msAllOpts=listed.map(r=>({value:r.id,label:pieceLabel(r.fields)||r.id}));const sel=document.getElementById('ms-eb-select');if(listed.length===0){sel.innerHTML='<option value="">— no listed pieces —</option>';return;}sel.innerHTML='<option value="">— pick a piece —</option>'+msAllOpts.map(o=>'<option value="'+escHtml(o.value)+'">'+escHtml(o.label)+'</option>').join('');_clearEbSearch('ms-eb-search','ms-eb-results');sel.onchange=()=>{const recId=sel.value;document.getElementById('ms-next-btn').disabled=!recId;if(!recId){msSelectedRecord=null;document.getElementById('ms-piece-preview').style.display='none';return;}msSelectedRecord=allRecords.find(r=>r.id===recId);if(!msSelectedRecord)return;const f=msSelectedRecord.fields;document.getElementById('ms-piece-preview').style.display='block';document.getElementById('ms-piece-preview').innerHTML='<div class="at-preview"><div class="at-preview-title">Selected piece</div><div class="at-grid"><div class="at-field"><div class="at-label">EB Number</div><div class="at-value">'+escHtml(f['EB Number'])+'</div></div><div class="at-field"><div class="at-label">Type</div><div class="at-value">'+escHtml(f['Type']||'—')+'</div></div><div class="at-field"><div class="at-label">Price</div><div class="at-value">'+(f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—')+'</div></div></div></div>';};}
 function msSelectChannel(el,channel){document.querySelectorAll('#screen-sold .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');msSelectedChannel=channel;}
 async function msConfirmSale(){if(!msSelectedRecord||!msSelectedChannel){alert('Select a piece and sale channel.');return;}const salePrice=document.getElementById('ms-sale-price').value.trim();const saleDate=document.getElementById('ms-sale-date').value;const btn=document.getElementById('ms-confirm-btn');btn.disabled=true;btn.textContent='⏳ Recording...';setStatus('ms','Marking as sold...','loading');try{await markSold(msSelectedRecord,msSelectedChannel,salePrice,saleDate);const result=document.getElementById('ms-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(msSelectedRecord.fields['EB Number'])+'</strong> marked as sold via '+msSelectedChannel+'.';btn.textContent='✓ Done!';setStatus('ms','Sale recorded ✓','success');populateHomeStats();populateMSSelect();populateLPSelect();populateCFInventory();setTimeout(()=>hideStatus('ms'),4000);}catch(e){setStatus('ms','Error: '+e.message,'error');btn.disabled=false;btn.textContent='✓ Mark as sold';}}
 async function markSold(record,channel,salePrice,saleDate){const f=record.fields;const atFields={'Status':'Sold','Sales channel':channel};if(salePrice)atFields['Price ($)']=parseFloat(salePrice);if(saleDate)atFields['Date sold']=saleDate;await airtableFetch('/'+record.id,{method:'PATCH',body:JSON.stringify({fields:atFields})});Object.assign(f,atFields);try{await fetch(SERVER_URL+'/mark-sold',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shopify_url:f['Shopify URL'],eb_number:f['EB Number']})});}catch(e){console.warn('Shopify mark sold failed:',e.message);}}
@@ -2895,8 +2968,8 @@ function avScreenInit() {
   document.getElementById('av-video-section').style.display = 'none';
   document.getElementById('av-step-pill').textContent = 'Select piece';
   // Build opts from listed pieces
-  avAllListedOpts = allRecords
-    .filter(r => r.fields['Status'] === 'Listed' && r.fields['Shopify URL'])
+  avAllListedOpts = sortPiecesByEB(allRecords
+    .filter(r => r.fields['Status'] === 'Listed' && r.fields['Shopify URL']))
     .map(r => ({ value: r.id, label: pieceLabel(r.fields) || r.id }));
   // Auto-select last published if available
   if (lastPublishedProduct && lastPublishedProduct.eb) {
