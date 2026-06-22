@@ -32,7 +32,7 @@ const AT_COSTS_TBL     = 'Costs';
 // ── Token stores ─────────────────────────────────────────────
 let shopifyAccessToken = process.env.SHOPIFY_TOKEN || null;
 let googleAccessToken  = null;
-let googleRefreshToken = null;
+let googleRefreshToken = process.env.GOOGLE_REFRESH_TOKEN || null;
 let googleTokenExpiry  = 0;
 
 // ── Airtable helper ───────────────────────────────────────────
@@ -146,13 +146,16 @@ app.get('/auth/callback', async (req, res) => {
     const tokenData = await tokenRes.json();
     if (tokenData.access_token) {
       shopifyAccessToken = tokenData.access_token;
-      console.log('✓ Shopify OAuth complete');
+      console.log('✓ Shopify OAuth complete. Set this in Render → SHOPIFY_TOKEN =', shopifyAccessToken);
       res.send(`<html><head><meta charset="utf-8">
         <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
-        <style>body{font-family:'Poppins',system-ui,sans-serif;background:#fbfaf9;color:#2b2622;padding:48px 40px;max-width:500px;margin:0 auto;line-height:1.7}h2{font-family:'DM Serif Display',Georgia,serif;font-weight:400;color:#bb8588;font-size:28px;margin-bottom:10px}p{color:#5b5248;font-size:14px}</style>
+        <style>body{font-family:'Poppins',system-ui,sans-serif;background:#fbfaf9;color:#2b2622;padding:48px 40px;max-width:560px;margin:0 auto;line-height:1.7}h2{font-family:'DM Serif Display',Georgia,serif;font-weight:400;color:#bb8588;font-size:28px;margin-bottom:10px}p{color:#5b5248;font-size:14px}code{display:block;word-break:break-all;background:#f3f3f6;border:1px solid #e9e6e2;padding:10px 12px;border-radius:6px;font-size:13px;margin:8px 0;font-family:ui-monospace,Menlo,monospace}.warn{font-size:12px;color:#7a4a0a;background:#fefbec;border:1px solid #eea211;border-radius:6px;padding:10px 12px;margin-top:16px}</style>
         </head><body>
         <h2>✓ Shopify connected</h2>
-        <p>You can close this tab and return to the listing assistant.</p>
+        <p><strong>Make it permanent:</strong> copy the value below into Render as the <code style="display:inline;padding:2px 6px;margin:0">SHOPIFY_TOKEN</code> environment variable, then redeploy. After that, Shopify stays connected across server restarts and you won't need to do this again.</p>
+        <code>${shopifyAccessToken}</code>
+        <div class="warn">⚠ This is a secret — don't share or screenshot it for anyone. Once SHOPIFY_TOKEN is set in Render you can ignore this page.</div>
+        <p style="margin-top:16px">You can close this tab and return to the Studio.</p>
         </body></html>`);
     } else {
       res.status(400).send('Failed to get access token: ' + JSON.stringify(tokenData));
@@ -195,16 +198,18 @@ app.get('/drive-auth/callback', async (req, res) => {
     const d = await r.json();
     if (d.access_token) {
       googleAccessToken  = d.access_token;
-      googleRefreshToken = d.refresh_token;
+      if (d.refresh_token) googleRefreshToken = d.refresh_token;  // prompt=consent returns one each time; never overwrite with undefined
       googleTokenExpiry  = Date.now() + (d.expires_in || 3600) * 1000;
-      console.log('✓ Google Drive OAuth complete');
+      console.log('✓ Google Drive OAuth complete. Set this in Render → GOOGLE_REFRESH_TOKEN =', googleRefreshToken);
       res.send(`<html><head><meta charset="utf-8">
         <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
-        <style>body{font-family:'Poppins',system-ui,sans-serif;background:#fbfaf9;color:#2b2622;padding:48px 40px;max-width:500px;margin:0 auto;line-height:1.7}h2{font-family:'DM Serif Display',Georgia,serif;font-weight:400;color:#bb8588;font-size:28px;margin-bottom:10px}p{color:#5b5248;font-size:14px}.muted{font-size:12px;color:#aea498;margin-top:20px}a{color:#bb8588}</style>
+        <style>body{font-family:'Poppins',system-ui,sans-serif;background:#fbfaf9;color:#2b2622;padding:48px 40px;max-width:560px;margin:0 auto;line-height:1.7}h2{font-family:'DM Serif Display',Georgia,serif;font-weight:400;color:#bb8588;font-size:28px;margin-bottom:10px}p{color:#5b5248;font-size:14px}code{display:block;word-break:break-all;background:#f3f3f6;border:1px solid #e9e6e2;padding:10px 12px;border-radius:6px;font-size:13px;margin:8px 0;font-family:ui-monospace,Menlo,monospace}.warn{font-size:12px;color:#7a4a0a;background:#fefbec;border:1px solid #eea211;border-radius:6px;padding:10px 12px;margin-top:16px}.muted{font-size:12px;color:#aea498;margin-top:20px}a{color:#bb8588}</style>
         </head><body>
         <h2>✓ Google Drive connected</h2>
-        <p>The backlog catchup tool can now read and organize your Listing Photos folder.</p>
-        <p>You can close this tab and return to the Studio.</p>
+        <p><strong>Make it permanent:</strong> copy the value below into Render as the <code style="display:inline;padding:2px 6px;margin:0">GOOGLE_REFRESH_TOKEN</code> environment variable, then redeploy. After that, Drive stays connected across server restarts.</p>
+        <code>${googleRefreshToken || '(no refresh token returned — visit /drive-auth again)'}</code>
+        <div class="warn">⚠ This is a secret — don't share or screenshot it for anyone. Once GOOGLE_REFRESH_TOKEN is set in Render you can ignore this page.</div>
+        <p style="margin-top:16px">You can close this tab and return to the Studio.</p>
         <p class="muted">Health check: <a href="/health">/health</a></p>
         </body></html>`);
     } else {
