@@ -125,6 +125,10 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .lp-folder-linked{display:flex;align-items:center;gap:10px;background:var(--teal-bg);border:1.5px solid var(--teal-light);border-radius:var(--radius-sm);padding:11px 13px;margin-bottom:8px}
 .thumb-row{display:flex;gap:6px;overflow-x:auto;padding:2px 0}
 .thumb-row img{width:62px;height:62px;object-fit:cover;border-radius:8px;border:1px solid var(--border);flex-shrink:0;background:#fff}
+.thumb-row-zoom img{cursor:zoom-in;transition:outline .1s}
+.thumb-row img.sel{outline:3px solid var(--rose);outline-offset:-2px}
+.np-bigpreview{margin-top:8px}
+.np-bigpreview img{width:100%;max-height:340px;object-fit:contain;background:#fff;border:1px solid var(--border);border-radius:12px;cursor:zoom-out;display:block}
 /* ── Video panel ── */
 .lp-video-panel{border:1.5px dashed var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;margin-top:10px}
 .lp-video-panel.found{border-color:var(--teal);background:var(--teal-bg)}
@@ -467,7 +471,7 @@ button:active{transform:scale(.97)}
       <div class="field"><label>Reference name <span style="color:var(--rose)">*</span></label><input type="text" id="np-ref-name" required placeholder="e.g. Cozy autumn door wreath"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">A short, temporary name to recognize this piece in lists.</div></div>
       <div class="grid-2">
         <div class="field"><label>Year</label><select id="np-year"><option value="26">2026</option><option value="27">2027</option><option value="28">2028</option></select></div>
-        <div class="field"><label>Type</label><select id="np-type"><option value="WR">Wreath</option><option value="TT">Home decor</option><option value="OP">Outdoor planter</option><option value="CP">Centerpiece</option><option value="WP">Wall decor</option><option value="HA">Hanging</option><option value="SW">Swag</option><option value="CU">Custom order</option></select></div>
+        <div class="field"><label>Type</label><select id="np-type"><option value="WR">Wreath</option><option value="HD">Home decor</option><option value="OP">Outdoor planter</option><option value="CP">Centerpiece</option><option value="WP">Wall decor</option><option value="HA">Hanging</option><option value="SW">Swag</option><option value="CU">Custom order</option></select></div>
       </div>
       <div class="field"><label>Season</label><div id="np-season" class="chip-checks"></div></div>
       <div class="grid-2">
@@ -494,6 +498,7 @@ button:active{transform:scale(.97)}
     <div class="step-block" id="np-step-2">
       <div id="np-eb-display" class="eb-display"><div class="eb-label">EB Number assigned</div><div class="eb-number" id="np-eb-num">EB-26SP-WR-001</div><div class="eb-sub">Write this on the physical hang tag now</div><div class="qr-container"><img id="np-qr-img" src="" alt="QR code"></div></div>
       <div class="btn-row" style="margin-top:10px;margin-bottom:4px"><button class="btn btn-full" onclick="printQRTag(npCurrentEB, (allRecords.find(r=>r.fields['EB Number']===npCurrentEB)||{fields:{}}).fields['Price ($)']||'')">🏷 Print QR tag</button></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin:0 2px 14px;cursor:pointer"><input type="checkbox" id="np-tag-printed" onchange="npToggleTagPrinted(this.checked)" style="width:16px;height:16px;accent-color:var(--sage)"> I've printed a copy of this tag</label>
       <div style="margin-bottom:16px">
         <div class="section-label">Photo status</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -1114,7 +1119,7 @@ const SERVER_URL = 'https://eb-shopify-server.onrender.com';
 const SHOPIFY_BASE = 'https://eternalbloomsbypatti.com/products/';
 const DEFAULT_COST_PCT = 66; // Default cost as % of price — change here to update the global default
 const LISTABLE_STATUSES = ['In stock','Photographed','Ready to list'];
-const TYPE_CODES = {WR:'Wreath',TT:'Home decor',OP:'Outdoor planter',CP:'Centerpiece',WP:'Wall decor',HA:'Hanging',SW:'Swag',CU:'Custom order'};
+const TYPE_CODES = {WR:'Wreath',HD:'Home decor',OP:'Outdoor planter',CP:'Centerpiece',WP:'Wall decor',HA:'Hanging',SW:'Swag',CU:'Custom order'};
 const SEASON_NAMES = {SP:'Spring',SU:'Summer',FA:'Fall',WI:'Winter',AS:'All Season'};
 // Season name → 2-letter EB code. Multiple seasons → MS (multi-season), or AS when "All Season" is among them.
 const SEASON_CODE = {Spring:'SP',Summer:'SU',Fall:'FA',Winter:'WI','All Season':'AS'};
@@ -1572,6 +1577,7 @@ function npStep(n) {
   document.getElementById('np-step-'+n).classList.add('active');
   document.getElementById('np-step-pill').textContent = 'Step '+n+' of 4';
   document.getElementById('np-progress').style.width = (n*25)+'%';
+  if(n===2){ const cb=document.getElementById('np-tag-printed'); if(cb){ const rec=(npCurrentRecordId&&allRecords.find(r=>r.id===npCurrentRecordId))||allRecords.find(r=>r.fields['EB Number']===npCurrentEB); cb.checked=!!(rec&&rec.fields['Tag printed']); } }
   wipSaveNP(); window.scrollTo({top:0,behavior:'smooth'});
 }
 document.getElementById('np-type').addEventListener('change', function() { document.getElementById('np-outdoor-warning').style.display = this.value==='OP'?'block':'none'; });
@@ -1652,8 +1658,21 @@ async function npFolderRenderPreview(folderId){
     const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not load photos');
     const imgs=(d.files||[]).slice(0,6), total=d.total!=null?d.total:(d.files||[]).length;
     if(!imgs.length){ box.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:6px 0">No photos in this folder yet.</div>'; return; }
-    box.innerHTML='<div class="thumb-row">'+imgs.map(f=>'<img src="'+(f.thumbnailLink||'')+'" alt="'+escHtml(f.name)+'" referrerpolicy="no-referrer">').join('')+'</div>'+(total>imgs.length?'<div style="font-size:11px;color:var(--text-muted);margin-top:3px">+'+(total-imgs.length)+' more</div>':'');
+    box.innerHTML='<div class="thumb-row thumb-row-zoom">'+imgs.map(f=>'<img src="'+(f.thumbnailLink||'')+'" data-full="'+escHtml(driveUpsize(f.thumbnailLink||''))+'" alt="'+escHtml(f.name)+'" referrerpolicy="no-referrer" onclick="npFolderBigPreview(this)">').join('')+'</div>'+(total>imgs.length?'<div style="font-size:11px;color:var(--text-muted);margin-top:3px">+'+(total-imgs.length)+' more</div>':'')+'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">Tap a photo to enlarge it below for reference.</div><div id="np-folder-bigpreview" class="np-bigpreview" style="display:none"></div>';
   }catch(e){ box.innerHTML='<div style="font-size:11px;color:var(--rose);padding:6px 0">⚠ '+escHtml(e.message)+'</div>'; }
+}
+// Request a larger render of a Google Drive thumbnail link (they end with =s220 / =w200-h150).
+function driveUpsize(t){ if(!t) return t; if(/=s\d+/i.test(t)) return t.replace(/=s\d+(-[a-z0-9]+)*/i,'=s1200'); if(/=w\d+-h\d+/i.test(t)) return t.replace(/=w\d+-h\d+(-[a-z0-9]+)*/i,'=s1200'); return t; }
+// Click a Step 1.1 thumbnail → show it large beneath the row (toggle off on re-tap or tapping the big image).
+function npFolderBigPreview(imgEl){
+  const box=document.getElementById('np-folder-bigpreview'); if(!box||!imgEl)return;
+  const full=imgEl.getAttribute('data-full')||imgEl.src;
+  const row=imgEl.parentElement;
+  if(box.style.display!=='none' && box.dataset.src===full){ box.style.display='none'; box.dataset.src=''; row.querySelectorAll('img').forEach(t=>t.classList.remove('sel')); return; }
+  box.dataset.src=full;
+  box.innerHTML='<img src="'+escHtml(full)+'" referrerpolicy="no-referrer" alt="enlarged preview" onclick="this.parentElement.style.display=\'none\';this.parentElement.dataset.src=\'\';">';
+  box.style.display='block';
+  row.querySelectorAll('img').forEach(t=>t.classList.remove('sel')); imgEl.classList.add('sel');
 }
 
 // ── ADD / EDIT MODE ──
@@ -1819,7 +1838,7 @@ async function npGenerateEB() {
     const qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=140x140&data='+encodeURIComponent(SHOPIFY_BASE+ebNumber.toLowerCase());
     document.getElementById('np-qr-img').src=qrUrl;
     document.getElementById('np-eb-num').textContent=ebNumber;
-    hideStatus('np'); npStep(2); npCurrentRecordId=result.id;
+    hideStatus('np'); npCurrentRecordId=result.id; npSetPhotoStatus(npSelectedFolder?'done':'needed'); npStep(2);
   } catch(e) { setStatus('np','Error: '+e.message,'error'); }
 }
 
@@ -1837,7 +1856,7 @@ async function npSaveEdit() {
     const qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=140x140&data='+encodeURIComponent(SHOPIFY_BASE+(npCurrentEB||'').toLowerCase());
     document.getElementById('np-qr-img').src=qrUrl;
     document.getElementById('np-eb-num').textContent=npCurrentEB;
-    hideStatus('np'); npStep(2);
+    hideStatus('np'); npSetPhotoStatus(npSelectedFolder?'done':'needed'); npStep(2);
   } catch(e) { setStatus('np','Error: '+e.message,'error'); }
 }
 
@@ -1928,6 +1947,15 @@ function npReset() {
   const btn=document.getElementById('np-mark-photo-btn'); btn.disabled=false; btn.textContent='📷 Mark as Photographed in Airtable'; btn.style.background=''; btn.style.borderColor='';
   hideStatus('np'); hideStatus('np-photo'); npCurrentEB=''; npCurrentRecordId=null; npPhotoStatus='needed';
   WIP.clear('np'); npStep(1);
+}
+
+// Persist the "I've printed a copy of this tag" checkbox (Step 1.2) to Airtable.
+async function npToggleTagPrinted(checked){
+  const rec=(npCurrentRecordId&&allRecords.find(r=>r.id===npCurrentRecordId))||allRecords.find(r=>r.fields['EB Number']===npCurrentEB);
+  const id=npCurrentRecordId||(rec&&rec.id);
+  if(!id) return;
+  try{ await airtableFetch('/'+id,{method:'PATCH',body:JSON.stringify({fields:{'Tag printed':checked}})}); if(rec)rec.fields['Tag printed']=checked; }
+  catch(e){ const cb=document.getElementById('np-tag-printed'); if(cb)cb.checked=!checked; alert('Could not save: '+e.message); }
 }
 
 function npSetPhotoStatus(status) {
@@ -3088,8 +3116,12 @@ function ptRender(filter) {
     const color=statusColor[status]||'var(--text-muted)';
     const photoUrl=f['Photo URL']||'';
     const thumb=photoUrl?'<img src="'+photoUrl+'" style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--border);cursor:pointer" onclick="ptPromptPhoto(\''+r.id+'\',\''+escHtml(eb)+'\')" title="Tap to update photo">':'<div onclick="ptPromptPhoto(\''+r.id+'\',\''+escHtml(eb)+'\')" title="Tap to add photo" style="width:48px;height:48px;border-radius:6px;background:var(--ivory-dark);flex-shrink:0;border:1.5px dashed var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px">📷</div>';
-    return'<div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow-sm)">'+thumb+'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800;color:var(--text)">'+escHtml(eb)+'</div>'+(refName?'<div style="font-size:12px;color:var(--text);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(refName)+'</div>':'')+'<div style="font-size:11px;color:var(--text-muted);margin-top:1px">'+escHtml(detail)+'</div><div style="font-size:10px;margin-top:3px;display:flex;gap:8px;align-items:center"><span style="color:'+color+';font-weight:700">'+escHtml(status)+'</span>'+(dateMade?'<span style="color:var(--text-muted)">'+escHtml(dateMade)+'</span>':'')+'</div></div><button onclick="printQRTag(\''+escHtml(eb)+'\',\''+(f['Price ($)']!=null?String(f['Price ($)']):'')+'\')" style="flex-shrink:0;background:var(--sage);color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer">🏷 Print</button></div>';
+    return'<div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow-sm)">'+thumb+'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800;color:var(--text)">'+escHtml(eb)+'</div>'+(refName?'<div style="font-size:12px;color:var(--text);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(refName)+'</div>':'')+'<div style="font-size:11px;color:var(--text-muted);margin-top:1px">'+escHtml(detail)+'</div><div style="font-size:10px;margin-top:3px;display:flex;gap:8px;align-items:center"><span style="color:'+color+';font-weight:700">'+escHtml(status)+'</span>'+(dateMade?'<span style="color:var(--text-muted)">'+escHtml(dateMade)+'</span>':'')+'<div style="margin-top:6px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="pt-tp-'+r.id+'" '+(f['Tag printed']?'checked':'')+' onchange="ptToggleTagPrinted(\''+r.id+'\',this.checked)" style="width:14px;height:14px;accent-color:var(--sage)"> Tag printed</label></div></div><button onclick="printQRTag(\''+escHtml(eb)+'\',\''+(f['Price ($)']!=null?String(f['Price ($)']):'')+'\')" style="flex-shrink:0;background:var(--sage);color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer">🏷 Print</button></div>';
   }).join('');
+}
+async function ptToggleTagPrinted(recordId, checked) {
+  try { await airtableFetch('/'+recordId,{method:'PATCH',body:JSON.stringify({fields:{'Tag printed':checked}})}); const rec=allRecords.find(r=>r.id===recordId); if(rec)rec.fields['Tag printed']=checked; }
+  catch(e){ const cb=document.getElementById('pt-tp-'+recordId); if(cb)cb.checked=!checked; alert('Could not save: '+e.message); }
 }
 async function ptPromptPhoto(recordId, ebNumber) {
   const url = prompt('Paste the Shopify image URL for ' + ebNumber + ':','');
