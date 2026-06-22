@@ -2379,6 +2379,9 @@ async function lpPublish(){
   const isOutdoor=f['Type']==='Outdoor planter';
   const descEl=document.getElementById('lp-desc');
   const desc=descEl?descEl.value.trim():'';
+  // Description is now HTML (from the AI). Pass HTML through untouched; only wrap
+  // plain text (e.g. hand-typed) in paragraphs so Shopify still renders it cleanly.
+  const bodyHtml = !desc ? '' : (/<(p|ul|ol|li|strong|em|br|h[1-6])\b[^>]*>/i.test(desc) ? desc : '<p>'+desc.replace(/\n{2,}/g,'</p><p>').replace(/\n/g,'<br>')+'</p>');
   const btn=document.getElementById('lp-publish-btn'),result=document.getElementById('lp-publish-result');
   btn.disabled=true;btn.textContent='⏳ Preparing photos...';result.style.display='none';
   setStatus('lp','Optimizing photos for Shopify...','loading');
@@ -2387,7 +2390,7 @@ async function lpPublish(){
   btn.textContent='⏳ Publishing...';setStatus('lp','Publishing to Shopify...','loading');
   try {
     const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),90000);
-    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:desc?'<p>'+desc.replace(/\n/g,'</p><p>')+'</p>':'',sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images})});
+    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images})});
     clearTimeout(timeout);const data=await res.json();
     if(!res.ok||!data.success) throw new Error(data.error||'Publish failed');
     try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;if(meta)photoFields['Listing Meta Description']=meta;await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:photoFields})});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;if(meta)rec.fields['Listing Meta Description']=meta;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
