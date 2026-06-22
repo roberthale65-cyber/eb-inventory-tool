@@ -536,11 +536,23 @@ app.post('/generate-description', async (req, res) => {
   const { eb_number, reference_name, type, season, holiday, colors, dimensions, materials, location, special, notes, images } = req.body;
   const textPrompt = `You write product listings for Eternal Blooms Designs, a handmade artificial flower arrangement business in Omaha, Nebraska. Each piece is completely one of a kind — no two are ever the same.
 
-Write a Shopify product listing for this piece: a TITLE and a DESCRIPTION.
+Write a Shopify product listing for this piece: a TITLE, a DESCRIPTION, and an SEO_META.
 
-TITLE — a concise, Shopify-SEO-optimized product title, roughly 4 to 9 words. Lead with the most searchable, evocative descriptors a shopper would type (color, style, key flower, occasion, arrangement type). Use Title Case. Do NOT include any EB/SKU code, quotation marks, or the word "title".
+TITLE — a Shopify-SEO-optimized product title, BETWEEN 60 AND 80 CHARACTERS long (count the characters; this range optimizes for SEO and avoids search-result truncation — never go under 60 or over 80).
+- Begin with the clearest PRIMARY KEYWORD — the exact term a shopper is most likely to search for (usually the arrangement type with its standout descriptor, e.g. "Fall Door Wreath", "Floral Centerpiece"). It must come at the very beginning.
+- Use the Maker's working name / Reference name (in the piece details below) as your BASE, then refine and expand it into a polished, keyword-led title that satisfies these rules.
+- Use Title Case (capitalize the first letter of every significant word).
+- Write any numbers as digits (e.g. "3", never "three").
+- Do NOT include any EB/SKU code, quotation marks, or the word "title".
 
-DESCRIPTION — elegant and creative, like a boutique shop description. Write ABOUT the piece itself, not about the maker. No first person ("I", "my"), no mention of Patti or the maker at all. Focus entirely on the piece — its colors, textures, mood, and where it belongs in someone's home. Keep it to 3–4 sentences, evocative but professional and polished. End with a closing sentence that celebrates the handcrafted individuality of this specific piece — its particular beauty as made — without implying it can never be recreated or that no similar piece could ever exist.${images && images.length > 0 ? '\n\nPhoto(s) of the actual piece are attached — use what you can see in the photos to write the most accurate and evocative title and description possible.' : ''}
+DESCRIPTION — return as clean, minimal HTML; it is published directly as the Shopify product description. Aim for 150–400 words of scannable, engaging, boutique-style copy. Write ABOUT the piece, not the maker — no first person ("I", "my"), and no mention of Patti or any maker.
+- FRONT-LOAD the single most compelling benefit in the first one or two sentences so mobile shoppers see it immediately, and include the PRIMARY KEYWORD in that opening sentence.
+- Keep every paragraph to 2–3 sentences maximum to avoid walls of text on mobile.
+- Use ONE short bold sub-header before the detail list (and optionally one more) to break up sections and create white space.
+- Include a structured BULLET LIST of concrete details: colors, key flowers/materials, best display location, and seasonal or occasion fit. (Exact dimensions are appended automatically after your description — do NOT list them.)
+- Naturally weave in keyword synonyms throughout for SEO, without keyword-stuffing.
+- Allowed HTML tags ONLY, and with NO attributes: <p>, <strong>, <ul>, <li>, <br>. Use <p><strong>Sub-header</strong></p> for a bold header. Do NOT use markdown, heading tags, inline styles, classes, or any tag attributes.
+- Return the HTML as a SINGLE LINE with no literal line breaks inside the JSON string.${images && images.length > 0 ? '\n\nPhoto(s) of the actual piece are attached — use what you can see in the photos to write the most accurate, keyword-rich title and description possible.' : ''}
 
 Piece details:
 - Type: ${type || 'arrangement'}
@@ -551,7 +563,7 @@ Piece details:
 - Key materials / flowers: ${materials || 'not specified'}
 - Best display location: ${location || 'not specified'}
 - Maker notes: ${(notes || '') + (special ? ' ' + special : '') || 'none'}
-- Maker's working name (internal hint only — do NOT copy this verbatim into the title or description): ${reference_name || 'none'}
+- Maker's working name / Reference name (use this as the BASE for the title, refined and expanded for SEO; you may also draw on it for the description): ${reference_name || 'none'}
 
 SEO_META — a Google meta description for search results, 140-160 characters. Must include 2-3 of the strongest keywords from the title. Describe the piece enticingly as if coaxing a click. Do not open with the exact title text. Do not exceed 160 characters.
 
@@ -575,20 +587,27 @@ Return ONLY valid JSON in exactly this shape, with no markdown, no code fences, 
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 600, messages: [{ role: 'user', content: messageContent }] })
+      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 1200, messages: [{ role: 'user', content: messageContent }] })
     });
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json({ error: data.error?.message || 'Anthropic API error' });
     const raw = data.content && data.content[0] && data.content[0].text ? data.content[0].text.trim() : '';
-    // Model is asked for {"title","description"} JSON; parse tolerantly and fall back to raw text as the description.
+    // Model is asked for {"title","description","seo_meta"} JSON; parse tolerantly and fall back to raw text.
     let title = '', description = '', seo_meta = '';
-    try {
-      const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
-      const parsed = JSON.parse(s >= 0 && e > s ? raw.slice(s, e + 1) : raw);
+    const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
+    const jsonStr = (s >= 0 && e > s) ? raw.slice(s, e + 1) : raw;
+    let parsed = null;
+    try { parsed = JSON.parse(jsonStr); }
+    catch(_) {
+      // The HTML description can occasionally arrive with literal line breaks that
+      // break JSON.parse — collapse them and retry before giving up.
+      try { parsed = JSON.parse(jsonStr.replace(/\r?\n/g, ' ')); } catch(__) {}
+    }
+    if (parsed) {
       title = (parsed.title || '').trim();
       description = (parsed.description || '').trim();
       seo_meta = (parsed.seo_meta || '').trim();
-    } catch(_) { description = raw; }
+    } else { description = raw; }
     res.json({ success: true, title, description, seo_meta });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
