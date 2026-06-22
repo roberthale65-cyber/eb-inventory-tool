@@ -498,7 +498,7 @@ async function loadInventory() {
 }
 
 // ── Piece-dropdown ordering: Year (desc) → Type → Season → Number, parsed from the EB number ──
-const EB_TYPE_RANK   = {WR:0,HD:1,TT:1,OP:2,CP:3,WP:4,HA:5,SW:6,CU:7};
+const EB_TYPE_RANK   = {WR:0,HD:1,TT:1,OP:2,CP:3,WD:4,WP:4,HA:5,SW:6,CU:7};
 const EB_SEASON_RANK = {SP:0,SU:1,FA:2,WI:3,AS:4,MS:5};
 function ebSortKey(f){
   const eb=((f&&f['EB Number'])||'').toUpperCase();

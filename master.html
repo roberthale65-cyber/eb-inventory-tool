@@ -477,7 +477,7 @@ button:active{transform:scale(.97)}
       <div class="field"><label>Reference name <span style="color:var(--rose)">*</span></label><input type="text" id="np-ref-name" required placeholder="e.g. Cozy autumn door wreath"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">A short, temporary name to recognize this piece in lists.</div></div>
       <div class="grid-2">
         <div class="field"><label>Year</label><select id="np-year"><option value="26">2026</option><option value="27">2027</option><option value="28">2028</option></select></div>
-        <div class="field"><label>Type</label><select id="np-type"><option value="WR">Wreath</option><option value="HD">Home decor</option><option value="OP">Outdoor planter</option><option value="CP">Centerpiece</option><option value="WP">Wall decor</option><option value="HA">Hanging</option><option value="SW">Swag</option><option value="CU">Custom order</option></select></div>
+        <div class="field"><label>Type</label><select id="np-type"><option value="WR">Wreath</option><option value="HD">Home decor</option><option value="OP">Outdoor planter</option><option value="CP">Centerpiece</option><option value="WD">Wall decor</option><option value="HA">Hanging</option><option value="SW">Swag</option><option value="CU">Custom order</option></select></div>
       </div>
       <div class="field"><label>Season</label><div id="np-season" class="chip-checks"></div></div>
       <div class="grid-2">
@@ -1137,7 +1137,7 @@ const SERVER_URL = 'https://eb-shopify-server.onrender.com';
 const SHOPIFY_BASE = 'https://eternalbloomsbypatti.com/products/';
 const DEFAULT_COST_PCT = 66; // Default cost as % of price — change here to update the global default
 const LISTABLE_STATUSES = ['In stock','Photographed','Ready to list'];
-const TYPE_CODES = {WR:'Wreath',HD:'Home decor',OP:'Outdoor planter',CP:'Centerpiece',WP:'Wall decor',HA:'Hanging',SW:'Swag',CU:'Custom order'};
+const TYPE_CODES = {WR:'Wreath',HD:'Home decor',OP:'Outdoor planter',CP:'Centerpiece',WD:'Wall decor',HA:'Hanging',SW:'Swag',CU:'Custom order'};
 const SEASON_NAMES = {SP:'Spring',SU:'Summer',FA:'Fall',WI:'Winter',AS:'All Season'};
 // Season name → 2-letter EB code. Multiple seasons → MS (multi-season), or AS when "All Season" is among them.
 const SEASON_CODE = {Spring:'SP',Summer:'SU',Fall:'FA',Winter:'WI','All Season':'AS'};
@@ -1712,7 +1712,7 @@ function pieceLabel(f){const eb=f['EB Number']||'';const ref=(f['Reference name'
 // ── Shared piece-dropdown ordering ──
 // Pieces sort by Year (desc) → Type (Airtable order) → Season (Spring→Multi) → Number (asc),
 // all parsed from the EB number (EB-{YY}{SEASON}-{TYPE}-{NNN}).
-const EB_TYPE_RANK   = {WR:0,HD:1,TT:1,OP:2,CP:3,WP:4,HA:5,SW:6,CU:7};          // TT = legacy Home decor
+const EB_TYPE_RANK   = {WR:0,HD:1,TT:1,OP:2,CP:3,WD:4,WP:4,HA:5,SW:6,CU:7};      // TT = legacy Home decor, WP = legacy Wall decor
 const EB_SEASON_RANK = {SP:0,SU:1,FA:2,WI:3,AS:4,MS:5};
 function ebSortKey(f){
   const eb=((f&&f['EB Number'])||'').toUpperCase();
