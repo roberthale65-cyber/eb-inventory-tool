@@ -827,7 +827,7 @@ app.get('/drive-folder-videos', async (req, res) => {
 // because the signed URL is not a V4 query-param signed URL.
 app.post('/shopify-add-video', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Shopify not authorized — visit /auth' });
-  const { productId, fileId, fileName } = req.body;
+  const { productId, fileId, fileName, position } = req.body;
   if (!productId || !fileId) return res.status(400).json({ error: 'productId and fileId required' });
   try {
     const token = await getValidGoogleToken();
@@ -880,7 +880,7 @@ app.post('/shopify-add-video', async (req, res) => {
 
     // 5. Attach the confirmed GCS resource to the Shopify product
     const gidProductId = String(productId).startsWith('gid://') ? String(productId) : `gid://shopify/Product/${productId}`;
-    const mediaMutation = `mutation productCreateMedia($media:[CreateMediaInput!]!,$productId:ID!){productCreateMedia(media:$media,productId:$productId){media{alt mediaContentType status}mediaUserErrors{field message}}}`;
+    const mediaMutation = `mutation productCreateMedia($media:[CreateMediaInput!]!,$productId:ID!){productCreateMedia(media:$media,productId:$productId){media{id alt mediaContentType status}mediaUserErrors{field message}}}`;
     const mediaRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/graphql.json`, {
       method: 'POST',
       headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
@@ -892,9 +892,33 @@ app.post('/shopify-add-video', async (req, res) => {
     const mediaData = await mediaRes.json();
     const mediaErrors = mediaData?.data?.productCreateMedia?.mediaUserErrors || [];
     if (mediaErrors.length) throw new Error(mediaErrors.map(e=>e.message).join(', '));
+    const createdMedia = mediaData?.data?.productCreateMedia?.media || [];
 
-    console.log(`Video uploaded: ${name} (${Math.round(videoBuffer.length/1024/1024)}MB) → product ${productId}`);
-    res.json({ success: true, media: mediaData?.data?.productCreateMedia?.media });
+    // 6. Optionally move the video right after the hero image (media position 1,
+    //    0-indexed). Non-fatal: a reorder failure still leaves the video attached
+    //    at the end, so we never fail the request over it.
+    let reordered = false;
+    const videoMediaId = createdMedia[0]?.id;
+    if (position === 'after_hero' && videoMediaId) {
+      try {
+        const reorderMutation = `mutation productReorderMedia($id:ID!,$moves:[MoveInput!]!){productReorderMedia(id:$id,moves:$moves){mediaUserErrors{field message}}}`;
+        const reorderRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/graphql.json`, {
+          method: 'POST',
+          headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: reorderMutation, variables: {
+            id: gidProductId,
+            moves: [{ id: videoMediaId, newPosition: '1' }]
+          }})
+        });
+        const reorderData = await reorderRes.json();
+        const reorderErrors = reorderData?.data?.productReorderMedia?.mediaUserErrors || [];
+        if (reorderErrors.length) console.warn('Video reorder skipped:', reorderErrors.map(e=>e.message).join(', '));
+        else reordered = true;
+      } catch(reErr) { console.warn('Video reorder failed (non-fatal):', reErr.message); }
+    }
+
+    console.log(`Video uploaded: ${name} (${Math.round(videoBuffer.length/1024/1024)}MB) → product ${productId}${reordered ? ' (positioned after hero)' : ''}`);
+    res.json({ success: true, media: createdMedia, reordered });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

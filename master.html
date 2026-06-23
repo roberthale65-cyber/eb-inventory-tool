@@ -401,8 +401,7 @@ button:active{transform:scale(.97)}
   </div>
   <div class="home-grid">
     <div class="mode-card new-piece" onclick="goTo('screen-new-piece')"><span class="mode-icon">🌸</span><div class="mode-title">Step 1 — Add or edit inventory</div><div class="mode-desc">Add a new piece or edit an existing one — log details, generate QR tag</div><div class="mode-arrow">→</div></div>
-    <div class="mode-card list-publish" onclick="goTo('screen-list')"><span class="mode-icon">📋</span><div class="mode-title">Step 2 — List & publish</div><div class="mode-desc">Photos, AI description, publish to Shopify</div><div class="mode-arrow">→</div></div>
-    <div class="mode-card" onclick="goTo('screen-video')" style="border-top:3px solid var(--teal)"><span class="mode-icon">📹</span><div class="mode-title">Step 3 — Add video</div><div class="mode-desc">Select a listed piece, pick its Drive video, send straight to Shopify</div><div class="mode-arrow">→</div></div>
+    <div class="mode-card list-publish" onclick="goTo('screen-list')"><span class="mode-icon">📋</span><div class="mode-title">Step 2 — List & publish</div><div class="mode-desc">Photos &amp; video, AI description, publish to Shopify</div><div class="mode-arrow">→</div></div>
     <div class="mode-card mark-sold" onclick="goTo('screen-sold')"><span class="mode-icon">✅</span><div class="mode-title">Mark as sold</div><div class="mode-desc">Record a sale, update Shopify and Airtable instantly</div><div class="mode-arrow">→</div></div>
     <div class="mode-card craft-fair" onclick="goTo('screen-craft-fair')"><span class="mode-icon">🛍️</span><div class="mode-title">Craft fair</div><div class="mode-desc">Mobile-optimized selling at shows and events</div><div class="mode-arrow">→</div></div>
     <div class="mode-card bin-mgmt" onclick="goTo('screen-bin-mgmt')"><span class="mode-icon">📦</span><div class="mode-title">Bin management</div><div class="mode-desc">Print bin labels, scan to assign pieces, update anytime</div><div class="mode-arrow">→</div></div>
@@ -418,6 +417,7 @@ button:active{transform:scale(.97)}
       <a class="ql-btn" href="https://eb-shopify-server.onrender.com/health" target="_blank">⚡ Health check</a>
       <button class="ql-btn" onclick="goTo('screen-cost-summary')">💰 Cost summary</button>
       <button class="ql-btn" onclick="goTo('screen-print-tag')">🏷 Print tag</button>
+      <button class="ql-btn" onclick="goTo('screen-video')">📹 Add video to a listed piece</button>
     </div>
   </div>
   <div style="padding:0 16px 28px;max-width:520px;margin:0 auto">
@@ -658,6 +658,13 @@ button:active{transform:scale(.97)}
           <button class="btn-primary" id="lp-drive-link-btn" onclick="lpDriveLinkRename()">🔗 Link &amp; rename in Drive</button>
           <button class="btn" onclick="lpClearPhotos()">✕ Clear</button>
         </div>
+        <!-- ── Video selection — same Drive folder; uploads right after the hero photo at publish ── -->
+        <div id="lp-video-pick" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+          <div class="section-label">🎬 Video <span style="font-weight:600;color:var(--text-muted);text-transform:none;letter-spacing:0">(optional)</span></div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">Pick one video from this piece's folder — it uploads to Shopify right after the hero photo when you publish. Tap again to deselect.</div>
+          <div id="lp-video-pick-list"></div>
+          <div id="lp-video-pick-empty" style="display:none;font-size:12px;color:var(--text-muted);background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 14px">No videos in this folder yet — drop one into the Drive folder, then tap ↻ above. You can also add a video any time after listing.</div>
+        </div>
       </div>
       <div class="btn-row" style="margin-top:14px"><button class="btn-primary btn-full" onclick="lpStep(4)">Title &amp; description →</button><button class="btn btn-full" onclick="lpStep(2)">← Back</button></div>
     </div>
@@ -702,7 +709,7 @@ button:active{transform:scale(.97)}
         </div>
       </div>
       <hr class="divider">
-      <div class="info-card teal" id="lp-video-reminder-dynamic" style="display:none"><strong>📹 Video linked</strong> After publishing, the next step will add your video directly to the Shopify listing.</div>
+      <div class="info-card teal" id="lp-video-reminder-dynamic" style="display:none"></div>
       <div class="info-card sage" id="lp-video-reminder-manual" style="display:none"><strong>📹 Video</strong> No folder linked — after publishing, add your video manually in Shopify Admin → Media.</div>
       <div class="btn-row" style="margin-top:14px"><button class="btn-primary btn-full" onclick="lpStep(5)">Review &amp; publish →</button><button class="btn btn-full" onclick="lpStep(3)">← Back</button></div>
     </div>
@@ -2071,7 +2078,11 @@ function lpStep(n) {
     const hasFolder = lpSelectedRecord && lpSelectedRecord.fields['Drive Folder ID'];
     const dynCard = document.getElementById('lp-video-reminder-dynamic');
     const manCard = document.getElementById('lp-video-reminder-manual');
-    if(dynCard) dynCard.style.display = hasFolder ? 'block' : 'none';
+    if(dynCard){
+      if(lpVideoFileId){ dynCard.innerHTML='<strong>📹 Video selected</strong> It uploads right after the hero photo when you publish.'; dynCard.style.display='block'; }
+      else if(hasFolder){ dynCard.innerHTML='<strong>📹 Video optional</strong> Pick one back in the Photos step, or add it any time after listing.'; dynCard.style.display='block'; }
+      else { dynCard.style.display='none'; }
+    }
     if(manCard) manCard.style.display = hasFolder ? 'none' : 'block';
     // Auto-generate once per piece; back/forward won't re-bill the API.
     const eb=lpSelectedRecord?(lpSelectedRecord.fields['EB Number']||lpSelectedRecord.id):'';
@@ -2342,9 +2353,9 @@ async function lpDriveInit(){
 function lpDriveConnect(){ window.open(SERVER_URL+'/drive-auth','_blank'); setStatus('lp','After connecting in the new tab, come back and tap “Photos” again.','loading'); setTimeout(()=>{hideStatus('lp');lpDriveInit();},4000); }
 async function lpDriveLoadImages(folderId, force){
   const status=document.getElementById('lp-drive-grid-status'), label=document.getElementById('lp-drive-grid-label');
-  if(!folderId){ lpLoadedFolderId=null; lpDriveImages=[]; lpPhotoItems=[]; lpDriveLinked=false; lpRenderDriveGrid(); lpRenderPhotos(); if(status)status.style.display='none'; if(label)label.style.display='none'; return; }
+  if(!folderId){ lpLoadedFolderId=null; lpDriveImages=[]; lpPhotoItems=[]; lpDriveLinked=false; lpRenderDriveGrid(); lpRenderPhotos(); lpLoadFolderVideos(null); if(status)status.style.display='none'; if(label)label.style.display='none'; return; }
   // Already loaded this folder — keep the user's current selection/order on back-navigation.
-  if(!force && folderId===lpLoadedFolderId && lpDriveImages.length){ if(label)label.style.display='block'; lpRenderDriveGrid(); lpRenderPhotos(); return; }
+  if(!force && folderId===lpLoadedFolderId && lpDriveImages.length){ if(label)label.style.display='block'; lpRenderDriveGrid(); lpRenderPhotos(); lpLoadFolderVideos(folderId); return; }
   lpDriveImages=[]; lpPhotoItems=[]; lpDriveLinked=false; lpRenderDriveGrid(); lpRenderPhotos();
   if(status){status.style.display='block'; status.style.color='var(--text-muted)'; status.textContent='Loading photos from Drive…';} if(label)label.style.display='none';
   try{
@@ -2354,6 +2365,7 @@ async function lpDriveLoadImages(folderId, force){
     if(lpDriveImages.length===0){ if(status){status.style.display='block'; status.textContent='No images found in this folder.';} if(label)label.style.display='none'; }
     else { if(status)status.style.display='none'; if(label)label.style.display='block'; }
     lpRenderDriveGrid();
+    lpLoadFolderVideos(folderId);
   }catch(e){ if(status){status.style.display='block'; status.style.color='var(--rose)'; status.textContent='⚠ '+e.message;} }
 }
 function lpDriveSelectedIndex(id){ return lpPhotoItems.findIndex(it=>it.driveFileId===id); }
@@ -2475,12 +2487,15 @@ async function lpPublish(){
     // Clear draft fields now that this piece is live — non-blocking
     airtableFetch('/'+lpSelectedRecord.id, {method:'PATCH', body:JSON.stringify({fields:{'Draft Title':'','Draft Description':''}})})
       .catch(()=>{});
-    setTimeout(lpCheckVideo, 800);
     WIP.clear('lp');
     lastPublishedProduct={eb:f['EB Number']||'',detail:(f['Type']||'')+(f['Season']?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Occasion']&&f['Occasion']!=='None'?' · '+f['Occasion']:''),adminUrl:data.admin_url,price:f['Price ($)']!=null?String(f['Price ($)']):''}; 
     result.className='publish-result success';result.style.display='block';
-    result.innerHTML='<div style="font-size:15px;font-weight:700;color:var(--sage);margin-bottom:14px">✓ Published successfully!</div><div style="display:grid;gap:8px;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 1 — Airtable</strong><div style="font-size:11px;color:var(--text-muted)">Status set to Listed · Shopify URL saved</div></div></div><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 2 — Shopify</strong><div style="font-size:11px;color:var(--text-muted)">Listing live · inventory set to 1 · collections assigned</div></div></div><div onclick="goTo(\'screen-video\')" style="display:flex;align-items:center;gap:10px;background:var(--teal);border-radius:8px;padding:12px;cursor:pointer"><span style="font-size:18px">📹</span><div><strong style="font-size:13px;color:#fff">Step 3 — Add video</strong><div style="font-size:11px;color:rgba(255,255,255,0.8)">Tap here → select this piece → video goes straight to Shopify from Drive</div></div><span style="margin-left:auto;color:rgba(255,255,255,0.8);font-size:16px">→</span></div></div><a href="'+data.shopify_url+'" target="_blank" style="font-size:12px;color:var(--text-muted)">🔗 View live listing</a>';
+    result.innerHTML='<div style="font-size:15px;font-weight:700;color:var(--sage);margin-bottom:14px">✓ Published successfully!</div><div style="display:grid;gap:8px;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 1 — Airtable</strong><div style="font-size:11px;color:var(--text-muted)">Status set to Listed · Shopify URL saved</div></div></div><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 2 — Shopify</strong><div style="font-size:11px;color:var(--text-muted)">Listing live · inventory set to 1 · collections assigned</div></div></div><div id="lp-pub-video" style="display:flex;align-items:center;gap:10px;background:var(--teal-bg);border:1px solid var(--teal-light);border-radius:8px;padding:12px"><span style="font-size:18px">📹</span><div id="lp-pub-video-msg" style="font-size:12px;color:var(--teal)">Checking video…</div></div></div><a href="'+data.shopify_url+'" target="_blank" style="font-size:12px;color:var(--text-muted)">🔗 View live listing</a>';
     btn.textContent='✓ Published!';btn.style.background='var(--sage)';btn.style.borderColor='var(--sage)';
+    // Video (the result panel — incl. #lp-pub-video — now exists in the DOM): if one
+    // was picked in Step 2.3 upload it now; otherwise fall back to the manual panel.
+    if (lpVideoFileId) { lpAutoUploadVideo(lpLastProductId); }
+    else { const pv=document.getElementById('lp-pub-video'); if(pv)pv.style.display='none'; setTimeout(lpCheckVideo, 800); }
     setStatus('lp','Published to Shopify ✓','success');setTimeout(()=>hideStatus('lp'),6000);populateLPSelect();
   } catch(e){result.className='publish-result error';result.style.display='block';result.innerHTML='✗ <strong>Publish failed:</strong> '+escHtml(e.message)+'<br><span style="font-size:12px">Check server: <a href="'+SERVER_URL+'/health" target="_blank">health check</a></span>';btn.disabled=false;btn.textContent='↑ Publish listing to Shopify';btn.style.background='';btn.style.borderColor='';setStatus('lp','Publish failed — see error below','error');}
 }
@@ -2668,6 +2683,49 @@ function lpRenderFolderSection() {
 let lpLastProductId  = null; // set after successful publish
 let lpVideoFileId    = null;
 let lpVideoFileName  = null;
+let lpFolderVideos       = [];   // videos in the linked folder, for the Step-2.3 picker
+let lpVideoLoadedFolderId = null; // guard so back-nav doesn't refetch/reset selection
+
+// Load the linked folder's videos into the Step-2.3 picker (selection flows to publish).
+async function lpLoadFolderVideos(folderId){
+  const sec=document.getElementById('lp-video-pick'); if(!sec)return;
+  if(!folderId){ sec.style.display='none'; lpFolderVideos=[]; lpVideoLoadedFolderId=null; return; }
+  if(folderId===lpVideoLoadedFolderId){ sec.style.display='block'; lpRenderVideoPick(); return; }
+  lpVideoLoadedFolderId=folderId; lpFolderVideos=[]; sec.style.display='block';
+  try{
+    const r=await fetch(SERVER_URL+'/drive-folder-videos?folderId='+encodeURIComponent(folderId));
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||'list failed');
+    lpFolderVideos=d.files||[];
+    // Convenience: if there's exactly one video and nothing chosen yet, pre-select it.
+    if(lpFolderVideos.length===1 && !lpVideoFileId){ lpVideoFileId=lpFolderVideos[0].id; lpVideoFileName=lpFolderVideos[0].name; }
+  }catch(e){ lpFolderVideos=[]; console.warn('Video list failed:',e.message); }
+  lpRenderVideoPick();
+}
+function lpRenderVideoPick(){
+  const list=document.getElementById('lp-video-pick-list'), empty=document.getElementById('lp-video-pick-empty');
+  if(!list)return;
+  if(!lpFolderVideos.length){ list.innerHTML=''; if(empty)empty.style.display='block'; return; }
+  if(empty)empty.style.display='none';
+  list.innerHTML=lpFolderVideos.map(f=>{const sel=lpVideoFileId===f.id;return '<div class="lp-folder-card'+(sel?' selected':'')+'" onclick="lpToggleVideoPick(\''+f.id.replace(/'/g,"\\'")+'\',\''+f.name.replace(/'/g,"\\'")+'\')"><span style="font-size:20px;flex-shrink:0">📹</span><div style="flex:1;min-width:0"><div class="lp-folder-name">'+escHtml(f.name)+'</div></div><div class="lp-folder-radio'+(sel?' sel':'')+'"></div></div>';}).join('');
+}
+function lpToggleVideoPick(id,name){
+  if(lpVideoFileId===id){ lpVideoFileId=null; lpVideoFileName=null; }
+  else { lpVideoFileId=id; lpVideoFileName=name; }
+  lpRenderVideoPick();
+}
+// Upload the video chosen in Step 2.3, right after publish (product now exists).
+// Non-blocking: a failure never undoes the successful listing — it offers a retry.
+async function lpAutoUploadVideo(productId){
+  const row=document.getElementById('lp-pub-video'), msg=document.getElementById('lp-pub-video-msg');
+  if(row)row.style.display='flex';
+  if(!productId){ if(msg){msg.style.color='var(--rose)';msg.innerHTML='⚠ Couldn\'t find the new product to attach the video — open “Add video to a listed piece” from the home screen to finish.';} return; }
+  if(msg){msg.style.color='var(--teal)';msg.innerHTML='⏳ Uploading video — placing it right after the hero photo (Shopify processes it for ~1 min)…';}
+  try{
+    const r=await fetch(SERVER_URL+'/shopify-add-video',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productId,fileId:lpVideoFileId,fileName:lpVideoFileName,position:'after_hero'})});
+    const d=await r.json(); if(!r.ok||!d.success) throw new Error(d.error||'Server error');
+    if(msg){msg.style.color='var(--green-text)';msg.innerHTML='✓ Video added'+(d.reordered?' — placed right after the hero photo':'')+'. Shopify is processing it (~1 min).';}
+  }catch(e){ if(msg){msg.style.color='var(--rose)';msg.innerHTML='⚠ Video upload failed: '+escHtml(e.message)+' — <a href="#" onclick="lpCheckVideo();return false;" style="color:var(--teal);font-weight:700">retry below</a>';} }
+}
 
 // ── Step 2 quick-save ─────────────────────────────────────────
 async function lpSaveStepTwo() {
@@ -2920,7 +2978,7 @@ async function lpAddVideoToShopify() {
     }
     if (!productId) throw new Error('Could not determine Shopify product ID — make sure the piece is listed.');
     const r = await fetch(SERVER_URL+'/shopify-add-video', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({productId, fileId: lpVideoFileId, fileName: lpVideoFileName})});
+      body: JSON.stringify({productId, fileId: lpVideoFileId, fileName: lpVideoFileName, position:'after_hero'})});
     const d = await r.json();
     if (!r.ok || !d.success) throw new Error(d.error || 'Server error');
     btn.textContent = '✓ Video added';
@@ -2932,7 +2990,7 @@ async function lpAddVideoToShopify() {
 }
 
 
-function lpReset(){lpSelectedRecord=null;lpPhotoItems=[];lpDriveImages=[];lpDriveLinked=false;lpLoadedFolderId=null;lpFolderSelected=null;lpAllFolders=[];lpLastProductId=null;lpVideoFileId=null;lpVideoFileName=null;lpStepTwoCache={location:'',meta:'',special:''};const fsec=document.getElementById('lp-folder-section');if(fsec)fsec.style.display='none';const vsec=document.getElementById('lp-video-section');if(vsec)vsec.style.display='none';lpCurrentDesc='';lpCurrentTitle='';lpGeneratedFor='';['lp-location','lp-meta','lp-special','lp-title'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});const _lpd=document.getElementById('lp-desc');if(_lpd)_lpd.innerHTML='';lpDescResetEditor();lpRenderDisplayLocation('');;const dg=document.getElementById('lp-drive-grid');if(dg)dg.innerHTML='';document.getElementById('lp-eb-select').value='';_clearEbSearch('lp-eb-search','lp-eb-results');document.getElementById('lp-at-preview').style.display='none';document.getElementById('lp-outdoor-warning').style.display='none';const ed=document.getElementById('lp-dims-editor');if(ed)ed.style.display='none';document.getElementById('lp-next-1-btn').disabled=true;document.getElementById('lp-publish-result').style.display='none';const pb=document.getElementById('lp-publish-btn');if(pb){pb.disabled=true;pb.textContent='↑ Publish listing to Shopify';pb.style.background='';pb.style.borderColor='';}lpRenderPhotos();lpStep(1);populateLPSelect();WIP.clear('lp');}
+function lpReset(){lpSelectedRecord=null;lpPhotoItems=[];lpDriveImages=[];lpDriveLinked=false;lpLoadedFolderId=null;lpFolderSelected=null;lpAllFolders=[];lpLastProductId=null;lpVideoFileId=null;lpVideoFileName=null;lpFolderVideos=[];lpVideoLoadedFolderId=null;lpStepTwoCache={location:'',meta:'',special:''};const fsec=document.getElementById('lp-folder-section');if(fsec)fsec.style.display='none';const vsec=document.getElementById('lp-video-section');if(vsec)vsec.style.display='none';const vpick=document.getElementById('lp-video-pick');if(vpick)vpick.style.display='none';const vpl=document.getElementById('lp-video-pick-list');if(vpl)vpl.innerHTML='';lpCurrentDesc='';lpCurrentTitle='';lpGeneratedFor='';['lp-location','lp-meta','lp-special','lp-title'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});const _lpd=document.getElementById('lp-desc');if(_lpd)_lpd.innerHTML='';lpDescResetEditor();lpRenderDisplayLocation('');;const dg=document.getElementById('lp-drive-grid');if(dg)dg.innerHTML='';document.getElementById('lp-eb-select').value='';_clearEbSearch('lp-eb-search','lp-eb-results');document.getElementById('lp-at-preview').style.display='none';document.getElementById('lp-outdoor-warning').style.display='none';const ed=document.getElementById('lp-dims-editor');if(ed)ed.style.display='none';document.getElementById('lp-next-1-btn').disabled=true;document.getElementById('lp-publish-result').style.display='none';const pb=document.getElementById('lp-publish-btn');if(pb){pb.disabled=true;pb.textContent='↑ Publish listing to Shopify';pb.style.background='';pb.style.borderColor='';}lpRenderPhotos();lpStep(1);populateLPSelect();WIP.clear('lp');}
 
 
 // ── MARK AS SOLD ──
@@ -3087,7 +3145,7 @@ async function avAddVideo() {
     if (!productId) throw new Error('Product not found in Shopify');
     const r = await fetch(SERVER_URL+'/shopify-add-video', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ productId, fileId: avVideoFileId, fileName: avVideoFileName })
+      body: JSON.stringify({ productId, fileId: avVideoFileId, fileName: avVideoFileName, position:'after_hero' })
     });
     const d = await r.json();
     if (!r.ok || !d.success) throw new Error(d.error || 'Server error');
