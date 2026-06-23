@@ -539,7 +539,7 @@ async function getCollectionId(handle) {
 app.post('/generate-description', async (req, res) => {
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server.' });
   const { eb_number, reference_name, type, season, holiday, colors, dimensions, materials, location, special, notes, images } = req.body;
-  const textPrompt = `You write product listings for Eternal Blooms Designs, a handmade artificial flower arrangement business in Omaha, Nebraska. Each piece is completely one of a kind — no two are ever the same.
+  const textPrompt = `You write product listings for Eternal Blooms Designs, a handmade artificial flower arrangement business in Omaha, Nebraska. Each piece is handmade and one of a kind.
 
 Write a Shopify product listing for this piece: a TITLE, a DESCRIPTION, and an SEO_META.
 
@@ -557,6 +557,7 @@ DESCRIPTION — return as clean, minimal HTML; it is published directly as the S
 - Include a structured BULLET LIST of concrete details: colors, key flowers/materials, best display location, and seasonal or occasion fit. (Exact dimensions are appended automatically after your description — do NOT list them.)
 - Naturally weave in keyword synonyms throughout for SEO, without keyword-stuffing.
 - Allowed HTML tags ONLY, and with NO attributes: <p>, <strong>, <ul>, <li>, <br>. Use <p><strong>Sub-header</strong></p> for a bold header. Do NOT use markdown, heading tags, inline styles, classes, or any tag attributes.
+- You may describe the piece as handmade and one-of-a-kind, but do NOT claim or imply it cannot be reproduced, recreated, or replicated. Never use phrasing such as "can never be exactly duplicated," "no two are ever the same," "impossible to recreate," or any similar wording suggesting the item is unrepeatable.
 - Return the HTML as a SINGLE LINE with no literal line breaks inside the JSON string.${images && images.length > 0 ? '\n\nPhoto(s) of the actual piece are attached — use what you can see in the photos to write the most accurate, keyword-rich title and description possible.' : ''}
 
 Piece details:
@@ -744,7 +745,7 @@ app.post('/create-product', async (req, res) => {
   const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images } = req.body;
   if (!title || !sku) return res.status(400).json({ error: 'title and sku are required' });
   const variant = { sku, price: price || '0.00', inventory_management: 'shopify', inventory_policy: 'deny', fulfillment_service: 'manual', requires_shipping: requires_shipping !== false };
-  // Weight: prefer ounces (Shopify WeightUnit OUNCES) — exact, matches the Airtable "Packaged weight (oz)" field.
+  // Weight: prefer ounces (Shopify WeightUnit OUNCES) — exact, matches the Airtable "Item weight (oz)" field.
   if (weight_oz != null && weight_oz !== '') { variant.weight = Number(weight_oz); variant.weight_unit = 'oz'; }
   else if (weight_lbs) { variant.weight = Math.round(weight_lbs * 453.592); variant.weight_unit = 'g'; }
   let fullDescription = body_html || '';

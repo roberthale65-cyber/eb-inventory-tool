@@ -518,7 +518,7 @@ button:active{transform:scale(.97)}
         <div class="field"><label>Height (in)</label><input type="number" id="np-height" placeholder='18'></div>
         <div class="field"><label>Depth (in)</label><input type="number" id="np-depth" placeholder='4'></div>
       </div>
-      <div class="section-label" style="margin-top:4px">Packaged weight</div>
+      <div class="section-label" style="margin-top:4px">Item weight</div>
       <div class="grid-2">
         <div class="field"><label>Pounds (lb)</label><input type="number" min="0" step="1" id="np-weight-lb" placeholder="e.g. 3"></div>
         <div class="field"><label>Ounces (oz)</label><input type="number" min="0" max="15" step="1" id="np-weight-oz" placeholder="e.g. 8"></div>
@@ -596,7 +596,7 @@ button:active{transform:scale(.97)}
           <div class="field"><label>Depth (in)</label><input type="number" id="lp-edit-depth" placeholder="4"></div>
         </div>
         <div class="grid-2">
-          <div class="field"><label>Packaged weight — lb</label><input type="number" min="0" step="1" id="lp-edit-weight-lb" placeholder="3"></div>
+          <div class="field"><label>Item weight — lb</label><input type="number" min="0" step="1" id="lp-edit-weight-lb" placeholder="3"></div>
           <div class="field"><label>oz</label><input type="number" min="0" max="15" step="1" id="lp-edit-weight-oz" placeholder="8"></div>
         </div>
         <div id="lp-dims-save-status" style="display:none;font-size:12px;margin-bottom:8px"></div>
@@ -610,7 +610,7 @@ button:active{transform:scale(.97)}
       <div class="field"><label>Best display location</label><div id="lp-location-chips" class="chip-checks" style="display:none;margin-bottom:4px"></div><div id="lp-location-text-wrap" style="display:flex;gap:6px;align-items:center"><input type="text" id="lp-location" placeholder="e.g. front door, dining table" spellcheck="true" style="flex:1"><button class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px" onclick="lpCleanupField('lp-location')">✓ Fix</button></div></div>
       <div id="lp-s2-save-status" style="display:none;font-size:12px;padding:7px 10px;border-radius:6px;margin-bottom:8px;text-align:center"></div>
       <button class="btn btn-full" id="lp-s2-save-btn" onclick="lpSaveStepTwo()" style="font-size:12px;margin-bottom:8px">💾 Save details to Airtable</button>
-      <div class="btn-row"><button class="btn btn-full" onclick="lpStep(1)">← Back</button><button class="btn-primary" style="flex:1" onclick="lpStep(3)">Photos →</button></div>
+      <div class="btn-row"><button class="btn-primary btn-full" onclick="lpStep(3)">Photos →</button><button class="btn btn-full" onclick="lpStep(1)">← Back</button></div>
     </div>
     <div class="step-block" id="lp-step-3">
       <div class="section-label">Photos</div>
@@ -659,7 +659,7 @@ button:active{transform:scale(.97)}
           <button class="btn" onclick="lpClearPhotos()">✕ Clear</button>
         </div>
       </div>
-      <div class="btn-row" style="margin-top:14px"><button class="btn btn-full" onclick="lpStep(2)">← Back</button><button class="btn-primary" style="flex:1" onclick="lpStep(4)">Title &amp; description →</button></div>
+      <div class="btn-row" style="margin-top:14px"><button class="btn-primary btn-full" onclick="lpStep(4)">Title &amp; description →</button><button class="btn btn-full" onclick="lpStep(2)">← Back</button></div>
     </div>
     <div class="step-block" id="lp-step-4">
       <div class="info-card amber" id="lp-photos-for-ai-note" style="display:none"><strong>📸 No photos added yet.</strong> Add photos in the previous step for the best AI title &amp; description.</div>
@@ -704,7 +704,7 @@ button:active{transform:scale(.97)}
       <hr class="divider">
       <div class="info-card teal" id="lp-video-reminder-dynamic" style="display:none"><strong>📹 Video linked</strong> After publishing, the next step will add your video directly to the Shopify listing.</div>
       <div class="info-card sage" id="lp-video-reminder-manual" style="display:none"><strong>📹 Video</strong> No folder linked — after publishing, add your video manually in Shopify Admin → Media.</div>
-      <div class="btn-row" style="margin-top:14px"><button class="btn btn-full" onclick="lpStep(3)">← Back</button><button class="btn-primary" style="flex:1" onclick="lpStep(5)">Review &amp; publish →</button></div>
+      <div class="btn-row" style="margin-top:14px"><button class="btn-primary btn-full" onclick="lpStep(5)">Review &amp; publish →</button><button class="btn btn-full" onclick="lpStep(3)">← Back</button></div>
     </div>
     <div class="step-block" id="lp-step-5">
       <div class="section-label">Your Shopify listing</div>
@@ -772,7 +772,7 @@ button:active{transform:scale(.97)}
       <div class="field"><label>Sale price (confirm or adjust)</label><input type="text" id="ms-sale-price" placeholder="e.g. 85.00"></div>
       <div class="field"><label>Date sold</label><input type="date" id="ms-sale-date"></div>
       <div class="info-card sage" style="font-size:12px"><strong>This will:</strong> Set Shopify inventory to 0 · Move to Sold/Portfolio · Update Airtable status to Sold</div>
-      <div class="btn-row"><button class="btn" onclick="msStep(1)">← Back</button><button class="btn-rose" style="flex:1" id="ms-confirm-btn" onclick="msConfirmSale()">✓ Mark as sold</button></div>
+      <div class="btn-row"><button class="btn-rose btn-full" id="ms-confirm-btn" onclick="msConfirmSale()">✓ Mark as sold</button><button class="btn btn-full" onclick="msStep(1)">← Back</button></div>
       <div id="ms-result" style="display:none" class="publish-result"></div>
     </div>
   </div>
@@ -1007,7 +1007,7 @@ button:active{transform:scale(.97)}
       </div>
       <div class="field"><label>Purpose</label><select id="mile-purpose"><option value="Craft show setup/breakdown">Craft show setup/breakdown</option><option value="Client delivery">Client delivery</option><option value="Materials pickup">Materials pickup</option><option value="Event/show day">Event/show day</option><option value="Other business">Other business</option></select></div>
       <div class="info-card sage" style="margin-top:8px"><strong>📋 Miles will be logged to Airtable</strong><div style="font-size:12px;color:var(--text-muted);margin-top:4px">Your accountant will apply the IRS mileage rate at tax time.</div></div>
-      <div class="btn-row"><button class="btn btn-full" onclick="costStep(1)">&larr; Back</button><button class="btn-primary btn-full" onclick="saveMileage()">Save mileage &rarr;</button></div>
+      <div class="btn-row"><button class="btn-primary btn-full" onclick="saveMileage()">Save mileage &rarr;</button><button class="btn btn-full" onclick="costStep(1)">&larr; Back</button></div>
     </div>
     <div class="step-block" id="cost-step-manual">
       <div class="section-label">Manual cost entry</div>
@@ -1021,7 +1021,7 @@ button:active{transform:scale(.97)}
       <div id="man-cat-grid" class="cost-cat-grid"></div>
       <div id="man-subcat-wrap" style="display:none"><div class="section-label">Material subcategory</div><div id="man-subcat-grid" class="mat-subcat-grid"></div></div>
       <div class="field"><label>Payment method</label><select id="man-payment"><option value="Card">Card</option><option value="Cash">Cash</option><option value="Venmo">Venmo</option><option value="Check">Check</option></select></div>
-      <div class="btn-row"><button class="btn btn-full" onclick="costStep(1)">&larr; Back</button><button class="btn-primary btn-full" onclick="saveManualCost()">Save cost &rarr;</button></div>
+      <div class="btn-row"><button class="btn-primary btn-full" onclick="saveManualCost()">Save cost &rarr;</button><button class="btn btn-full" onclick="costStep(1)">&larr; Back</button></div>
     </div>
     <div class="step-block" id="cost-step-review">
       <div class="section-label">Review parsed receipt</div>
@@ -1041,7 +1041,7 @@ button:active{transform:scale(.97)}
       <div class="section-label">Cost category</div>
       <div id="pr-cat-grid" class="cost-cat-grid"></div>
       <div id="pr-subcat-wrap" style="display:none"><div class="section-label">Material subcategory</div><div id="pr-subcat-grid" class="mat-subcat-grid"></div></div>
-      <div class="btn-row"><button class="btn btn-full" onclick="costStep('receipt')">&larr; Re-upload</button><button class="btn-primary btn-full" onclick="saveReceiptCost()">&#x2713; Save to Airtable &rarr;</button></div>
+      <div class="btn-row"><button class="btn-primary btn-full" onclick="saveReceiptCost()">&#x2713; Save to Airtable &rarr;</button><button class="btn btn-full" onclick="costStep('receipt')">&larr; Re-upload</button></div>
     </div>
     <div class="step-block" id="cost-step-done">
       <div style="text-align:center;padding:32px 20px">
@@ -1348,7 +1348,7 @@ function readinessRender() {
   // Incomplete = publish works but listing is missing key info
   const INCOMPLETE = [
     { key:'dims',   label:'Dimensions',     fn: f => !!(f['Width (in)']||f['Height (in)']||f['Depth (in)']) },
-    { key:'weight', label:'Weight',         fn: f => f['Packaged weight (oz)'] != null },
+    { key:'weight', label:'Weight',         fn: f => f['Item weight (oz)'] != null },
     { key:'photos', label:'Photos',         fn: f => !!(f['Photo URL']||['Photographed','Ready to list'].includes(f['Status'])) },
   ];
   const ALL_FIELDS = [...BLOCKING, ...INCOMPLETE];
@@ -1785,7 +1785,7 @@ function npLoadRecordForEdit(){
   document.getElementById('np-width').value=f['Width (in)']!=null?f['Width (in)']:'';
   document.getElementById('np-height').value=f['Height (in)']!=null?f['Height (in)']:'';
   document.getElementById('np-depth').value=f['Depth (in)']!=null?f['Depth (in)']:'';
-  const ozEdit=f['Packaged weight (oz)'];
+  const ozEdit=f['Item weight (oz)'];
   document.getElementById('np-weight-lb').value=(ozEdit!=null&&ozEdit!=='')?Math.floor(Number(ozEdit)/16):'';
   document.getElementById('np-weight-oz').value=(ozEdit!=null&&ozEdit!=='')?Number(ozEdit)%16:'';
   btn.disabled=false;
@@ -1922,8 +1922,8 @@ async function npSaveDimensions() {
       hideStatus('np');
     }
   }
-  // Packaged weight → total ounces. Saved in its own PATCH so a missing
-  // "Packaged weight (oz)" field can never break the dimensions save.
+  // Item weight → total ounces. Saved in its own PATCH so a missing
+  // "Item weight (oz)" field can never break the dimensions save.
   await npSaveWeight();
   document.getElementById('np-complete-eb').textContent=npCurrentEB;
   document.getElementById('np-complete-status-msg').textContent=npMode==='edit'?'Changes saved.':'Status: In stock.';
@@ -1947,9 +1947,9 @@ async function npSaveWeight(){
   const totalOz=wtInputsToOz('np-weight-lb','np-weight-oz');
   if(totalOz===null)return;
   try{
-    await airtableFetch('/'+npCurrentRecordId,{method:'PATCH',body:JSON.stringify({fields:{'Packaged weight (oz)':totalOz}})});
-    const rec=allRecords.find(r=>r.id===npCurrentRecordId); if(rec)rec.fields['Packaged weight (oz)']=totalOz;
-  }catch(e){ console.warn('Weight save skipped (Packaged weight (oz) field may not exist yet):',e.message); }
+    await airtableFetch('/'+npCurrentRecordId,{method:'PATCH',body:JSON.stringify({fields:{'Item weight (oz)':totalOz}})});
+    const rec=allRecords.find(r=>r.id===npCurrentRecordId); if(rec)rec.fields['Item weight (oz)']=totalOz;
+  }catch(e){ console.warn('Weight save skipped (Item weight (oz) field may not exist yet):',e.message); }
 }
 function npListNow(){
   const recId = npCurrentRecordId;
@@ -2144,7 +2144,7 @@ async function lpOnSelectRecord() {
 // ── Record-sourced listing data (colors, materials, weight now come from Step 1's Airtable record) ──
 function lpColorsFromRecord(f){const c=f['Color(s)'];return Array.isArray(c)?c.join(', '):(c||'');}
 function lpMaterialsFromRecord(f){const parts=[];const km=f['Key Materials'];if(Array.isArray(km))parts.push(...km);else if(km)parts.push(km);if(f['Florals']&&f['Florals']!=='None')parts.push(f['Florals']);if(f['Greenery']&&f['Greenery']!=='None')parts.push(f['Greenery']);return parts.join(', ');}
-function lpWeightOzFromRecord(f){const o=f['Packaged weight (oz)'];return (o===''||o==null)?null:Number(o);}
+function lpWeightOzFromRecord(f){const o=f['Item weight (oz)'];return (o===''||o==null)?null:Number(o);}
 function ozToLbOzStr(oz){oz=Number(oz);const lb=Math.floor(oz/16),r=oz%16;return (lb?lb+' lb':'')+(lb&&r?' ':'')+(r||!lb?r+' oz':'');}
 
 function lpRenderLPPreview(f) {
@@ -2188,7 +2188,7 @@ async function lpSaveDimsInline(){
     catch(e){ ok=false; if(ss){ss.style.color='var(--rose)';ss.textContent='⚠ Dimensions: '+e.message;} }
   }
   if(totalOz!==null){
-    try{ await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:{'Packaged weight (oz)':totalOz}})}); lpSelectedRecord.fields['Packaged weight (oz)']=totalOz; const rec=allRecords.find(r=>r.id===lpSelectedRecord.id); if(rec)rec.fields['Packaged weight (oz)']=totalOz; }
+    try{ await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:{'Item weight (oz)':totalOz}})}); lpSelectedRecord.fields['Item weight (oz)']=totalOz; const rec=allRecords.find(r=>r.id===lpSelectedRecord.id); if(rec)rec.fields['Item weight (oz)']=totalOz; }
     catch(e){ ok=false; if(ss){ss.style.color='var(--rose)';ss.textContent='⚠ Weight field may not exist in Airtable yet: '+e.message;} }
   }
   lpRenderLPPreview(lpSelectedRecord.fields);
@@ -2429,7 +2429,7 @@ function lpUpdatePublishSummary(){
   const blocks=[];
   if(!sku) blocks.push('EB number not selected');
   if(!price||Number(price)<=0) blocks.push('Price not set in Airtable');
-  if(!hasWeight) blocks.push('Packaged weight missing — add it in Step 1 or Step 2.1');
+  if(!hasWeight) blocks.push('Item weight missing — add it in Step 1 or Step 2.1');
   if(!hasDims) blocks.push('Dimensions missing — add them in Step 2.1');
   if(!title) blocks.push('Product title is empty');
   if(!desc) blocks.push('Description is empty');
