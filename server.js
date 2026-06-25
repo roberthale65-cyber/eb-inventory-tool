@@ -2,6 +2,7 @@ const express = require('express');
 const cors    = require('cors');
 const crypto  = require('crypto');
 const fetch   = (...args) => import('node-fetch').then(({default: f}) => f(...args));
+const FormData = require('form-data'); // streaming multipart for staged video uploads
  
 const app = express();
 app.use(express.json({limit: '150mb'}));
@@ -877,24 +878,37 @@ app.post('/shopify-add-video', async (req, res) => {
     const target = stageData?.data?.stagedUploadsCreate?.stagedTargets?.[0];
     if (!target?.url || !target?.resourceUrl) throw new Error('No staged upload target returned from Shopify');
 
-    // 3. Download video bytes from Drive using server auth token (no public sharing)
+    // 3. Open the Drive download as a stream (server auth token, no public sharing).
+    //    videoRes.body is a Node Readable — bytes are never buffered into memory.
     const videoRes = await fetch(
       `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
       { headers: { 'Authorization': 'Bearer ' + token } }
     );
     if (!videoRes.ok) throw new Error('Drive video download failed: ' + videoRes.status);
-    const videoBuffer = Buffer.from(await videoRes.arrayBuffer());
 
-    // 4. POST to GCS as multipart form — parameters MUST come before the file field
+    // 4. Stream straight into the GCS multipart POST — parameters MUST come before
+    //    the file field. knownLength (from Drive metadata) lets form-data set a correct
+    //    Content-Length without measuring bytes, so peak memory stays flat regardless
+    //    of video size. form.submit() pipes the Drive stream directly to GCS.
     const form = new FormData();
     for (const p of (target.parameters || [])) { form.append(p.name, p.value); }
-    form.append('file', new Blob([videoBuffer], { type: mimeType }), name);
+    form.append('file', videoRes.body, { knownLength: Number(fileSize), contentType: mimeType, filename: name });
 
-    const uploadRes = await fetch(target.url, { method: 'POST', body: form });
-    if (!uploadRes.ok) {
-      const errText = await uploadRes.text().catch(() => '');
-      throw new Error(`GCS upload failed (${uploadRes.status}): ${errText.slice(0, 300)}`);
-    }
+    await new Promise((resolve, reject) => {
+      form.submit(target.url, (err, uploadRes) => {
+        if (err) return reject(err);
+        const status = uploadRes.statusCode;
+        let errText = '';
+        uploadRes.on('data', c => { if (status >= 300 && errText.length < 300) errText += c.toString(); });
+        uploadRes.on('end', () => {
+          if (status < 200 || status >= 300) {
+            return reject(new Error(`GCS upload failed (${status}): ${errText.slice(0, 300)}`));
+          }
+          resolve();
+        });
+        uploadRes.on('error', reject);
+      });
+    });
 
     // 5. Attach the confirmed GCS resource to the Shopify product
     const gidProductId = String(productId).startsWith('gid://') ? String(productId) : `gid://shopify/Product/${productId}`;
@@ -935,7 +949,7 @@ app.post('/shopify-add-video', async (req, res) => {
       } catch(reErr) { console.warn('Video reorder failed (non-fatal):', reErr.message); }
     }
 
-    console.log(`Video uploaded: ${name} (${Math.round(videoBuffer.length/1024/1024)}MB) → product ${productId}${reordered ? ' (positioned after hero)' : ''}`);
+    console.log(`Video uploaded: ${name} (${Math.round(Number(fileSize)/1024/1024)}MB) → product ${productId}${reordered ? ' (positioned after hero)' : ''}`);
     res.json({ success: true, media: createdMedia, reordered });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
