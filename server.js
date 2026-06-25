@@ -423,6 +423,45 @@ app.get('/drive-file-content', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Drive: upload a generated image (e.g. a square crop) into a folder ──
+// Used to save the "_square_" listing crops alongside the untouched originals.
+// If a file of the same name already exists in the folder, its bytes are
+// updated in place so re-publishing a piece never piles up duplicates.
+app.post('/drive-upload-image', async (req, res) => {
+  const { folderId, name, dataBase64, mimeType, ebNumber, sourceFileId } = req.body;
+  if (!folderId || !name || !dataBase64) return res.status(400).json({ error: 'folderId, name and dataBase64 are required' });
+  try {
+    const token = await getValidGoogleToken();
+    const mime  = mimeType || 'image/jpeg';
+    const bytes = Buffer.from(dataBase64, 'base64');
+    const properties = { eb_number: ebNumber || '', variant: 'square' };
+    if (sourceFileId) properties.source_file_id = sourceFileId;
+
+    // Reuse an existing same-named file in the folder rather than duplicating it.
+    const q = `name = '${name.replace(/'/g, "\\'")}' and '${folderId}' in parents and trashed = false`;
+    const existing = await driveRequest('/files?q=' + encodeURIComponent(q) + '&fields=files(id)');
+    const existingId = existing.files && existing.files[0] && existing.files[0].id;
+
+    const metadata = existingId ? { name, properties } : { name, parents: [folderId], properties };
+    const boundary = 'ebupload' + Date.now();
+    const pre  = Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` + JSON.stringify(metadata) + `\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`, 'utf8');
+    const post = Buffer.from(`\r\n--${boundary}--`, 'utf8');
+    const body = Buffer.concat([pre, bytes, post]);
+
+    const uploadUrl = existingId
+      ? `https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart&fields=id,name`
+      : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name`;
+    const up = await fetch(uploadUrl, {
+      method: existingId ? 'PATCH' : 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body
+    });
+    if (!up.ok) { const t = await up.text().catch(() => ''); throw new Error('Drive upload failed ' + up.status + ': ' + t.slice(0, 200)); }
+    const out = await up.json();
+    res.json({ success: true, id: out.id, name: out.name, updated: !!existingId });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Airtable: inventory endpoints ────────────────────────────
 
 // GET /airtable/inventory — fetch all inventory records (paginated)
