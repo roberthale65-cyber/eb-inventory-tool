@@ -2331,7 +2331,7 @@ async function lpGenerateListing(){
   if(inlineStatus){inlineStatus.style.display='block';inlineStatus.textContent='✨ Generating title & description with Claude...';inlineStatus.style.color='var(--text-muted)';}
   try {
     const photoImages=[];
-    for(const item of lpPhotoItems.slice(0,3)){try{await lpEnsureDriveBytes(item);const smallBlob=await lpResizeImage(item.dataUrl,800,150);const smallDataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(smallBlob);});photoImages.push({data:smallDataUrl.split(',')[1],mime:'image/jpeg'});}catch(e){console.warn('Skipping photo:',e.message);}}
+    for(const item of lpPhotoItems.slice(0,3)){try{await lpEnsureDriveBytes(item);const smallBlob=await lpCropToSquare(item.dataUrl,item.crop,800,150);const smallDataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(smallBlob);});photoImages.push({data:smallDataUrl.split(',')[1],mime:'image/jpeg'});}catch(e){console.warn('Skipping photo:',e.message);}}
     const seasonVal=Array.isArray(f['Season'])?f['Season'].join(', '):(f['Season']||'');
     const res=await fetch(SERVER_URL+'/generate-description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:f['EB Number'],reference_name:f['Reference name'],type:f['Type'],season:seasonVal,holiday:f['Occasion'],colors:lpColorsFromRecord(f),dimensions:dims,materials:lpMaterialsFromRecord(f),location:lpGetLocation()||lpStepTwoCache.location||'',special:(f['Listing Special Notes']||lpStepTwoCache.special||''),notes:f['Description'],images:photoImages})});
     const data=await res.json(); if(!res.ok||!data.success) throw new Error(data.error||'Server returned error');
@@ -2447,7 +2447,7 @@ function lpDriveSelectedIndex(id){ return lpPhotoItems.findIndex(it=>it.driveFil
 function lpDriveToggle(id){
   const idx=lpDriveSelectedIndex(id);
   if(idx>=0){ lpPhotoItems.splice(idx,1); }
-  else { if(lpPhotoItems.length>=15){alert('Up to 15 photos.');return;} const img=lpDriveImages.find(f=>f.id===id); if(!img)return; lpPhotoItems.push({driveFileId:img.id,name:img.name,thumbnailLink:img.thumbnailLink,mime:img.mimeType,dataUrl:null}); }
+  else { if(lpPhotoItems.length>=15){alert('Up to 15 photos.');return;} const img=lpDriveImages.find(f=>f.id===id); if(!img)return; const savedCrop=lpCropStore[img.id]||null; lpPhotoItems.push({driveFileId:img.id,name:img.name,thumbnailLink:img.thumbnailLink,mime:img.mimeType,dataUrl:null,crop:savedCrop,cropped:!!savedCrop}); }
   lpDriveLinked=false; lpRenderDriveGrid(); lpRenderPhotos();
 }
 function lpRenderDriveGrid(){
@@ -2501,11 +2501,18 @@ async function lpDriveLinkRename(){
   finally{ btn.disabled=false; btn.textContent=orig; }
 }
 
-function lpResizeImage(dataUrl,targetSize,maxKB){return new Promise(resolve=>{const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');canvas.width=targetSize;canvas.height=targetSize;const ctx=canvas.getContext('2d');ctx.fillStyle='#ffffff';ctx.fillRect(0,0,targetSize,targetSize);const scale=Math.min(targetSize/img.width,targetSize/img.height);const w=img.width*scale,h=img.height*scale;ctx.drawImage(img,(targetSize-w)/2,(targetSize-h)/2,w,h);let quality=0.88;const tryExport=()=>{canvas.toBlob(blob=>{if(blob.size/1024<=maxKB||quality<=0.5)resolve(blob);else{quality-=0.08;tryExport();}},'image/jpeg',quality);};tryExport();};img.src=dataUrl;});}
-
 // ── Square crop (1:1) — crops the chosen region instead of padding with white ──
 // crop = {sx,sy,sSize} in source-pixel coords; falls back to a centered square.
 function lpCropToSquare(dataUrl,crop,targetSize,maxKB){return new Promise(resolve=>{const img=new Image();img.onload=()=>{const natW=img.naturalWidth,natH=img.naturalHeight;let sSize,sx,sy;if(crop&&crop.sSize){sSize=Math.min(crop.sSize,natW,natH);sx=crop.sx;sy=crop.sy;}else{sSize=Math.min(natW,natH);sx=(natW-sSize)/2;sy=(natH-sSize)/2;}sx=Math.max(0,Math.min(sx,natW-sSize));sy=Math.max(0,Math.min(sy,natH-sSize));const canvas=document.createElement('canvas');canvas.width=targetSize;canvas.height=targetSize;const ctx=canvas.getContext('2d');ctx.drawImage(img,sx,sy,sSize,sSize,0,0,targetSize,targetSize);let quality=0.88;const tryExport=()=>{canvas.toBlob(blob=>{(blob.size/1024<=maxKB||quality<=0.5)?resolve(blob):(quality-=0.08,tryExport());},'image/jpeg',quality);};tryExport();};img.src=dataUrl;});}
+
+// ── Persistent crop store ────────────────────────────────────
+// Crops survive across sessions, keyed by Drive file ID (stable through the
+// publish rename). Re-selecting a photo in any later session reattaches its
+// saved crop. Kept separate from WIP because the photo selection itself isn't
+// persisted — this is keyed to the file, not the listing draft.
+const LP_CROP_STORE_KEY='eb_crop_store';
+let lpCropStore=(function(){try{return JSON.parse(localStorage.getItem(LP_CROP_STORE_KEY))||{};}catch(e){return {};}})();
+function lpCropStorePersist(){try{localStorage.setItem(LP_CROP_STORE_KEY,JSON.stringify(lpCropStore));}catch(e){}}
 
 // ── Interactive square-crop modal ────────────────────────────
 const LP_CROP_STAGE=320;
@@ -2527,7 +2534,7 @@ function lpCropWheel(e){e.preventDefault();lpCropZoomAround(e.deltaY>0?1.06:0.94
 function lpCropBindEvents(){if(lpCropBound)return;const c=document.getElementById('lp-crop-canvas');if(!c)return;c.addEventListener('pointerdown',lpCropPointerDown);c.addEventListener('pointermove',lpCropPointerMove);c.addEventListener('pointerup',lpCropPointerUp);c.addEventListener('pointercancel',lpCropPointerUp);c.addEventListener('wheel',lpCropWheel,{passive:false});lpCropBound=true;}
 
 async function lpOpenCrop(i){const item=lpPhotoItems[i];if(!item)return;lpCropBindEvents();lpCropIdx=i;lpCropImg=null;const sub=document.getElementById('lp-crop-sub');document.getElementById('lp-crop-modal').classList.add('open');try{if(sub)sub.textContent='Loading full-resolution photo…';await lpEnsureDriveBytes(item);}catch(e){if(sub)sub.textContent='⚠ Could not load photo: '+e.message;return;}const img=new Image();img.onload=()=>{const natW=img.naturalWidth,natH=img.naturalHeight,maxSize=Math.min(natW,natH),minSize=Math.min(maxSize,Math.max(400,Math.round(maxSize*0.3)));lpCropImg=img;lpCropS={natW,natH,maxSize,minSize,sx:0,sy:0,sSize:maxSize};if(item.crop&&item.crop.sSize){lpCropS.sx=item.crop.sx;lpCropS.sy=item.crop.sy;lpCropS.sSize=item.crop.sSize;}else{lpCropS.sSize=maxSize;lpCropS.sx=(natW-maxSize)/2;lpCropS.sy=(natH-maxSize)/2;}lpCropClamp();lpCropSyncZoomSlider();if(sub)sub.textContent='Drag the photo to reposition · pinch, scroll, or use the slider to zoom. This 1:1 crop is saved to Drive and sent to Shopify — your original stays untouched.';lpCropDraw();};img.onerror=()=>{if(sub)sub.textContent='⚠ Could not render photo.';};img.src=item.dataUrl;}
-function lpCropSave(){if(lpCropIdx<0||!lpCropS.maxSize){lpCropCloseModal();return;}const item=lpPhotoItems[lpCropIdx];if(item){item.crop={sx:Math.round(lpCropS.sx),sy:Math.round(lpCropS.sy),sSize:Math.round(lpCropS.sSize),natW:lpCropS.natW,natH:lpCropS.natH};item.cropped=true;}lpCropCloseModal();lpRenderPhotos();}
+function lpCropSave(){if(lpCropIdx<0||!lpCropS.maxSize){lpCropCloseModal();return;}const item=lpPhotoItems[lpCropIdx];if(item){item.crop={sx:Math.round(lpCropS.sx),sy:Math.round(lpCropS.sy),sSize:Math.round(lpCropS.sSize),natW:lpCropS.natW,natH:lpCropS.natH};item.cropped=true;if(item.driveFileId){lpCropStore[item.driveFileId]=item.crop;lpCropStorePersist();}}lpCropCloseModal();lpRenderPhotos();}
 function lpCropCancel(){lpCropCloseModal();}
 function lpCropCloseModal(){const m=document.getElementById('lp-crop-modal');if(m)m.classList.remove('open');lpCropIdx=-1;lpCropImg=null;lpCropPointers.clear();lpCropPanStart=null;lpCropPinchStart=null;}
 function lpCropBackdrop(e){if(e.target===document.getElementById('lp-crop-modal'))lpCropCancel();}
