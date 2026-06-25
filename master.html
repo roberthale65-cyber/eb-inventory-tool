@@ -2437,9 +2437,16 @@ async function lpDriveLoadImages(folderId, force){
     const r=await fetch(SERVER_URL+'/drive-folder-images?folderId='+encodeURIComponent(folderId)); const d=await r.json();
     if(!r.ok) throw new Error(d.error||'Could not list images');
     lpDriveImages=d.files||[]; lpLoadedFolderId=folderId;
+    // Re-apply a previously-saved selection (in saved order), reattaching crops.
+    // Files no longer in the folder are dropped; the cleaned order is re-persisted.
+    const savedSel=lpSelectionStore[folderId]||[];
+    if(savedSel.length){
+      lpPhotoItems=savedSel.map(fid=>lpDriveImages.find(f=>f.id===fid)).filter(Boolean).map(img=>{const sc=lpCropStore[img.id]||null;return {driveFileId:img.id,name:img.name,thumbnailLink:img.thumbnailLink,mime:img.mimeType,dataUrl:null,crop:sc,cropped:!!sc};});
+      if(lpPhotoItems.length!==savedSel.length) lpSelectionStoreSync();
+    }
     if(lpDriveImages.length===0){ if(status){status.style.display='block'; status.textContent='No images found in this folder.';} if(label)label.style.display='none'; }
     else { if(status)status.style.display='none'; if(label)label.style.display='block'; }
-    lpRenderDriveGrid();
+    lpRenderDriveGrid(); lpRenderPhotos();
     lpLoadFolderVideos(folderId);
   }catch(e){ if(status){status.style.display='block'; status.style.color='var(--rose)'; status.textContent='⚠ '+e.message;} }
 }
@@ -2448,7 +2455,7 @@ function lpDriveToggle(id){
   const idx=lpDriveSelectedIndex(id);
   if(idx>=0){ lpPhotoItems.splice(idx,1); }
   else { if(lpPhotoItems.length>=15){alert('Up to 15 photos.');return;} const img=lpDriveImages.find(f=>f.id===id); if(!img)return; const savedCrop=lpCropStore[img.id]||null; lpPhotoItems.push({driveFileId:img.id,name:img.name,thumbnailLink:img.thumbnailLink,mime:img.mimeType,dataUrl:null,crop:savedCrop,cropped:!!savedCrop}); }
-  lpDriveLinked=false; lpRenderDriveGrid(); lpRenderPhotos();
+  lpDriveLinked=false; lpSelectionStoreSync(); lpRenderDriveGrid(); lpRenderPhotos();
 }
 function lpRenderDriveGrid(){
   const grid=document.getElementById('lp-drive-grid'); if(!grid)return;
@@ -2465,12 +2472,12 @@ function lpRenderPhotos(){
   if(grid)grid.innerHTML=lpPhotoItems.map((item,i)=>'<div class="photo-card-opt" id="lpc-'+i+'" draggable="true" ondragstart="lpPhotoDragStart('+i+')" ondragover="lpPhotoDragOver(event,'+i+')" ondragleave="lpPhotoDragLeave('+i+')" ondrop="lpPhotoDrop(event,'+i+')"><span class="photo-badge">'+(i===0?'HERO':i+1)+'</span><button class="photo-remove" onclick="lpRemovePhoto('+i+')">✕</button><img src="'+(item.thumbnailLink||item.dataUrl||'')+'" alt="photo '+(i+1)+'" referrerpolicy="no-referrer"><button class="photo-crop-btn'+(item.cropped?' set':'')+'" onclick="lpOpenCrop('+i+')">'+(item.cropped?'✓ Square':'◻ Crop')+'</button><div class="photo-card-footer-opt">'+escHtml(item.name||'')+'</div></div>').join('');
   lpUpdatePublishSummary();
 }
-function lpRemovePhoto(i){lpPhotoItems.splice(i,1);lpDriveLinked=false;lpRenderDriveGrid();lpRenderPhotos();}
-function lpClearPhotos(){lpPhotoItems=[];lpDriveLinked=false;lpRenderDriveGrid();lpRenderPhotos();}
+function lpRemovePhoto(i){lpPhotoItems.splice(i,1);lpDriveLinked=false;lpSelectionStoreSync();lpRenderDriveGrid();lpRenderPhotos();}
+function lpClearPhotos(){lpPhotoItems=[];lpDriveLinked=false;lpSelectionStoreSync();lpRenderDriveGrid();lpRenderPhotos();}
 function lpPhotoDragStart(i){lpDragSrcIdx=i;document.getElementById('lpc-'+i).classList.add('dragging');}
 function lpPhotoDragOver(e,i){e.preventDefault();if(i!==lpDragSrcIdx)document.getElementById('lpc-'+i).classList.add('drag-over');}
 function lpPhotoDragLeave(i){document.getElementById('lpc-'+i).classList.remove('drag-over');}
-function lpPhotoDrop(e,i){e.preventDefault();document.getElementById('lpc-'+i).classList.remove('drag-over');if(lpDragSrcIdx===null||lpDragSrcIdx===i){lpDragSrcIdx=null;return;}const moved=lpPhotoItems.splice(lpDragSrcIdx,1)[0];lpPhotoItems.splice(i,0,moved);lpDragSrcIdx=null;lpDriveLinked=false;lpRenderDriveGrid();lpRenderPhotos();}
+function lpPhotoDrop(e,i){e.preventDefault();document.getElementById('lpc-'+i).classList.remove('drag-over');if(lpDragSrcIdx===null||lpDragSrcIdx===i){lpDragSrcIdx=null;return;}const moved=lpPhotoItems.splice(lpDragSrcIdx,1)[0];lpPhotoItems.splice(i,0,moved);lpDragSrcIdx=null;lpDriveLinked=false;lpSelectionStoreSync();lpRenderDriveGrid();lpRenderPhotos();}
 
 // Fetch full image bytes from Drive on demand (for AI vision + Shopify upload).
 async function lpEnsureDriveBytes(item){
@@ -2513,6 +2520,15 @@ function lpCropToSquare(dataUrl,crop,targetSize,maxKB){return new Promise(resolv
 const LP_CROP_STORE_KEY='eb_crop_store';
 let lpCropStore=(function(){try{return JSON.parse(localStorage.getItem(LP_CROP_STORE_KEY))||{};}catch(e){return {};}})();
 function lpCropStorePersist(){try{localStorage.setItem(LP_CROP_STORE_KEY,JSON.stringify(lpCropStore));}catch(e){}}
+
+// Photo selection + order also persist across sessions, keyed by Drive folder ID.
+// Re-applied after a folder loads (lpDriveLoadImages wipes lpPhotoItems on each
+// fresh load), so the chosen photos and their hero/order survive start/stop.
+const LP_SEL_STORE_KEY='eb_selection_store';
+let lpSelectionStore=(function(){try{return JSON.parse(localStorage.getItem(LP_SEL_STORE_KEY))||{};}catch(e){return {};}})();
+function lpSelectionStorePersist(){try{localStorage.setItem(LP_SEL_STORE_KEY,JSON.stringify(lpSelectionStore));}catch(e){}}
+// Persist the current ordered selection for the loaded folder.
+function lpSelectionStoreSync(){if(!lpLoadedFolderId)return;lpSelectionStore[lpLoadedFolderId]=lpPhotoItems.map(it=>it.driveFileId);lpSelectionStorePersist();}
 
 // ── Interactive square-crop modal ────────────────────────────
 const LP_CROP_STAGE=320;
