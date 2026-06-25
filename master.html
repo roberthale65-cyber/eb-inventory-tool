@@ -477,12 +477,13 @@ button:active{transform:scale(.97)}
       <div class="field"><label>Reference name <span style="color:var(--rose)">*</span></label><input type="text" id="np-ref-name" required placeholder="e.g. Cozy autumn door wreath" onblur="npCheckSpelling()" oninput="npDismissSpelling()"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">A short, temporary name to recognize this piece in lists.</div><div id="np-spell-suggestion" style="display:none;margin-top:6px;background:var(--teal-bg);border:1.5px solid var(--teal-light);border-radius:6px;padding:8px 10px;font-size:12px;color:var(--teal)">Suggested: <strong id="np-spell-corrected"></strong><button onclick="npAcceptSpelling()" style="margin-left:8px;background:var(--teal);color:#fff;border:none;border-radius:4px;padding:2px 10px;font-size:11px;font-weight:700;cursor:pointer">Accept</button><button onclick="npDismissSpelling()" style="margin-left:4px;background:none;border:none;color:var(--text-muted);font-size:12px;cursor:pointer;line-height:1">✕</button></div></div>
       <div class="grid-2">
         <div class="field"><label>Year</label><select id="np-year"><option value="26">2026</option><option value="27">2027</option><option value="28">2028</option></select></div>
-        <div class="field"><label>Type</label><select id="np-type"><option value="WR">Wreath</option><option value="HD">Home decor</option><option value="OP">Outdoor planter</option><option value="CP">Centerpiece</option><option value="WD">Wall decor</option><option value="HA">Hanging</option><option value="SW">Swag</option><option value="CU">Custom order</option></select></div>
+        <div class="field"><label>Type</label><select id="np-type"><option value="WR">Wreath</option><option value="HD">Home decor</option><option value="OP">Outdoor planter</option><option value="CP">Centerpiece</option><option value="WD">Wall decor</option><option value="HA">Hanging</option><option value="SW">Swag</option><option value="CU">Custom order</option><option value="AO">Add-on</option></select></div>
       </div>
       <div class="field"><label>Season</label><div id="np-season" class="chip-checks"></div></div>
+      <div class="field"><label>Occasion (optional)</label><div id="np-occasion" class="chip-checks"></div></div>
       <div class="grid-2">
-        <div class="field"><label>Occasion (optional)</label><div id="np-occasion" class="chip-checks"></div></div>
         <div class="field"><label>Price ($)</label><input type="text" id="np-price" placeholder="e.g. 85.00" oninput="npAutoFillCost()"></div>
+        <div class="field"><label>Quantity</label><input type="number" id="np-quantity" min="0" step="1" value="1"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Units in stock. Defaults to 1 for one-of-a-kind pieces.</div></div>
       </div>
       <div class="grid-2">
         <div class="field"><label>Cost ($)</label><input type="text" id="np-cost" placeholder="auto-filled from price"></div>
@@ -1101,7 +1102,7 @@ button:active{transform:scale(.97)}
     <div style="position:sticky;bottom:0;z-index:10;background:var(--ivory);border-top:1.5px solid var(--border);padding:14px 0 0;margin-top:8px">
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
         <div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Season</div><div id="bl-sel-season" style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:7px 10px;display:flex;flex-direction:column;gap:5px"><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Spring" style="accent-color:var(--sage);width:14px;height:14px"> Spring</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Summer" style="accent-color:var(--sage);width:14px;height:14px"> Summer</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Fall" style="accent-color:var(--sage);width:14px;height:14px"> Fall</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="checkbox" value="Winter" style="accent-color:var(--sage);width:14px;height:14px"> Winter</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;border-top:1px solid var(--border);padding-top:5px;margin-top:2px"><input type="checkbox" value="All Season" style="accent-color:var(--sage);width:14px;height:14px"> All Season</label></div></div>
-        <div style="display:flex;flex-direction:column;gap:8px"><div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Type</div><select id="bl-sel-type" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)"><option value="Wreath" selected>Wreath</option><option value="Home decor">Home decor</option><option value="Outdoor planter">Outdoor planter</option><option value="Centerpiece">Centerpiece</option><option value="Wall decor">Wall decor</option><option value="Hanging">Hanging</option><option value="Swag">Swag</option><option value="Custom order">Custom order</option></select></div><div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Occasion</div><select id="bl-sel-occasion" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)"><option value="None" selected>None</option><option value="Everyday">Everyday</option><option value="Christmas">Christmas</option><option value="Thanksgiving">Thanksgiving</option><option value="Easter">Easter</option><option value="Mother's Day">Mother's Day</option><option value="Fourth of July">Fourth of July</option><option value="Halloween">Halloween</option><option value="Valentine's Day">Valentine's Day</option><option value="Memorial Day">Memorial Day</option><option value="Congratulations">Congratulations</option><option value="Sympathy">Sympathy</option><option value="Funeral">Funeral</option><option value="Wedding">Wedding</option><option value="Bridal Shower">Bridal Shower</option><option value="Baby Shower">Baby Shower</option><option value="Graduation">Graduation</option></select></div></div>
+        <div style="display:flex;flex-direction:column;gap:8px"><div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Type</div><select id="bl-sel-type" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)"><option value="Wreath" selected>Wreath</option><option value="Home decor">Home decor</option><option value="Outdoor planter">Outdoor planter</option><option value="Centerpiece">Centerpiece</option><option value="Wall decor">Wall decor</option><option value="Hanging">Hanging</option><option value="Swag">Swag</option><option value="Custom order">Custom order</option><option value="Add-on">Add-on</option></select></div><div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Occasion</div><select id="bl-sel-occasion" style="width:100%;padding:8px 10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card);color:var(--text)"><option value="None" selected>None</option><option value="Everyday">Everyday</option><option value="Christmas">Christmas</option><option value="Thanksgiving">Thanksgiving</option><option value="Easter">Easter</option><option value="Mother's Day">Mother's Day</option><option value="Fourth of July">Fourth of July</option><option value="Halloween">Halloween</option><option value="Valentine's Day">Valentine's Day</option><option value="Memorial Day">Memorial Day</option><option value="Congratulations">Congratulations</option><option value="Sympathy">Sympathy</option><option value="Funeral">Funeral</option><option value="Wedding">Wedding</option><option value="Bridal Shower">Bridal Shower</option><option value="Baby Shower">Baby Shower</option><option value="Graduation">Graduation</option></select></div></div>
         <div><div style="font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Status</div><div id="bl-sel-status" style="display:flex;flex-direction:column;gap:5px"><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="In stock" style="accent-color:var(--sage);width:14px;height:14px"> In stock</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Photographed" checked style="accent-color:var(--sage);width:14px;height:14px"> Photographed</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Ready to list" style="accent-color:var(--sage);width:14px;height:14px"> Ready to list</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Listed" style="accent-color:var(--sage);width:14px;height:14px"> Listed</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Craft Fair" style="accent-color:var(--sage);width:14px;height:14px"> Craft Fair</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Hair Salon" style="accent-color:var(--sage);width:14px;height:14px"> Hair Salon</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Sold" style="accent-color:var(--sage);width:14px;height:14px"> Sold</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer"><input type="radio" name="bl-status" value="Archived" style="accent-color:var(--sage);width:14px;height:14px"> Archived</label></div></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
@@ -1144,7 +1145,7 @@ const SERVER_URL = 'https://eb-shopify-server.onrender.com';
 const SHOPIFY_BASE = 'https://eternalbloomsbypatti.com/products/';
 const DEFAULT_COST_PCT = 66; // Default cost as % of price — change here to update the global default
 const LISTABLE_STATUSES = ['In stock','Photographed','Ready to list'];
-const TYPE_CODES = {WR:'Wreath',HD:'Home decor',OP:'Outdoor planter',CP:'Centerpiece',WD:'Wall decor',HA:'Hanging',SW:'Swag',CU:'Custom order'};
+const TYPE_CODES = {WR:'Wreath',HD:'Home decor',OP:'Outdoor planter',CP:'Centerpiece',WD:'Wall decor',HA:'Hanging',SW:'Swag',CU:'Custom order',AO:'Add-on'};
 const SEASON_NAMES = {SP:'Spring',SU:'Summer',FA:'Fall',WI:'Winter',AS:'All Season'};
 // Season name → 2-letter EB code. Multiple seasons → MS (multi-season), or AS when "All Season" is among them.
 const SEASON_CODE = {Spring:'SP',Summer:'SU',Fall:'FA',Winter:'WI','All Season':'AS'};
@@ -1779,6 +1780,7 @@ function npPopulateEditSelect(){
 function npClearForm(){
   document.getElementById('np-ref-name').value='';
   document.getElementById('np-price').value='';
+  document.getElementById('np-quantity').value='1';
   document.getElementById('np-cost').value='';
   document.getElementById('np-cost-pct').value=DEFAULT_COST_PCT;
   document.getElementById('np-notes').value='';
@@ -1808,6 +1810,7 @@ function npLoadRecordForEdit(){
   npSetChecks('np-season',Array.isArray(f['Season'])?f['Season']:(f['Season']?[f['Season']]:[]));
   npSetChecks('np-occasion',(f['Occasion']&&f['Occasion']!=='None')?f['Occasion'].split(',').map(v=>v.trim()).filter(Boolean):[]);
   document.getElementById('np-price').value=f['Price ($)']!=null?f['Price ($)']:'';
+  document.getElementById('np-quantity').value=f['Quantity']!=null?f['Quantity']:1;
   document.getElementById('np-cost').value=f['Cost ($)']!=null?f['Cost ($)']:'';
   var _ep=parseFloat(f['Price ($)'])||0,_ec=parseFloat(f['Cost ($)'])||0;
   document.getElementById('np-cost-pct').value=(_ep>0&&_ec>0)?Math.round(_ec/_ep*100):DEFAULT_COST_PCT;
@@ -1831,13 +1834,27 @@ function npLoadRecordForEdit(){
 }
 function npPrimaryAction(){ return npMode==='edit' ? npSaveEdit() : npGenerateEB(); }
 
+// Map a Type label to its default Shopify product category. Add-on returns ''
+// (no default — selected manually on Shopify). Wreath → Wreaths; all other
+// Types → Artificial Flowering Plants.
+function npCategoryForType(typeName){
+  if(typeName==='Wreath') return 'Wreaths';
+  if(typeName==='Add-on') return '';
+  return 'Artificial Flowering Plants';
+}
+
 // Build the Airtable field payload shared by create + edit from the Step 1.1 form.
 function npBuildFieldsFromForm(){
   const seasons=npGetChecks('np-season');
+  const typeName=TYPE_CODES[document.getElementById('np-type').value];
+  const qtyRaw=parseInt((document.getElementById('np-quantity')||{}).value,10);
   const fields={
     'Season':seasons,
     'Reference name':document.getElementById('np-ref-name').value.trim(),
-    'Type':TYPE_CODES[document.getElementById('np-type').value],
+    'Type':typeName,
+    'Quantity':(Number.isFinite(qtyRaw)&&qtyRaw>=0)?qtyRaw:1,
+    // Auto-derived default category; null for Add-on so it stays blank (and clears on edit).
+    'Product Category':npCategoryForType(typeName)||null,
     'Occasion':npGetChecks('np-occasion').join(', ')||'',
     'Florals':document.getElementById('np-florals').value,
     'Greenery':document.getElementById('np-greenery').value,
@@ -2250,7 +2267,10 @@ function lpRenderReview() {
   const title=(titleEl&&titleEl.value.trim())||lpCurrentTitle||lpFallbackTitle(f);
   const tags=lpBuildTags(f), sku=f['EB Number']||'', price=f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—';
   const collections=lpBuildCollections(f), collLabel=collections.map(h=>COLLECTION_LABELS[h]||h).join(' + ')||'—';
-  const fields=[{l:'Product title',v:title},{l:'SKU',v:sku},{l:'Price',v:price},{l:'Tags',v:tags},{l:'Collection(s)',v:collLabel},{l:'Quantity',v:'1'},{l:'Dimensions',v:dims||'— add in Step 1'},{l:'Weight',v:oz!=null?ozToLbOzStr(oz):'— add in Step 1'},{l:'Meta description',v:meta||'— optional'},{l:'Shopify URL (after live)',v:sku?SHOPIFY_BASE+sku.toLowerCase():'—'}];
+  const qty=(f['Quantity']!=null&&f['Quantity']!=='')?f['Quantity']:1;
+  const catLabel=f['Product Category']||npCategoryForType(f['Type'])||'';
+  const catDisplay=catLabel||'— select on Shopify';
+  const fields=[{l:'Product title',v:title},{l:'SKU',v:sku},{l:'Price',v:price},{l:'Tags',v:tags},{l:'Collection(s)',v:collLabel},{l:'Category',v:catDisplay},{l:'Quantity',v:String(qty)},{l:'Dimensions',v:dims||'— add in Step 1'},{l:'Weight',v:oz!=null?ozToLbOzStr(oz):'— add in Step 1'},{l:'Meta description',v:meta||'— optional'},{l:'Shopify URL (after live)',v:sku?SHOPIFY_BASE+sku.toLowerCase():'—'}];
   document.getElementById('lp-listing-fields').innerHTML=fields.map((fld,i)=>'<div class="listing-field-row"><span class="lf-label">'+fld.l+'</span><span class="lf-value" id="lpf-'+i+'">'+escHtml(fld.v||'—')+'</span><button class="lf-copy" id="lpfb-'+i+'" onclick="lpCopyField(\'lpf-'+i+'\',\'lpfb-'+i+'\')">Copy</button></div>').join('');
 }
 
@@ -2511,7 +2531,9 @@ async function lpPublish(){
   btn.textContent='⏳ Publishing...';setStatus('lp','Publishing to Shopify...','loading');
   try {
     const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),90000);
-    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images})});
+    const pubQty=(f['Quantity']!=null&&f['Quantity']!=='')?f['Quantity']:1;
+    const pubCategory=f['Product Category']||npCategoryForType(f['Type'])||'';
+    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory})});
     clearTimeout(timeout);const data=await res.json();
     if(!res.ok||!data.success) throw new Error(data.error||'Publish failed');
     try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;if(meta)photoFields['Listing Meta Description']=meta;await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:photoFields})});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;if(meta)rec.fields['Listing Meta Description']=meta;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
@@ -2522,7 +2544,7 @@ async function lpPublish(){
     WIP.clear('lp');
     lastPublishedProduct={eb:f['EB Number']||'',detail:(f['Type']||'')+(f['Season']?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Occasion']&&f['Occasion']!=='None'?' · '+f['Occasion']:''),adminUrl:data.admin_url,price:f['Price ($)']!=null?String(f['Price ($)']):''}; 
     result.className='publish-result success';result.style.display='block';
-    result.innerHTML='<div style="font-size:15px;font-weight:700;color:var(--sage);margin-bottom:14px">✓ Published successfully!</div><div style="display:grid;gap:8px;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 1 — Airtable</strong><div style="font-size:11px;color:var(--text-muted)">Status set to Listed · Shopify URL saved</div></div></div><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 2 — Shopify</strong><div style="font-size:11px;color:var(--text-muted)">Listing live · inventory set to 1 · collections assigned</div></div></div><div id="lp-pub-video" style="display:flex;align-items:center;gap:10px;background:var(--teal-bg);border:1px solid var(--teal-light);border-radius:8px;padding:12px"><span style="font-size:18px">📹</span><div id="lp-pub-video-msg" style="font-size:12px;color:var(--teal)">Checking video…</div></div></div><a href="'+data.shopify_url+'" target="_blank" style="font-size:12px;color:var(--text-muted)">🔗 View live listing</a>';
+    result.innerHTML='<div style="font-size:15px;font-weight:700;color:var(--sage);margin-bottom:14px">✓ Published successfully!</div><div style="display:grid;gap:8px;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 1 — Airtable</strong><div style="font-size:11px;color:var(--text-muted)">Status set to Listed · Shopify URL saved</div></div></div><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 2 — Shopify</strong><div style="font-size:11px;color:var(--text-muted)">Listing live · inventory set to '+(data.quantity!=null?data.quantity:1)+(data.category?' · category: '+escHtml(data.category):'')+' · collections assigned</div></div></div><div id="lp-pub-video" style="display:flex;align-items:center;gap:10px;background:var(--teal-bg);border:1px solid var(--teal-light);border-radius:8px;padding:12px"><span style="font-size:18px">📹</span><div id="lp-pub-video-msg" style="font-size:12px;color:var(--teal)">Checking video…</div></div></div><a href="'+data.shopify_url+'" target="_blank" style="font-size:12px;color:var(--text-muted)">🔗 View live listing</a>';
     btn.textContent='✓ Published!';btn.style.background='var(--sage)';btn.style.borderColor='var(--sage)';
     // Video (the result panel — incl. #lp-pub-video — now exists in the DOM): if one
     // was picked in Step 2.3 upload it now; otherwise fall back to the manual panel.
@@ -3034,7 +3056,7 @@ async function markSold(record,channel,salePrice,saleDate){const f=record.fields
 
 // ── CRAFT FAIR ──
 function populateCFInventory(filter=''){const container=document.getElementById('cf-inventory');const records=cfCachedRecords.filter(r=>{const f=r.fields,status=f['Status']||'';if(status==='Archived')return false;if(!filter)return true;const q=filter.toLowerCase();return(f['EB Number']||'').toLowerCase().includes(q)||(f['Type']||'').toLowerCase().includes(q)||(f['Season']||'').toLowerCase().includes(q)||(f['Occasion']||'').toLowerCase().includes(q);});if(records.length===0){container.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:12px">🔍</div><div style="font-size:14px">No pieces found</div></div>';return;}const order={'In stock':0,'Photographed':0,'Ready to list':0,'Listed':1,'Craft fair':1,'Hair Salon':1,'Sold':2};records.sort((a,b)=>(order[a.fields['Status']]||3)-(order[b.fields['Status']]||3));container.innerHTML=records.map(r=>{const f=r.fields,isSold=f['Status']==='Sold'||f['Status']==='Archived';const price=f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—';const seasonDisplay=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||'');const tags=[seasonDisplay,f['Occasion']&&f['Occasion']!=='None'?f['Occasion']:null,f['Status']].filter(Boolean).join(' · ');return'<div class="cf-piece-card'+(isSold?' sold-out':'')+'" onclick="cfTapPiece(\''+r.id+'\')">'+'<div class="cf-piece-thumb-placeholder">'+cfTypeIcon(f['Type'])+'</div>'+'<div class="cf-piece-info"><div class="cf-piece-eb">'+escHtml(f['EB Number']||'—')+'</div>'+'<div class="cf-piece-type">'+escHtml(f['Type']||'Arrangement')+'</div>'+'<div class="cf-piece-tags">'+escHtml(tags)+'</div></div>'+(isSold?'<div class="cf-sold-badge">SOLD</div>':'<div class="cf-piece-price">'+price+'</div>')+'</div>';}).join('');}
-function cfTypeIcon(type){const icons={'Wreath':'🌿','Home decor':'🌸','Outdoor planter':'🪴','Centerpiece':'💐','Wall decor':'🖼','Swag':'🌾','Custom order':'✨'};return icons[type]||'🌺';}
+function cfTypeIcon(type){const icons={'Wreath':'🌿','Home decor':'🌸','Outdoor planter':'🪴','Centerpiece':'💐','Wall decor':'🖼','Swag':'🌾','Custom order':'✨','Add-on':'➕'};return icons[type]||'🌺';}
 function cfFilter(){populateCFInventory(document.getElementById('cf-search').value.trim());}
 function cfTapPiece(recordId){const record=cfCachedRecords.find(r=>r.id===recordId);if(!record)return;const f=record.fields;if(f['Status']==='Sold'||f['Status']==='Archived'){alert(escHtml(f['EB Number'])+' is already sold.');return;}modalSelectedRecord=record;document.getElementById('modal-piece-title').textContent=f['EB Number']||'Mark as sold';document.getElementById('modal-piece-sub').textContent=(f['Type']||'Arrangement')+((f['Season'])?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Price ($)']!=null?' · $'+Number(f['Price ($)']).toFixed(2):'');document.getElementById('modal-price').value=f['Price ($)']!=null?Number(f['Price ($)']).toFixed(2):'';document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>{b.classList.remove('selected');if(b.querySelector('.channel-label').textContent==='Craft fair'){b.classList.add('selected');modalSelectedChannel='Craft fair';}});document.getElementById('modal-status').style.display='none';document.getElementById('modal-confirm-btn').disabled=false;document.getElementById('modal-confirm-btn').textContent='✓ Mark as sold';document.getElementById('sold-modal').classList.add('open');}
 function modalSelectChannel(el,channel){document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');modalSelectedChannel=channel;}
@@ -3819,6 +3841,7 @@ function wipRestoreNP(saved) {
   if(saved.colors)npSetChecks('np-colors',saved.colors);
   if(saved.materials)npSetChecks('np-materials',saved.materials);
   if(saved.price){const el=document.getElementById('np-price');if(el)el.value=saved.price;}
+  if(saved.quantity!==undefined&&saved.quantity!==''){const el=document.getElementById('np-quantity');if(el)el.value=saved.quantity;}
   if(saved.cost){const el=document.getElementById('np-cost');if(el)el.value=saved.cost;}
   if(saved.costPct){const el=document.getElementById('np-cost-pct');if(el)el.value=saved.costPct;}
   if(saved.notes){const el=document.getElementById('np-notes');if(el)el.value=saved.notes;}
@@ -3850,6 +3873,7 @@ function wipSaveNP() {
     colors:   npGetChecks('np-colors'),
     materials:npGetChecks('np-materials'),
     price:    (document.getElementById('np-price')||{}).value||'',
+    quantity: (document.getElementById('np-quantity')||{}).value||'',
     cost:     (document.getElementById('np-cost')||{}).value||'',
     costPct:  (document.getElementById('np-cost-pct')||{}).value||'',
     notes:    (document.getElementById('np-notes')||{}).value||'',

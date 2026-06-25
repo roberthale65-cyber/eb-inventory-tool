@@ -30,6 +30,16 @@ const AT_BASE_ID       = 'appHw4SEE5RNT8tCV';
 const AT_INVENTORY_TBL = 'tbl29ndzXDXXU8f7x';
 const AT_COSTS_TBL     = 'Costs';
 
+// ── Shopify standard product category (taxonomy) GIDs ─────────
+// Map the "Product Category" label (from Airtable / Step 1.1) to a Shopify
+// taxonomy node. REST can't set the category, so /create-product sets it via
+// a follow-up productUpdate GraphQL mutation. Add-on has no entry on purpose —
+// the category is chosen manually on Shopify for those.
+const SHOPIFY_CATEGORY_GIDS = {
+  'Wreaths':                     'gid://shopify/TaxonomyCategory/hg-3-76-2',
+  'Artificial Flowering Plants': 'gid://shopify/TaxonomyCategory/hg-3-2-1'
+};
+
 // ── Token stores ─────────────────────────────────────────────
 let shopifyAccessToken = process.env.SHOPIFY_TOKEN || null;
 let googleAccessToken  = null;
@@ -761,14 +771,19 @@ app.post('/mark-sold', async (req, res) => {
 // ── Create product ────────────────────────────────────────────
 app.post('/create-product', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized. Visit ' + SERVER_URL + '/auth to complete Shopify OAuth first.' });
-  const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images } = req.body;
+  const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images, quantity, product_category } = req.body;
   if (!title || !sku) return res.status(400).json({ error: 'title and sku are required' });
+  // Inventory quantity — default to 1 (one-of-a-kind) when unset; clamp to a non-negative integer.
+  const qty = (quantity != null && quantity !== '' && Number.isFinite(Number(quantity))) ? Math.max(0, Math.round(Number(quantity))) : 1;
   const variant = { sku, price: price || '0.00', inventory_management: 'shopify', inventory_policy: 'deny', fulfillment_service: 'manual', requires_shipping: requires_shipping !== false };
   // Weight: prefer ounces (Shopify WeightUnit OUNCES) — exact, matches the Airtable "Item weight (oz)" field.
   if (weight_oz != null && weight_oz !== '') { variant.weight = Number(weight_oz); variant.weight_unit = 'oz'; }
   else if (weight_lbs) { variant.weight = Math.round(weight_lbs * 453.592); variant.weight_unit = 'g'; }
   let fullDescription = body_html || '';
-  if (dimensions) fullDescription += '<p><strong>Dimensions:</strong> ' + dimensions + '</p>';
+  if (dimensions) {
+    fullDescription += '<p><strong>Dimensions:</strong> ' + dimensions + '</p>';
+    fullDescription += '<p><em>Product dimensions are measured from tip to tip of leaves or flowers.</em></p>';
+  }
   const productPayload = {
     product: {
       title, body_html: fullDescription, vendor: 'Eternal Blooms Designs', product_type: product_type || '', tags: tags || '',
@@ -791,11 +806,36 @@ app.post('/create-product', async (req, res) => {
     const locData = await locRes.json();
     const locationId = locData.locations && locData.locations[0] && locData.locations[0].id;
     if (locationId) {
-      await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/inventory_levels/set.json`, {
+      // Connect the inventory item to the location first. set.json fails on an
+      // unconnected item, which is why new products were landing at 0 available.
+      // An already-connected item returns 422 — safe to ignore.
+      await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/inventory_levels/connect.json`, {
         method: 'POST',
         headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ location_id: locationId, inventory_item_id: inventoryItemId, available: 1 })
+        body: JSON.stringify({ location_id: locationId, inventory_item_id: inventoryItemId })
+      }).catch(() => {});
+      const invRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/inventory_levels/set.json`, {
+        method: 'POST',
+        headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location_id: locationId, inventory_item_id: inventoryItemId, available: qty })
       });
+      if (!invRes.ok) { const t = await invRes.text().catch(() => ''); console.warn(`Inventory set failed (${invRes.status}): ${t.slice(0, 200)}`); }
+    }
+    // Set the Shopify standard product category (taxonomy) — REST can't, so use
+    // a productUpdate GraphQL mutation. Skipped for Add-ons (no mapping). Non-fatal.
+    const categoryGid = SHOPIFY_CATEGORY_GIDS[product_category];
+    if (categoryGid) {
+      try {
+        const catMutation = `mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){product{id category{id name}}userErrors{field message}}}`;
+        const catRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/graphql.json`, {
+          method: 'POST',
+          headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: catMutation, variables: { product: { id: `gid://shopify/Product/${productId}`, category: categoryGid } } })
+        });
+        const catData = await catRes.json();
+        const catErrors = catData?.data?.productUpdate?.userErrors || [];
+        if (catErrors.length) console.warn('Product category not set:', catErrors.map(e => e.message).join(', '));
+      } catch (catErr) { console.warn('Product category update failed (non-fatal):', catErr.message); }
     }
     const collectionHandles = Array.isArray(collections) ? collections : [];
     const collectionResults = [];
@@ -814,7 +854,7 @@ app.post('/create-product', async (req, res) => {
     }
     const productUrl = `https://eternalbloomsbypatti.com/products/${data.product.handle}`;
     const heroImageUrl = data.product.images && data.product.images.length > 0 ? data.product.images[0].src : null;
-    res.json({ success: true, product_id: productId, handle: data.product.handle, shopify_url: productUrl, admin_url: `https://admin.shopify.com/store/zdzva0-tj/products/${productId}`, hero_image_url: heroImageUrl, collections_assigned: collectionResults });
+    res.json({ success: true, product_id: productId, handle: data.product.handle, shopify_url: productUrl, admin_url: `https://admin.shopify.com/store/zdzva0-tj/products/${productId}`, hero_image_url: heroImageUrl, collections_assigned: collectionResults, quantity: qty, category: (categoryGid ? product_category : null) });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
  
