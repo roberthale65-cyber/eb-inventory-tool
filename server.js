@@ -40,6 +40,39 @@ const SHOPIFY_CATEGORY_GIDS = {
   'Artificial Flowering Plants': 'gid://shopify/TaxonomyCategory/hg-3-2-1'
 };
 
+// ── EB color → Shopify "Color" metaobject (shopify.color-pattern) ─────
+// Each EB Color(s) value maps to a color-pattern metaobject. The metaobject
+// carries the exact EB shade as its label PLUS a color_taxonomy_reference to
+// the nearest Shopify standard color, so the native Color filter and
+// marketplaces group it correctly while the exact shade still shows. Created
+// 2026-06-29 (metaobjectCreate). The Airtable "Value Crosswalk" table is the
+// authoritative nearest-color mapping; update both together.
+const SHOPIFY_COLOR_METAOBJECTS = {
+  'White':         'gid://shopify/Metaobject/214182789255',
+  'Silver':        'gid://shopify/Metaobject/246366175367',
+  'Bronze':        'gid://shopify/Metaobject/246337962119',
+  'Brown':         'gid://shopify/Metaobject/247313924231',
+  'Red':           'gid://shopify/Metaobject/214182756487',
+  'Orange':        'gid://shopify/Metaobject/245698297991',
+  'Yellow':        'gid://shopify/Metaobject/214355935367',
+  'Green':         'gid://shopify/Metaobject/214372548743',
+  'Blue':          'gid://shopify/Metaobject/214182690951',
+  'Purple':        'gid://shopify/Metaobject/214355837063',
+  'Pink':          'gid://shopify/Metaobject/214372581511',
+  'Gray':          'gid://shopify/Metaobject/248710070407',
+  'Black':         'gid://shopify/Metaobject/248710103175',
+  'Gold':          'gid://shopify/Metaobject/248710135943',
+  'Cream':         'gid://shopify/Metaobject/248710168711',
+  'Burgundy':      'gid://shopify/Metaobject/248710201479',
+  'Light Blue':    'gid://shopify/Metaobject/248710234247',
+  'Lavender':      'gid://shopify/Metaobject/248710267015',
+  'Copper':        'gid://shopify/Metaobject/248710299783',
+  'Rust':          'gid://shopify/Metaobject/248710332551',
+  'Yellow-Orange': 'gid://shopify/Metaobject/248710365319',
+  'Teal':          'gid://shopify/Metaobject/248710398087',
+  'Peach':         'gid://shopify/Metaobject/248710430855'
+};
+
 // ── Token stores ─────────────────────────────────────────────
 let shopifyAccessToken = process.env.SHOPIFY_TOKEN || null;
 let googleAccessToken  = null;
@@ -810,7 +843,7 @@ app.post('/mark-sold', async (req, res) => {
 // ── Create product ────────────────────────────────────────────
 app.post('/create-product', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized. Visit ' + SERVER_URL + '/auth to complete Shopify OAuth first.' });
-  const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images, quantity, product_category } = req.body;
+  const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images, quantity, product_category, colors } = req.body;
   if (!title || !sku) return res.status(400).json({ error: 'title and sku are required' });
   // Inventory quantity — default to 1 (one-of-a-kind) when unset; clamp to a non-negative integer.
   const qty = (quantity != null && quantity !== '' && Number.isFinite(Number(quantity))) ? Math.max(0, Math.round(Number(quantity))) : 1;
@@ -860,21 +893,28 @@ app.post('/create-product', async (req, res) => {
       });
       if (!invRes.ok) { const t = await invRes.text().catch(() => ''); console.warn(`Inventory set failed (${invRes.status}): ${t.slice(0, 200)}`); }
     }
-    // Set the Shopify standard product category (taxonomy) — REST can't, so use
-    // a productUpdate GraphQL mutation. Skipped for Add-ons (no mapping). Non-fatal.
+    // Set the Shopify standard product category (taxonomy) AND the native
+    // "Color" attribute (shopify.color-pattern) — REST can set neither, so use a
+    // productUpdate GraphQL mutation. Category is skipped for Add-ons (no mapping).
+    // Colors map to color-pattern metaobjects (exact EB shade label + nearest
+    // standard-color taxonomy ref); unknown color names are dropped. Non-fatal.
     const categoryGid = SHOPIFY_CATEGORY_GIDS[product_category];
-    if (categoryGid) {
+    const colorGids = (Array.isArray(colors) ? colors : []).map(c => SHOPIFY_COLOR_METAOBJECTS[c]).filter(Boolean);
+    if (categoryGid || colorGids.length) {
       try {
-        const catMutation = `mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){product{id category{id name}}userErrors{field message}}}`;
-        const catRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/graphql.json`, {
+        const productInput = { id: `gid://shopify/Product/${productId}` };
+        if (categoryGid) productInput.category = categoryGid;
+        if (colorGids.length) productInput.metafields = [{ namespace: 'shopify', key: 'color-pattern', type: 'list.metaobject_reference', value: JSON.stringify(colorGids) }];
+        const upMutation = `mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){product{id category{id name}}userErrors{field message}}}`;
+        const upRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/graphql.json`, {
           method: 'POST',
           headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: catMutation, variables: { product: { id: `gid://shopify/Product/${productId}`, category: categoryGid } } })
+          body: JSON.stringify({ query: upMutation, variables: { product: productInput } })
         });
-        const catData = await catRes.json();
-        const catErrors = catData?.data?.productUpdate?.userErrors || [];
-        if (catErrors.length) console.warn('Product category not set:', catErrors.map(e => e.message).join(', '));
-      } catch (catErr) { console.warn('Product category update failed (non-fatal):', catErr.message); }
+        const upData = await upRes.json();
+        const upErrors = upData?.data?.productUpdate?.userErrors || [];
+        if (upErrors.length) console.warn('Category/color not set:', upErrors.map(e => e.message).join(', '));
+      } catch (upErr) { console.warn('Category/color update failed (non-fatal):', upErr.message); }
     }
     const collectionHandles = Array.isArray(collections) ? collections : [];
     const collectionResults = [];
@@ -893,7 +933,7 @@ app.post('/create-product', async (req, res) => {
     }
     const productUrl = `https://eternalbloomsbypatti.com/products/${data.product.handle}`;
     const heroImageUrl = data.product.images && data.product.images.length > 0 ? data.product.images[0].src : null;
-    res.json({ success: true, product_id: productId, handle: data.product.handle, shopify_url: productUrl, admin_url: `https://admin.shopify.com/store/zdzva0-tj/products/${productId}`, hero_image_url: heroImageUrl, collections_assigned: collectionResults, quantity: qty, category: (categoryGid ? product_category : null) });
+    res.json({ success: true, product_id: productId, handle: data.product.handle, shopify_url: productUrl, admin_url: `https://admin.shopify.com/store/zdzva0-tj/products/${productId}`, hero_image_url: heroImageUrl, collections_assigned: collectionResults, quantity: qty, category: (categoryGid ? product_category : null), colors_set: colorGids.length });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
  
