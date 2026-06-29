@@ -569,7 +569,7 @@ function showAirtablePreview(f) {
     {label:'Cost',      value: f['Cost ($)']  != null ? '$' + Number(f['Cost ($)']).toFixed(2) : null},
     {label:'Dimensions',value: dimsDisplay},
     {label:'Bin',       value: f['Bin location']},
-    {label:'Notes',     value: f['Description']},
+    {label:'Internal notes', value: f['Internal notes']},
     {label:'Date made', value: f['Date made']},
   ];
   document.getElementById('at-fields-grid').innerHTML = fields.map(fld =>
@@ -613,7 +613,7 @@ Piece details:
 - Dimensions: ${dims || 'not specified'}
 - Key materials / flowers: ${materials || 'not specified'}
 - Best display location: ${location || 'not specified'}
-- Maker notes: ${(f['Description'] || '') + (special ? ' ' + special : '') || 'none'}
+- Maker notes: ${(f['Internal notes'] || '') + (special ? ' ' + special : '') || 'none'}
 
 Write ONLY the product description paragraph. No title, no bullet points, no intro phrase like "Here is..." — just the description.`.trim();
 }
@@ -704,7 +704,7 @@ async function generateDescriptionAI() {
         materials,
         location,
         special,
-        notes:      f['Description']
+        notes:      f['Internal notes']
       })
     });
     const data = await res.json();
