@@ -361,6 +361,20 @@ button:active{transform:scale(.97)}
 .chip-checks label:hover{border-color:var(--sage-light)}
 .chip-checks label:has(input:checked){background:var(--sage-bg);border-color:var(--sage);color:var(--sage)}
 .chip-checks input{accent-color:var(--sage);width:14px;height:14px;margin:0}
+/* Searchable multi-select (chips + type-to-filter + checkbox dropdown) */
+.ms{position:relative}
+.ms-control{display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-height:38px;padding:5px 8px;background:#fff;border:1.5px solid var(--border);border-radius:var(--radius-sm);cursor:text;transition:border-color .12s}
+.ms-control:focus-within{border-color:var(--sage)}
+.ms-chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;background:var(--sage-bg);color:var(--sage);border:1px solid var(--sage);border-radius:var(--radius-sm);padding:3px 4px 3px 9px;letter-spacing:0;text-transform:none}
+.ms-chip button{border:none;background:none;color:var(--sage);font-size:15px;line-height:1;cursor:pointer;padding:0 2px;font-weight:700}
+.ms-search{flex:1;min-width:90px;border:none;outline:none;font-size:13px;font-family:inherit;background:transparent;padding:3px 2px;color:var(--text)}
+.ms-menu{display:none;position:absolute;z-index:40;left:0;right:0;top:calc(100% + 4px);max-height:260px;overflow-y:auto;background:#fff;border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.ms.ms-open .ms-menu{display:block}
+.ms-opt{display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;cursor:pointer}
+.ms-opt:hover{background:var(--sage-bg)}
+.ms-opt input{accent-color:var(--sage);width:15px;height:15px;margin:0;flex-shrink:0}
+.ms-add{padding:9px 12px;font-size:13px;color:var(--sage);font-weight:600;cursor:pointer;border-top:1px solid var(--border)}
+.ms-add:hover{background:var(--sage-bg)}
 /* Collapsible Photo & Video Workflow panel */
 .pv-workflow{background:var(--teal-bg);border:1.5px solid var(--teal-light);border-radius:var(--radius-sm);padding:0;margin-bottom:12px;overflow:hidden}
 .pv-workflow>summary{list-style:none;cursor:pointer;padding:12px 14px;font-family:var(--font-body);font-size:13px;font-weight:800;color:var(--teal);display:flex;align-items:center;gap:7px;user-select:none}
@@ -487,6 +501,7 @@ button:active{transform:scale(.97)}
       </div>
       <div class="field"><label>Season</label><div id="np-season" class="chip-checks"></div></div>
       <div class="field"><label>Occasion (optional)</label><div id="np-occasion" class="chip-checks"></div></div>
+      <div class="field"><label>Date made</label><input type="date" id="np-date-made"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">When the piece was made. Defaults to today (the EB creation date) if left blank.</div></div>
       <div class="grid-2">
         <div class="field"><label>Price ($)</label><input type="text" id="np-price" placeholder="e.g. 85.00" oninput="npAutoFillCost()"></div>
         <div class="field"><label>Quantity</label><input type="number" id="np-quantity" min="0" step="1" value="1"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Units in stock. Defaults to 1 for one-of-a-kind pieces.</div></div>
@@ -502,6 +517,8 @@ button:active{transform:scale(.97)}
       <div class="field"><label>Style</label><div id="np-style" class="chip-checks"></div></div>
       <div class="field"><label>Color(s)</label><div id="np-colors" class="chip-checks"></div></div>
       <div class="field"><label>Key materials</label><div id="np-materials" class="chip-checks"></div></div>
+      <div class="field"><label>Pattern</label><div id="np-pattern"></div></div>
+      <div class="field"><label>Plant name</label><div id="np-plantname"></div></div>
       <div class="field"><label>Product description <span style="color:var(--rose)">*</span></label><div style="display:flex;gap:6px;align-items:flex-start"><textarea id="np-description" required placeholder="Extra full, farmhouse style, great for gifting..." spellcheck="true" style="flex:1"></textarea><button type="button" class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px;margin-top:2px" onclick="lpCleanupField('np-description')">✓ Fix</button></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">What makes this piece special — feeds the AI listing title &amp; description.</div></div>
       <div class="field"><label>Internal notes (optional)</label><textarea id="np-notes" placeholder="Custom request, buyer name, materials reminder..."></textarea></div>
       <div id="np-outdoor-warning" style="display:none" class="info-card amber"><strong>⚠ Outdoor pot — local delivery only.</strong></div>
@@ -628,7 +645,7 @@ button:active{transform:scale(.97)}
     <div class="step-block" id="lp-step-2">
       <div class="section-label">Listing details</div>
       <div class="info-card sage" style="margin-bottom:12px"><strong>Colors, materials, weight &amp; product description come from Step 1.</strong> Just add the listing-specific details below.</div>
-      <div class="field"><label>Best display location</label><div id="lp-location-chips" class="chip-checks" style="display:none;margin-bottom:4px"></div><div id="lp-location-text-wrap" style="display:flex;gap:6px;align-items:center"><input type="text" id="lp-location" placeholder="e.g. front door, dining table" spellcheck="true" style="flex:1"><button class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px" onclick="lpCleanupField('lp-location')">✓ Fix</button></div></div>
+      <div class="field"><label>Best display location</label><div id="lp-location"></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Where the piece looks best — maps to Shopify "Suitable location".</div></div>
       <div id="lp-s2-save-status" style="display:none;font-size:12px;padding:7px 10px;border-radius:6px;margin-bottom:8px;text-align:center"></div>
       <button class="btn btn-full" id="lp-s2-save-btn" onclick="lpSaveStepTwo()" style="font-size:12px;margin-bottom:8px">💾 Save details to Airtable</button>
       <div class="btn-row"><button class="btn-primary btn-full" onclick="lpStep(3)">Photos →</button><button class="btn btn-full" onclick="lpStep(1)">← Back</button></div>
@@ -1198,14 +1215,12 @@ const NP_OPTIONS = {
   greenery: ['None','Premium','Standard'],
   style:    ['Farmhouse','Rustic','Vintage / Antique','Modern / Contemporary','Traditional / Classic','Boho','Cottage','Coastal'],
   colors:   ['White','Cream','Gray','Black','Silver','Gold','Bronze','Copper','Brown','Burgundy','Red','Rust','Orange','Yellow-Orange','Yellow','Green','Teal','Light Blue','Blue','Purple','Lavender','Pink','Peach'],
-  materials:['Metal','Wood','Ceramic','Resin','Glass','Grapevine','Galvanized Steel','Pine','Plastic','Basket','Rattan','Candle','Lights','Velvet']
+  materials:['Metal','Wood','Ceramic','Resin','Glass','Grapevine','Galvanized Steel','Pine','Plastic','Basket','Rattan','Candle','Lights','Velvet'],
+  pattern:  ['Abstract','Animal','Art','Bead & reel','Birds','Brick',"Bull's eye",'Camouflage','Characters','Checkered','Chevron','Chinoiserie','Christmas','Collage','Coral','Damask','Diagonal','Diamond',"Dog's tooth",'Dots','Egg & dart','Ethnic','Everlasting knot','Floral','Fret','Geometric','Guilloche','Hearts','Illusion','Lace','Leaves','Logo','Mosaic','Ogee','Organic','Other','Paisley','Plaid','Rainbow','Random','Scale','Scroll','Solid','Stars','Striped','Swirl','Text','Texture','Tie-dye','Trellis','Vehicle'],
+  plantname:['Aeonium','Allium','Alocasia','Aloe vera','Amaryllis','Anthurium','Aralia','Aubergine','Bamboo','Basil','Bay leaves','Begonia','Bell pepper','Bird of paradise','Bonsai','Bougainvillea','Boxwood','Cactus','Calathea','Cherry','Cherry tomato','Chervil','Chives','Chrysanthemum','Cilantro','Coriander','Cotton','Courgette','Crocus','Cucumber','Curry leaves','Cyclamen','Daffodil','Dahlia','Daisy','Dandelion','Dill','Echeveria','Echinacea','Edelweiss','Eucalyptus','Fennel','Fern','Ficus','Fir','Forsythia','Galanthus','Gardenia','Geranium','Grape vine','Grass','Hibiscus','Honeysuckle','Hosta','Hyacinth','Hydrangea','Ivy','Jasmine','Lavender','Lily','Magnolia','Marigold','Marjoram','Mint','Miscanthus sinensis','Monstera','Olive','Orchid','Oregano','Other','Palm','Pampas grass','Pansy','Papyrus','Parsley','Peony','Petunia','Phalaenopsis','Philodendron','Pine','Poinsettia','Protea','Ranunculus','Rose','Rosemary','Rubber plant','Sage','Sansevieria','Spider plant','Sunflower','Sweet pea','Tarragon','Thyme','Tomato','Tulip','Venus flytrap','Violet','Water lily','Weeping fig','Wildflower','Willow','Yarrow','Yucca','Zamioculcas','Zinnia','Spider Mums','Wisteria','Decorative Berries Artificial','Freesia','Poppies','Peonies','Wax Flowers','Plum Blossom','Cherry Blossoms','Flower Buds','Ranunculus Roses']
 };
-const LP_DISPLAY_LOCATIONS = {
-  'Wreath':          ['Front door','Wall decor','Over fireplace','Inside doors'],
-  'Centerpiece':     ['Dining table','Coffee table','Fireplace mantle','Nook','Book shelf','Kitchen island'],
-  'Home decor':       ['Bathroom','Bedroom','Book shelf','Coffee table','Corridor','Dining table','Entrance','Fireplace mantle','Hallway','Kitchen island','Living room','Nook'],
-  'Outdoor planter': ['Balcony','Courtyard','Deck','Front of garage','Front porch','Garden','Patio','Covered porch or patio'],
-};
+// Shopify "Suitable location" taxonomy values (Toilet omitted by choice — use Bathroom).
+const LP_LOCATION_OPTIONS = ['Balcony','Bathroom','Bedroom',"Children's room",'Corridor','Courtyard','Dining room','Entrance','Garage','Garden','Hallway','Kitchen','Laundry room','Living room','Other','Patio','Porch','Storage room'];
 let npMode = 'add';
 let npSelectedFolder = null;   // { id, name } chosen in the Step 1.1 Drive folder picker
 let npFolderList = [];         // cached subfolders of the product-media folder
@@ -1342,46 +1357,19 @@ function goTo(screenId) {
 function goHome() { stepBackFn = null; updateHeaderBackBtn(); goTo('screen-home'); }
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-// ── List & Publish: display-location helpers ──────────────────────────────────
+// ── List & Publish: display-location helpers (searchable multi-select) ────────
+// Airtable "Listing Display Location" is multipleSelects → maps to Shopify
+// "Suitable location". Stored as an array; lpGetLocation() returns a joined
+// string for the AI prompt + WIP cache, lpGetLocationArr() returns the array.
+function lpLocArr(v){ return Array.isArray(v) ? v.filter(Boolean) : String(v||'').split(',').map(s=>s.trim()).filter(Boolean); }
 function lpRenderDisplayLocation(productType) {
-  const opts    = LP_DISPLAY_LOCATIONS[productType];
-  const chipsEl = document.getElementById('lp-location-chips');
-  const textEl  = document.getElementById('lp-location-text-wrap');
-  if (!chipsEl || !textEl) return;
-  if (opts) {
-    chipsEl.innerHTML = opts.map(o =>
-      '<label><input type="checkbox" value="' + escHtml(o) + '"> ' + escHtml(o) + '</label>'
-    ).join('');
-    chipsEl.style.display  = 'flex';
-    textEl.style.display   = 'none';
-  } else {
-    chipsEl.innerHTML      = '';
-    chipsEl.style.display  = 'none';
-    textEl.style.display   = 'flex';
-  }
+  const host = document.getElementById('lp-location'); if(!host) return;
+  if(!host.classList.contains('ms')) msInit('lp-location', LP_LOCATION_OPTIONS, {allowCustom:true});
+  else { host.querySelectorAll('.ms-opt input').forEach(c=>{c.checked=false;}); msSync(host); }
 }
-
-function lpGetLocation() {
-  const chipsEl = document.getElementById('lp-location-chips');
-  if (chipsEl && chipsEl.style.display !== 'none') {
-    return Array.from(chipsEl.querySelectorAll('input[type=checkbox]:checked'))
-                .map(c => c.value).join(', ');
-  }
-  return (document.getElementById('lp-location') || { value: '' }).value.trim();
-}
-
-function lpSetLocation(val) {
-  const chipsEl = document.getElementById('lp-location-chips');
-  if (chipsEl && chipsEl.style.display !== 'none') {
-    const vals = new Set((val || '').split(',').map(v => v.trim()).filter(Boolean));
-    chipsEl.querySelectorAll('input[type=checkbox]').forEach(c => {
-      c.checked = vals.has(c.value);
-    });
-  } else {
-    const el = document.getElementById('lp-location');
-    if (el) el.value = val || '';
-  }
-}
+function lpGetLocationArr(){ return npGetChecks('lp-location'); }
+function lpGetLocation(){ return lpGetLocationArr().join(', '); }
+function lpSetLocation(val){ npSetChecks('lp-location', lpLocArr(val)); }
 
 // ── Listing Readiness ─────────────────────────────────────────────────────────
 let rdAllCards = [];
@@ -1684,17 +1672,86 @@ document.getElementById('np-type').addEventListener('change', function() { docum
 // Render the Step 1.1 dropdowns + multi-select chip groups from NP_OPTIONS.
 function npRenderSelect(id,opts){const el=document.getElementById(id);if(!el)return;el.innerHTML=opts.map(o=>'<option value="'+escHtml(o)+'">'+escHtml(o)+'</option>').join('');}
 function npRenderChecks(id,opts){const el=document.getElementById(id);if(!el)return;el.innerHTML=opts.map(o=>'<label><input type="checkbox" value="'+escHtml(o)+'"> '+escHtml(o)+'</label>').join('');}
+// ── Searchable multi-select component ─────────────────────────────────────────
+// Renders into #id: chips for selected values + a search box + a filterable
+// checkbox dropdown. Native checkboxes live inside #id, so npGetChecks/npSetChecks
+// keep working unchanged. Built with DOM listeners (no inline value args) so option
+// names with apostrophes (Bull's eye, Mother's Day) are safe.
+function msInit(id, options, conf){
+  conf = conf || {};
+  const host = document.getElementById(id); if(!host) return;
+  host.classList.remove('chip-checks'); host.classList.add('ms'); host.innerHTML='';
+  host._msAllowCustom = !!conf.allowCustom;
+  const control = document.createElement('div'); control.className='ms-control';
+  const chips = document.createElement('span'); chips.className='ms-chips';
+  const search = document.createElement('input'); search.className='ms-search'; search.type='text'; search.autocomplete='off';
+  search.placeholder = conf.placeholder || 'Type to search…';
+  control.appendChild(chips); control.appendChild(search);
+  const menu = document.createElement('div'); menu.className='ms-menu';
+  host.appendChild(control); host.appendChild(menu);
+  (options||[]).forEach(o => msAddOption(host, o, false));
+  control.addEventListener('click', ()=>{ search.focus(); host.classList.add('ms-open'); });
+  search.addEventListener('focus', ()=> host.classList.add('ms-open'));
+  search.addEventListener('input', ()=> msFilter(host));
+  search.addEventListener('keydown', e=>{
+    if(e.key==='Enter'){ e.preventDefault(); if(host._msAllowCustom){ const q=search.value.trim(); if(q) msPick(host,q); } }
+    else if(e.key==='Escape'){ host.classList.remove('ms-open'); }
+    else if(e.key==='Backspace' && !search.value){ const c=menu.querySelectorAll('.ms-opt input:checked'); if(c.length){ c[c.length-1].checked=false; msSync(host); } }
+  });
+  msSync(host);
+}
+function msAddOption(host, val, checked){
+  const menu = host.querySelector('.ms-menu');
+  const label = document.createElement('label'); label.className='ms-opt';
+  const cb = document.createElement('input'); cb.type='checkbox'; cb.value=val; cb.checked=!!checked;
+  cb.addEventListener('change', ()=> msSync(host));
+  const span = document.createElement('span'); span.textContent=val;
+  label.appendChild(cb); label.appendChild(span);
+  const add = menu.querySelector('.ms-add'); menu.insertBefore(label, add||null);
+  return cb;
+}
+function msPick(host, val){
+  let cb = Array.from(host.querySelectorAll('.ms-opt input')).find(c=>c.value.toLowerCase()===val.toLowerCase());
+  if(!cb) cb = msAddOption(host, val, true); else cb.checked=true;
+  host.querySelector('.ms-search').value=''; msFilter(host); msSync(host);
+}
+function msFilter(host){
+  const q=(host.querySelector('.ms-search').value||'').trim().toLowerCase(); let exact=false;
+  host.querySelectorAll('.ms-opt').forEach(l=>{ const v=l.querySelector('input').value; const m=v.toLowerCase().indexOf(q)!==-1; l.style.display=m?'':'none'; if(v.toLowerCase()===q) exact=true; });
+  if(host._msAllowCustom){
+    let add=host.querySelector('.ms-add');
+    if(q && !exact){ if(!add){ add=document.createElement('div'); add.className='ms-add'; host.querySelector('.ms-menu').appendChild(add); add.addEventListener('click', ()=> msPick(host, host.querySelector('.ms-search').value.trim())); } add.textContent='+ Add “'+q+'”'; add.style.display=''; }
+    else if(add){ add.style.display='none'; }
+  }
+}
+function msSync(host){
+  const chips=host.querySelector('.ms-chips'); if(!chips) return; chips.innerHTML='';
+  Array.from(host.querySelectorAll('.ms-opt input:checked')).forEach(cb=>{
+    const chip=document.createElement('span'); chip.className='ms-chip'; chip.textContent=cb.value;
+    const x=document.createElement('button'); x.type='button'; x.textContent='×'; x.setAttribute('aria-label','Remove');
+    x.addEventListener('click', e=>{ e.stopPropagation(); cb.checked=false; msSync(host); });
+    chip.appendChild(x); chips.appendChild(chip);
+  });
+}
+document.addEventListener('click', e=>{ document.querySelectorAll('.ms.ms-open').forEach(h=>{ if(!h.contains(e.target)) h.classList.remove('ms-open'); }); });
 function npInitFields(){
-  npRenderChecks('np-season',NP_OPTIONS.season);
-  npRenderChecks('np-occasion',NP_OPTIONS.occasion.filter(o=>o!=='None'));
+  msInit('np-season',NP_OPTIONS.season);
+  msInit('np-occasion',NP_OPTIONS.occasion.filter(o=>o!=='None'));
   npRenderSelect('np-florals',NP_OPTIONS.florals);
   npRenderSelect('np-greenery',NP_OPTIONS.greenery);
-  npRenderChecks('np-style',NP_OPTIONS.style);
-  npRenderChecks('np-colors',NP_OPTIONS.colors);
-  npRenderChecks('np-materials',NP_OPTIONS.materials);
+  msInit('np-style',NP_OPTIONS.style,{allowCustom:true});
+  msInit('np-colors',NP_OPTIONS.colors);
+  msInit('np-materials',NP_OPTIONS.materials,{allowCustom:true});
+  msInit('np-pattern',NP_OPTIONS.pattern);
+  msInit('np-plantname',NP_OPTIONS.plantname,{allowCustom:true});
 }
 function npGetChecks(id){return Array.from(document.querySelectorAll('#'+id+' input[type=checkbox]:checked')).map(c=>c.value);}
-function npSetChecks(id,vals){const set=new Set(vals||[]);document.querySelectorAll('#'+id+' input[type=checkbox]').forEach(c=>{c.checked=set.has(c.value);});}
+function npSetChecks(id,vals){const host=document.getElementById(id);const set=new Set(vals||[]);
+  if(host&&host.classList.contains('ms')){
+    (vals||[]).forEach(v=>{ if(!Array.from(host.querySelectorAll('.ms-opt input')).some(c=>c.value===v)) msAddOption(host,v,false); });
+    host.querySelectorAll('.ms-opt input').forEach(c=>{c.checked=set.has(c.value);}); msSync(host); return;
+  }
+  document.querySelectorAll('#'+id+' input[type=checkbox]').forEach(c=>{c.checked=set.has(c.value);});}
 // Seasons → EB code: 1 season uses its code; many incl. All Season → AS; many without → MS.
 function npSeasonCode(seasons){
   if(!seasons.length) return 'AS';
@@ -1822,6 +1879,7 @@ function npClearForm(){
   document.getElementById('np-ref-name').value='';
   document.getElementById('np-price').value='';
   document.getElementById('np-quantity').value='1';
+  document.getElementById('np-date-made').value=new Date().toISOString().slice(0,10);
   document.getElementById('np-cost').value='';
   document.getElementById('np-cost-pct').value=DEFAULT_COST_PCT;
   document.getElementById('np-notes').value='';
@@ -1830,7 +1888,7 @@ function npClearForm(){
   npSetChecks('np-occasion',[]);
   document.getElementById('np-florals').value='None';
   document.getElementById('np-greenery').value='None';
-  npSetChecks('np-season',[]); npSetChecks('np-style',[]); npSetChecks('np-colors',[]); npSetChecks('np-materials',[]);
+  npSetChecks('np-season',[]); npSetChecks('np-style',[]); npSetChecks('np-colors',[]); npSetChecks('np-materials',[]); npSetChecks('np-pattern',[]); npSetChecks('np-plantname',[]);
 }
 function npAutoFillCost(){
   var price=parseFloat(document.getElementById('np-price').value)||0;
@@ -1852,6 +1910,7 @@ function npLoadRecordForEdit(){
   npSetChecks('np-occasion',(f['Occasion']&&f['Occasion']!=='None')?f['Occasion'].split(',').map(v=>v.trim()).filter(Boolean):[]);
   document.getElementById('np-price').value=f['Price ($)']!=null?f['Price ($)']:'';
   document.getElementById('np-quantity').value=f['Quantity']!=null?f['Quantity']:1;
+  document.getElementById('np-date-made').value=f['Date made']||'';
   document.getElementById('np-cost').value=f['Cost ($)']!=null?f['Cost ($)']:'';
   var _ep=parseFloat(f['Price ($)'])||0,_ec=parseFloat(f['Cost ($)'])||0;
   document.getElementById('np-cost-pct').value=(_ep>0&&_ec>0)?Math.round(_ec/_ep*100):DEFAULT_COST_PCT;
@@ -1860,8 +1919,10 @@ function npLoadRecordForEdit(){
   npSetChecks('np-style',f['Style']||[]);
   npSetChecks('np-colors',f['Color(s)']||[]);
   npSetChecks('np-materials',f['Key Materials']||[]);
-  document.getElementById('np-notes').value=f['Description']||'';
-  document.getElementById('np-description').value=f['Listing Special Notes']||'';
+  npSetChecks('np-pattern',f['Pattern']||[]);
+  npSetChecks('np-plantname',f['Plant name']||[]);
+  document.getElementById('np-notes').value=f['Internal notes']||'';
+  document.getElementById('np-description').value=f['Product description']||'';
   npSelectedFolder = f['Drive Folder ID'] ? {id:f['Drive Folder ID'], name:f['Drive Folder Name']||f['Drive Folder ID']} : null;
   npFolderReflectSelected();
   // Prefill Step 1.2 physical fields so an edit doesn't blank them on save
@@ -1896,6 +1957,8 @@ function npBuildFieldsFromForm(){
     'Reference name':document.getElementById('np-ref-name').value.trim(),
     'Type':typeName,
     'Quantity':(Number.isFinite(qtyRaw)&&qtyRaw>=0)?qtyRaw:1,
+    // Date made: use the picked date, or default to today (the EB creation date) when left blank.
+    'Date made':((document.getElementById('np-date-made')||{}).value)||new Date().toISOString().slice(0,10),
     // Auto-derived default category; null for Add-on so it stays blank (and clears on edit).
     'Product Category':npCategoryForType(typeName)||null,
     'Occasion':npGetChecks('np-occasion').join(', ')||'',
@@ -1904,8 +1967,10 @@ function npBuildFieldsFromForm(){
     'Style':npGetChecks('np-style'),
     'Color(s)':npGetChecks('np-colors'),
     'Key Materials':npGetChecks('np-materials'),
-    'Description':document.getElementById('np-notes').value.trim(),
-    'Listing Special Notes':document.getElementById('np-description').value.trim()
+    'Pattern':npGetChecks('np-pattern'),
+    'Plant name':npGetChecks('np-plantname'),
+    'Internal notes':document.getElementById('np-notes').value.trim(),
+    'Product description':document.getElementById('np-description').value.trim()
   };
   if(npSelectedFolder && npSelectedFolder.id){
     fields['Drive Folder ID']=npSelectedFolder.id;
@@ -1964,7 +2029,7 @@ async function npGenerateEB() {
   const {fields,seasons}=npBuildFieldsFromForm();
   if(!fields['Reference name']){alert('Please enter a Reference name.');return;}
   if(seasons.length===0){alert('Please select at least one season.');return;}
-  if(!fields['Listing Special Notes']){alert('Please enter a Product description.');return;}
+  if(!fields['Product description']){alert('Please enter a Product description.');return;}
   setStatus('np','Assigning EB number...','loading');
   const prefix='EB-'+year+npSeasonCode(seasons)+'-'+type+'-';
   const existing=allRecords.map(r=>r.fields['EB Number']||'').filter(eb=>eb.startsWith(prefix)).map(eb=>parseInt(eb.split('-').pop())||0);
@@ -1987,7 +2052,7 @@ async function npSaveEdit() {
   const {fields,seasons}=npBuildFieldsFromForm();
   if(!fields['Reference name']){alert('Please enter a Reference name.');return;}
   if(seasons.length===0){alert('Please select at least one season.');return;}
-  if(!fields['Listing Special Notes']){alert('Please enter a Product description.');return;}
+  if(!fields['Product description']){alert('Please enter a Product description.');return;}
   setStatus('np','Saving changes to Airtable...','loading');
   try {
     const result=await airtableFetch('/'+npCurrentRecordId,{method:'PATCH',body:JSON.stringify({fields})});
@@ -2204,9 +2269,9 @@ function lpStep(n) {
       const _meta = (document.getElementById('lp-meta')||{value:''}).value || lpStepTwoCache.meta || '';
       const _spec = (document.getElementById('lp-special')||{value:''}).value || lpStepTwoCache.special || '';
       const _s2fields = {};
-      if (_loc)  _s2fields['Listing Display Location'] = _loc;
+      if (_loc)  _s2fields['Listing Display Location'] = lpLocArr(_loc);
       if (_meta) _s2fields['Listing Meta Description']  = _meta;
-      if (_spec) _s2fields['Listing Special Notes']     = _spec;
+      if (_spec) _s2fields['Product description']     = _spec;
       if (Object.keys(_s2fields).length) {
         airtableFetch('/'+lpSelectedRecord.id, {method:'PATCH', body:JSON.stringify({fields:_s2fields})})
           .then(() => { Object.assign(lpSelectedRecord.fields, _s2fields); })
@@ -2267,11 +2332,11 @@ async function lpOnSelectRecord() {
       // so the data is ready whether or not a WIP session exists.
       const _f = fresh.fields;
       if (_f['Listing Display Location'] && !lpStepTwoCache.location)
-        lpStepTwoCache.location = _f['Listing Display Location'];
+        lpStepTwoCache.location = lpLocArr(_f['Listing Display Location']).join(', ');
       if (_f['Listing Meta Description'] && !lpStepTwoCache.meta)
         lpStepTwoCache.meta = _f['Listing Meta Description'];
-      if (_f['Listing Special Notes'] && !lpStepTwoCache.special)
-        lpStepTwoCache.special = _f['Listing Special Notes'];
+      if (_f['Product description'] && !lpStepTwoCache.special)
+        lpStepTwoCache.special = _f['Product description'];
       // Pre-populate SEO meta if saved
       if (_f['Listing Meta Description'] && !lpStepTwoCache.meta) {
         lpStepTwoCache.meta = _f['Listing Meta Description'];
@@ -2404,7 +2469,7 @@ async function lpGenerateListing(){
     const photoImages=[];
     for(const item of lpPhotoItems.slice(0,3)){try{await lpEnsureDriveBytes(item);const smallBlob=await lpCropToSquare(item.dataUrl,item.crop,800,150);const smallDataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(smallBlob);});photoImages.push({data:smallDataUrl.split(',')[1],mime:'image/jpeg'});}catch(e){console.warn('Skipping photo:',e.message);}}
     const seasonVal=Array.isArray(f['Season'])?f['Season'].join(', '):(f['Season']||'');
-    const res=await fetch(SERVER_URL+'/generate-description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:f['EB Number'],reference_name:f['Reference name'],type:f['Type'],season:seasonVal,holiday:f['Occasion'],colors:lpColorsFromRecord(f),dimensions:dims,materials:lpMaterialsFromRecord(f),location:lpGetLocation()||lpStepTwoCache.location||'',special:(f['Listing Special Notes']||lpStepTwoCache.special||''),notes:f['Description'],images:photoImages})});
+    const res=await fetch(SERVER_URL+'/generate-description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:f['EB Number'],reference_name:f['Reference name'],type:f['Type'],season:seasonVal,holiday:f['Occasion'],colors:lpColorsFromRecord(f),dimensions:dims,materials:lpMaterialsFromRecord(f),location:lpGetLocation()||lpStepTwoCache.location||'',special:(f['Product description']||lpStepTwoCache.special||''),notes:f['Internal notes'],images:photoImages})});
     const data=await res.json(); if(!res.ok||!data.success) throw new Error(data.error||'Server returned error');
     lpCurrentTitle=((data.title||'').trim())||lpFallbackTitle(f);
     lpCurrentDesc=(data.description||'').trim();
@@ -2689,7 +2754,11 @@ async function lpPublish(){
     const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),90000);
     const pubQty=(f['Quantity']!=null&&f['Quantity']!=='')?f['Quantity']:1;
     const pubCategory=f['Product Category']||npCategoryForType(f['Type'])||'';
-    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory})});
+    const pubColors=Array.isArray(f['Color(s)'])?f['Color(s)']:(f['Color(s)']?[f['Color(s)']]:[]);
+    const pubPattern=Array.isArray(f['Pattern'])?f['Pattern']:(f['Pattern']?[f['Pattern']]:[]);
+    const pubPlant=Array.isArray(f['Plant name'])?f['Plant name']:(f['Plant name']?[f['Plant name']]:[]);
+    const pubLocations=lpGetLocationArr().length?lpGetLocationArr():lpLocArr(f['Listing Display Location']);
+    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations})});
     clearTimeout(timeout);const data=await res.json();
     if(!res.ok||!data.success) throw new Error(data.error||'Publish failed');
     try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;if(meta)photoFields['Listing Meta Description']=meta;await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:photoFields})});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;if(meta)rec.fields['Listing Meta Description']=meta;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
@@ -2700,7 +2769,7 @@ async function lpPublish(){
     WIP.clear('lp');
     lastPublishedProduct={eb:f['EB Number']||'',detail:(f['Type']||'')+(f['Season']?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Occasion']&&f['Occasion']!=='None'?' · '+f['Occasion']:''),adminUrl:data.admin_url,price:f['Price ($)']!=null?String(f['Price ($)']):''}; 
     result.className='publish-result success';result.style.display='block';
-    result.innerHTML='<div style="font-size:15px;font-weight:700;color:var(--sage);margin-bottom:14px">✓ Published successfully!</div><div style="display:grid;gap:8px;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 1 — Airtable</strong><div style="font-size:11px;color:var(--text-muted)">Status set to Listed · Shopify URL saved</div></div></div><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 2 — Shopify</strong><div style="font-size:11px;color:var(--text-muted)">Listing live · inventory set to '+(data.quantity!=null?data.quantity:1)+(data.category?' · category: '+escHtml(data.category):'')+' · collections assigned</div></div></div>'+(squaresSaved>0?'<div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">📐</span><div><strong style="font-size:13px">Drive — square crops</strong><div style="font-size:11px;color:var(--text-muted)">'+squaresSaved+' square photo'+(squaresSaved!==1?'s':'')+' saved · originals untouched</div></div></div>':'')+'<div id="lp-pub-video" style="display:flex;align-items:center;gap:10px;background:var(--teal-bg);border:1px solid var(--teal-light);border-radius:8px;padding:12px"><span style="font-size:18px">📹</span><div id="lp-pub-video-msg" style="font-size:12px;color:var(--teal)">Checking video…</div></div></div><a href="'+data.shopify_url+'" target="_blank" style="font-size:12px;color:var(--text-muted)">🔗 View live listing</a>';
+    result.innerHTML='<div style="font-size:15px;font-weight:700;color:var(--sage);margin-bottom:14px">✓ Published successfully!</div><div style="display:grid;gap:8px;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 1 — Airtable</strong><div style="font-size:11px;color:var(--text-muted)">Status set to Listed · Shopify URL saved</div></div></div><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 2 — Shopify</strong><div style="font-size:11px;color:var(--text-muted)">Listing live · inventory set to '+(data.quantity!=null?data.quantity:1)+(data.category?' · category: '+escHtml(data.category):'')+(data.colors_set?' · '+data.colors_set+' color'+(data.colors_set!==1?'s':''):'')+' · collections assigned</div></div></div>'+(squaresSaved>0?'<div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">📐</span><div><strong style="font-size:13px">Drive — square crops</strong><div style="font-size:11px;color:var(--text-muted)">'+squaresSaved+' square photo'+(squaresSaved!==1?'s':'')+' saved · originals untouched</div></div></div>':'')+'<div id="lp-pub-video" style="display:flex;align-items:center;gap:10px;background:var(--teal-bg);border:1px solid var(--teal-light);border-radius:8px;padding:12px"><span style="font-size:18px">📹</span><div id="lp-pub-video-msg" style="font-size:12px;color:var(--teal)">Checking video…</div></div></div><a href="'+data.shopify_url+'" target="_blank" style="font-size:12px;color:var(--text-muted)">🔗 View live listing</a>';
     btn.textContent='✓ Published!';btn.style.background='var(--sage)';btn.style.borderColor='var(--sage)';
     // Video (the result panel — incl. #lp-pub-video — now exists in the DOM): if one
     // was picked in Step 2.3 upload it now; otherwise fall back to the manual panel.
@@ -2953,9 +3022,9 @@ async function lpSaveStepTwo() {
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
     const fields = {};
-    if (loc)  fields['Listing Display Location'] = loc;
+    if (loc)  fields['Listing Display Location'] = lpLocArr(loc);
     if (meta) fields['Listing Meta Description']  = meta;
-    if (spec) fields['Listing Special Notes']     = spec;
+    if (spec) fields['Product description']     = spec;
     await airtableFetch('/'+lpSelectedRecord.id, {method:'PATCH', body:JSON.stringify({fields})});
     Object.assign(lpSelectedRecord.fields, fields);
     const cached = allRecords.find(r=>r.id===lpSelectedRecord.id);
@@ -2985,9 +3054,9 @@ async function lpSaveDraft() {
   const title  = (document.getElementById('lp-title')||{value:''}).value.trim() || lpCurrentTitle || '';
   const desc   = ((document.getElementById('lp-desc')||{}).innerHTML||lpCurrentDesc||'').trim();
   const fields = {};
-  if (loc)   fields['Listing Display Location'] = loc;
+  if (loc)   fields['Listing Display Location'] = lpLocArr(loc);
   if (meta)  fields['Listing Meta Description']  = meta;
-  if (spec)  fields['Listing Special Notes']     = spec;
+  if (spec)  fields['Product description']     = spec;
   if (title) fields['Draft Title']               = title;
   if (desc)  fields['Draft Description']         = desc;
   if (!Object.keys(fields).length) return;
@@ -3452,11 +3521,11 @@ function printQRTag(ebNumber, price) {
   var win = window.open('', '_blank');
   var refName = rec ? (rec.fields['Reference name'] || '').trim() : '';
   var inner = '<div class="top"><div class="left"><div class="brand">Eternal Blooms</div><div class="eb">' + cleanEB + '</div>' + (priceDisplay ? '<div class="price">' + priceDisplay + '</div>' : '') + '</div><img src="' + qrUrl + '" alt="QR"></div>' + (refName ? '<div class="sub">' + escHtml(refName) + '</div>' : '');
-  var css = ['<style>','@page { size: 3in 2in; margin: 0mm; }','@media print { @page { margin: 0mm !important; } html, body { margin: 0 !important; padding: 0 !important; } }','html, body { margin: 0 !important; padding: 0 !important; }','body { width: 3in; overflow: hidden; }','* { box-sizing: border-box; }','.tag { width: 3in; height: 2in; display: flex; flex-direction: column; justify-content: space-between; font-family: Arial, sans-serif; background: #fff; padding: 0.09in 0.11in; overflow: hidden; }','.top { display: flex; flex-direction: row; align-items: center; justify-content: space-between; flex: 1; }','.left { display: flex; flex-direction: column; justify-content: center; flex: 1; padding-right: 0.08in; overflow: hidden; min-width: 0; }','.brand { font-size: 10pt; font-weight: 400; letter-spacing: .1em; text-transform: uppercase; color: #bb8588; margin-bottom: 4px; white-space: nowrap; }','.eb { font-size: 10pt; font-weight: 800; letter-spacing: .03em; color: #2b2622; line-height: 1.15; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }','.price { font-size: 14pt; font-weight: 800; color: #bb8588; }','.sub { font-size: 14pt; color: #bb8588; text-align: center; width: 100%; letter-spacing: .02em; padding-top: 0.02in; }','img { width: 1in; height: 1in; flex-shrink: 0; display: block; }','</style>'].join('\n');
+  var css = ['<style>','@page { size: 3in 2in; margin: 0; }','html, body { margin: 0 !important; padding: 0 !important; }','body { width: 3in; overflow: hidden; }','* { box-sizing: border-box; }','.tag { width: 3in; height: 2in; display: flex; flex-direction: column; justify-content: space-between; font-family: Arial, sans-serif; background: #fff; padding: 0.09in 0.11in; overflow: hidden; }','.top { display: flex; flex-direction: row; align-items: center; justify-content: space-between; flex: 1; }','.left { display: flex; flex-direction: column; justify-content: center; flex: 1; padding-right: 0.08in; overflow: hidden; min-width: 0; }','.brand { font-size: 10pt; font-weight: 400; letter-spacing: .1em; text-transform: uppercase; color: #bb8588; margin-bottom: 4px; white-space: nowrap; }','.eb { font-size: 10pt; font-weight: 800; letter-spacing: .03em; color: #2b2622; line-height: 1.15; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }','.price { font-size: 14pt; font-weight: 800; color: #bb8588; }','.sub { font-size: 14pt; color: #bb8588; text-align: center; width: 100%; letter-spacing: .02em; padding-top: 0.02in; }','img { width: 1in; height: 1in; flex-shrink: 0; display: block; }','</style>'].join('\n');
   var body = isWreath
     ? '<div class="tag" style="break-after:page;page-break-after:always;">' + inner + '</div><div class="tag">' + inner + '</div>'
     : '<div class="tag">' + inner + '</div>';
-  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>' + css + '</head><body>' + body + '<script>window.onload=function(){setTimeout(function(){window.print();},900);};<\/script></body></html>';
+  var html = '<!DOCTYPE html><html><head><title>Tag ' + cleanEB + '</title>' + css + '</head><body>' + body + '<script>window.onload=function(){setTimeout(function(){window.print();},800);};<\/script></body></html>';
   win.document.write(html); win.document.close();
 }
 
@@ -3632,9 +3701,9 @@ async function bmPrintLabel() {
   const qrUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=480x480&data=' + encodeURIComponent(qrData);
   const win = window.open('', '_blank');
   const html = [
-    '<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>',
+    '<!DOCTYPE html><html><head><title>Bin ' + binNum + '</title>',
     '<style>',
-    '@page { size: 4in 6in; margin: 0mm; }','@media print { @page { margin: 0mm !important; } }',
+    '@page { size: 4in 6in; margin: 0; }',
     '* { box-sizing: border-box; margin: 0; padding: 0; }',
     'body { width: 4in; height: 6in; font-family: Arial, sans-serif; background: #fff;',
     '  display: flex; flex-direction: column; align-items: center; padding: 0.18in 0.22in; }',
@@ -3752,9 +3821,9 @@ function bmReprintLabel() {
   const qrUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=480x480&data=' + encodeURIComponent(qrData);
   const win = window.open('', '_blank');
   const html = [
-    '<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>',
+    '<!DOCTYPE html><html><head><title>Bin ' + binNum + '</title>',
     '<style>',
-    '@page { size: 4in 6in; margin: 0mm; }','@media print { @page { margin: 0mm !important; } }',
+    '@page { size: 4in 6in; margin: 0; }',
     '* { box-sizing: border-box; margin: 0; padding: 0; }',
     'body { width: 4in; height: 6in; font-family: Arial, sans-serif; background: #fff;',
     '  display: flex; flex-direction: column; align-items: center; padding: 0.18in 0.22in; }',
@@ -3998,8 +4067,11 @@ function wipRestoreNP(saved) {
   if(saved.style)npSetChecks('np-style',saved.style);
   if(saved.colors)npSetChecks('np-colors',saved.colors);
   if(saved.materials)npSetChecks('np-materials',saved.materials);
+  if(saved.pattern)npSetChecks('np-pattern',saved.pattern);
+  if(saved.plantname)npSetChecks('np-plantname',saved.plantname);
   if(saved.price){const el=document.getElementById('np-price');if(el)el.value=saved.price;}
   if(saved.quantity!==undefined&&saved.quantity!==''){const el=document.getElementById('np-quantity');if(el)el.value=saved.quantity;}
+  if(saved.dateMade){const el=document.getElementById('np-date-made');if(el)el.value=saved.dateMade;}
   if(saved.cost){const el=document.getElementById('np-cost');if(el)el.value=saved.cost;}
   if(saved.costPct){const el=document.getElementById('np-cost-pct');if(el)el.value=saved.costPct;}
   if(saved.notes){const el=document.getElementById('np-notes');if(el)el.value=saved.notes;}
@@ -4030,8 +4102,11 @@ function wipSaveNP() {
     style:    npGetChecks('np-style'),
     colors:   npGetChecks('np-colors'),
     materials:npGetChecks('np-materials'),
+    pattern:npGetChecks('np-pattern'),
+    plantname:npGetChecks('np-plantname'),
     price:    (document.getElementById('np-price')||{}).value||'',
     quantity: (document.getElementById('np-quantity')||{}).value||'',
+    dateMade: (document.getElementById('np-date-made')||{}).value||'',
     cost:     (document.getElementById('np-cost')||{}).value||'',
     costPct:  (document.getElementById('np-cost-pct')||{}).value||'',
     notes:    (document.getElementById('np-notes')||{}).value||'',
