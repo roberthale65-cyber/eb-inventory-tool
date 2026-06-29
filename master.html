@@ -487,6 +487,7 @@ button:active{transform:scale(.97)}
       </div>
       <div class="field"><label>Season</label><div id="np-season" class="chip-checks"></div></div>
       <div class="field"><label>Occasion (optional)</label><div id="np-occasion" class="chip-checks"></div></div>
+      <div class="field"><label>Date made</label><input type="date" id="np-date-made"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">When the piece was made. Defaults to today (the EB creation date) if left blank.</div></div>
       <div class="grid-2">
         <div class="field"><label>Price ($)</label><input type="text" id="np-price" placeholder="e.g. 85.00" oninput="npAutoFillCost()"></div>
         <div class="field"><label>Quantity</label><input type="number" id="np-quantity" min="0" step="1" value="1"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Units in stock. Defaults to 1 for one-of-a-kind pieces.</div></div>
@@ -1822,6 +1823,7 @@ function npClearForm(){
   document.getElementById('np-ref-name').value='';
   document.getElementById('np-price').value='';
   document.getElementById('np-quantity').value='1';
+  document.getElementById('np-date-made').value=new Date().toISOString().slice(0,10);
   document.getElementById('np-cost').value='';
   document.getElementById('np-cost-pct').value=DEFAULT_COST_PCT;
   document.getElementById('np-notes').value='';
@@ -1852,6 +1854,7 @@ function npLoadRecordForEdit(){
   npSetChecks('np-occasion',(f['Occasion']&&f['Occasion']!=='None')?f['Occasion'].split(',').map(v=>v.trim()).filter(Boolean):[]);
   document.getElementById('np-price').value=f['Price ($)']!=null?f['Price ($)']:'';
   document.getElementById('np-quantity').value=f['Quantity']!=null?f['Quantity']:1;
+  document.getElementById('np-date-made').value=f['Date made']||'';
   document.getElementById('np-cost').value=f['Cost ($)']!=null?f['Cost ($)']:'';
   var _ep=parseFloat(f['Price ($)'])||0,_ec=parseFloat(f['Cost ($)'])||0;
   document.getElementById('np-cost-pct').value=(_ep>0&&_ec>0)?Math.round(_ec/_ep*100):DEFAULT_COST_PCT;
@@ -1860,8 +1863,8 @@ function npLoadRecordForEdit(){
   npSetChecks('np-style',f['Style']||[]);
   npSetChecks('np-colors',f['Color(s)']||[]);
   npSetChecks('np-materials',f['Key Materials']||[]);
-  document.getElementById('np-notes').value=f['Description']||'';
-  document.getElementById('np-description').value=f['Listing Special Notes']||'';
+  document.getElementById('np-notes').value=f['Internal notes']||'';
+  document.getElementById('np-description').value=f['Product description']||'';
   npSelectedFolder = f['Drive Folder ID'] ? {id:f['Drive Folder ID'], name:f['Drive Folder Name']||f['Drive Folder ID']} : null;
   npFolderReflectSelected();
   // Prefill Step 1.2 physical fields so an edit doesn't blank them on save
@@ -1896,6 +1899,8 @@ function npBuildFieldsFromForm(){
     'Reference name':document.getElementById('np-ref-name').value.trim(),
     'Type':typeName,
     'Quantity':(Number.isFinite(qtyRaw)&&qtyRaw>=0)?qtyRaw:1,
+    // Date made: use the picked date, or default to today (the EB creation date) when left blank.
+    'Date made':((document.getElementById('np-date-made')||{}).value)||new Date().toISOString().slice(0,10),
     // Auto-derived default category; null for Add-on so it stays blank (and clears on edit).
     'Product Category':npCategoryForType(typeName)||null,
     'Occasion':npGetChecks('np-occasion').join(', ')||'',
@@ -1904,8 +1909,8 @@ function npBuildFieldsFromForm(){
     'Style':npGetChecks('np-style'),
     'Color(s)':npGetChecks('np-colors'),
     'Key Materials':npGetChecks('np-materials'),
-    'Description':document.getElementById('np-notes').value.trim(),
-    'Listing Special Notes':document.getElementById('np-description').value.trim()
+    'Internal notes':document.getElementById('np-notes').value.trim(),
+    'Product description':document.getElementById('np-description').value.trim()
   };
   if(npSelectedFolder && npSelectedFolder.id){
     fields['Drive Folder ID']=npSelectedFolder.id;
@@ -1964,7 +1969,7 @@ async function npGenerateEB() {
   const {fields,seasons}=npBuildFieldsFromForm();
   if(!fields['Reference name']){alert('Please enter a Reference name.');return;}
   if(seasons.length===0){alert('Please select at least one season.');return;}
-  if(!fields['Listing Special Notes']){alert('Please enter a Product description.');return;}
+  if(!fields['Product description']){alert('Please enter a Product description.');return;}
   setStatus('np','Assigning EB number...','loading');
   const prefix='EB-'+year+npSeasonCode(seasons)+'-'+type+'-';
   const existing=allRecords.map(r=>r.fields['EB Number']||'').filter(eb=>eb.startsWith(prefix)).map(eb=>parseInt(eb.split('-').pop())||0);
@@ -1987,7 +1992,7 @@ async function npSaveEdit() {
   const {fields,seasons}=npBuildFieldsFromForm();
   if(!fields['Reference name']){alert('Please enter a Reference name.');return;}
   if(seasons.length===0){alert('Please select at least one season.');return;}
-  if(!fields['Listing Special Notes']){alert('Please enter a Product description.');return;}
+  if(!fields['Product description']){alert('Please enter a Product description.');return;}
   setStatus('np','Saving changes to Airtable...','loading');
   try {
     const result=await airtableFetch('/'+npCurrentRecordId,{method:'PATCH',body:JSON.stringify({fields})});
@@ -2206,7 +2211,7 @@ function lpStep(n) {
       const _s2fields = {};
       if (_loc)  _s2fields['Listing Display Location'] = _loc;
       if (_meta) _s2fields['Listing Meta Description']  = _meta;
-      if (_spec) _s2fields['Listing Special Notes']     = _spec;
+      if (_spec) _s2fields['Product description']     = _spec;
       if (Object.keys(_s2fields).length) {
         airtableFetch('/'+lpSelectedRecord.id, {method:'PATCH', body:JSON.stringify({fields:_s2fields})})
           .then(() => { Object.assign(lpSelectedRecord.fields, _s2fields); })
@@ -2270,8 +2275,8 @@ async function lpOnSelectRecord() {
         lpStepTwoCache.location = _f['Listing Display Location'];
       if (_f['Listing Meta Description'] && !lpStepTwoCache.meta)
         lpStepTwoCache.meta = _f['Listing Meta Description'];
-      if (_f['Listing Special Notes'] && !lpStepTwoCache.special)
-        lpStepTwoCache.special = _f['Listing Special Notes'];
+      if (_f['Product description'] && !lpStepTwoCache.special)
+        lpStepTwoCache.special = _f['Product description'];
       // Pre-populate SEO meta if saved
       if (_f['Listing Meta Description'] && !lpStepTwoCache.meta) {
         lpStepTwoCache.meta = _f['Listing Meta Description'];
@@ -2404,7 +2409,7 @@ async function lpGenerateListing(){
     const photoImages=[];
     for(const item of lpPhotoItems.slice(0,3)){try{await lpEnsureDriveBytes(item);const smallBlob=await lpCropToSquare(item.dataUrl,item.crop,800,150);const smallDataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(smallBlob);});photoImages.push({data:smallDataUrl.split(',')[1],mime:'image/jpeg'});}catch(e){console.warn('Skipping photo:',e.message);}}
     const seasonVal=Array.isArray(f['Season'])?f['Season'].join(', '):(f['Season']||'');
-    const res=await fetch(SERVER_URL+'/generate-description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:f['EB Number'],reference_name:f['Reference name'],type:f['Type'],season:seasonVal,holiday:f['Occasion'],colors:lpColorsFromRecord(f),dimensions:dims,materials:lpMaterialsFromRecord(f),location:lpGetLocation()||lpStepTwoCache.location||'',special:(f['Listing Special Notes']||lpStepTwoCache.special||''),notes:f['Description'],images:photoImages})});
+    const res=await fetch(SERVER_URL+'/generate-description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:f['EB Number'],reference_name:f['Reference name'],type:f['Type'],season:seasonVal,holiday:f['Occasion'],colors:lpColorsFromRecord(f),dimensions:dims,materials:lpMaterialsFromRecord(f),location:lpGetLocation()||lpStepTwoCache.location||'',special:(f['Product description']||lpStepTwoCache.special||''),notes:f['Internal notes'],images:photoImages})});
     const data=await res.json(); if(!res.ok||!data.success) throw new Error(data.error||'Server returned error');
     lpCurrentTitle=((data.title||'').trim())||lpFallbackTitle(f);
     lpCurrentDesc=(data.description||'').trim();
@@ -2955,7 +2960,7 @@ async function lpSaveStepTwo() {
     const fields = {};
     if (loc)  fields['Listing Display Location'] = loc;
     if (meta) fields['Listing Meta Description']  = meta;
-    if (spec) fields['Listing Special Notes']     = spec;
+    if (spec) fields['Product description']     = spec;
     await airtableFetch('/'+lpSelectedRecord.id, {method:'PATCH', body:JSON.stringify({fields})});
     Object.assign(lpSelectedRecord.fields, fields);
     const cached = allRecords.find(r=>r.id===lpSelectedRecord.id);
@@ -2987,7 +2992,7 @@ async function lpSaveDraft() {
   const fields = {};
   if (loc)   fields['Listing Display Location'] = loc;
   if (meta)  fields['Listing Meta Description']  = meta;
-  if (spec)  fields['Listing Special Notes']     = spec;
+  if (spec)  fields['Product description']     = spec;
   if (title) fields['Draft Title']               = title;
   if (desc)  fields['Draft Description']         = desc;
   if (!Object.keys(fields).length) return;
@@ -4000,6 +4005,7 @@ function wipRestoreNP(saved) {
   if(saved.materials)npSetChecks('np-materials',saved.materials);
   if(saved.price){const el=document.getElementById('np-price');if(el)el.value=saved.price;}
   if(saved.quantity!==undefined&&saved.quantity!==''){const el=document.getElementById('np-quantity');if(el)el.value=saved.quantity;}
+  if(saved.dateMade){const el=document.getElementById('np-date-made');if(el)el.value=saved.dateMade;}
   if(saved.cost){const el=document.getElementById('np-cost');if(el)el.value=saved.cost;}
   if(saved.costPct){const el=document.getElementById('np-cost-pct');if(el)el.value=saved.costPct;}
   if(saved.notes){const el=document.getElementById('np-notes');if(el)el.value=saved.notes;}
@@ -4032,6 +4038,7 @@ function wipSaveNP() {
     materials:npGetChecks('np-materials'),
     price:    (document.getElementById('np-price')||{}).value||'',
     quantity: (document.getElementById('np-quantity')||{}).value||'',
+    dateMade: (document.getElementById('np-date-made')||{}).value||'',
     cost:     (document.getElementById('np-cost')||{}).value||'',
     costPct:  (document.getElementById('np-cost-pct')||{}).value||'',
     notes:    (document.getElementById('np-notes')||{}).value||'',

@@ -470,7 +470,7 @@ async function loadFromAirtable() {
 //  FIELD CHECK
 // ═══════════════════════════════════════════
 async function runFieldCheck() {
-  const required = ['EB Number','Season','Type','Occasion','Date made','Status','Price ($)','Cost ($)','Margin ($)','Shopify tags','Shopify URL','Bin location','Photos done','Listed on Shopify','Description','Notes'];
+  const required = ['EB Number','Season','Type','Occasion','Date made','Status','Price ($)','Cost ($)','Margin ($)','Shopify tags','Shopify URL','Bin location','Photos done','Listed on Shopify','Internal notes'];
   if (!allRecords.length) { hide('field-check-section'); return; }
   const sampleFields = Object.keys(allRecords[0].fields || {});
   const list = document.getElementById('field-check-list');
@@ -745,7 +745,7 @@ async function saveToAirtable() {
     'Season':       [SEASON_NAMES[seasonCode] || seasonCode],
     'Type':         TYPE_NAMES[typeCode]     || typeCode,
     'Occasion':     document.getElementById('f-occasion').value    || 'None',
-    'Description':  document.getElementById('f-description').value || '',
+    'Internal notes': document.getElementById('f-description').value || '',
     'Bin location': document.getElementById('f-bin').value         || '',
     'Status':       'In stock',
     'Date made':    new Date().toISOString().slice(0,10),
