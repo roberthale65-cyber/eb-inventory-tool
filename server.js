@@ -107,14 +107,17 @@ const SHOPIFY_CONTAINER_METAOBJECTS = {
 const SHOPIFY_STEM_METAOBJECTS = {
   'Medium':'gid://shopify/Metaobject/246395404423','Long':'gid://shopify/Metaobject/246539714695','Short':'gid://shopify/Metaobject/248750866567','Other':'gid://shopify/Metaobject/248792350855'
 };
-// Full decoration-material coverage. Last 4 are crosswalks (no taxonomy twin):
-// Grapevine/Pine → Wood, Candle/Lights → Other.
+// Full decoration-material coverage. Last 4 are EB-specific custom metaobjects whose
+// taxonomy_reference points at the nearest base value (Grapevine/Pine → Wood, Candle/
+// Lights → Other) but keep their own label so they publish AS themselves, not collapsed
+// onto the base value's metaobject (created via MCP 2026-06-30).
 const SHOPIFY_DECORATION_MATERIAL_METAOBJECTS = {
-  'Fabric':'gid://shopify/Metaobject/245698429063','Resin':'gid://shopify/Metaobject/246375317639','Metal':'gid://shopify/Metaobject/246375547015','Silk':'gid://shopify/Metaobject/246375579783','Ceramic':'gid://shopify/Metaobject/246395371655','Wool':'gid://shopify/Metaobject/247312646279','Plastic':'gid://shopify/Metaobject/247339417735','Wood':'gid://shopify/Metaobject/248712364167','Acrylic':'gid://shopify/Metaobject/248786452615','Aluminum':'gid://shopify/Metaobject/248786485383','Bamboo':'gid://shopify/Metaobject/248786518151','Brass':'gid://shopify/Metaobject/248786550919','Bronze':'gid://shopify/Metaobject/248786583687','Canvas':'gid://shopify/Metaobject/248786616455','Capiz':'gid://shopify/Metaobject/248786649223','Cardboard':'gid://shopify/Metaobject/248786681991','Cast iron':'gid://shopify/Metaobject/248786714759','Chrome':'gid://shopify/Metaobject/248786747527','Concrete':'gid://shopify/Metaobject/248786780295','Copper':'gid://shopify/Metaobject/248786813063','Cork':'gid://shopify/Metaobject/248786845831','Cotton':'gid://shopify/Metaobject/248786878599','Crystal':'gid://shopify/Metaobject/248786911367','Faux fur':'gid://shopify/Metaobject/248786944135','Faux leather':'gid://shopify/Metaobject/248786976903','Feathers':'gid://shopify/Metaobject/248787009671','Felt':'gid://shopify/Metaobject/248787042439','Glass':'gid://shopify/Metaobject/248787075207','Hemp':'gid://shopify/Metaobject/248787107975','Iron':'gid://shopify/Metaobject/248787140743','Jute':'gid://shopify/Metaobject/248787173511','Latex':'gid://shopify/Metaobject/248787206279','Leather':'gid://shopify/Metaobject/248787239047','Marble':'gid://shopify/Metaobject/248787271815','Medium density fiberboard (MDF)':'gid://shopify/Metaobject/248787304583','Melamine':'gid://shopify/Metaobject/248787435655','Nylon':'gid://shopify/Metaobject/248787468423','Other':'gid://shopify/Metaobject/248787501191','Paper':'gid://shopify/Metaobject/248787533959','Papier-mâché':'gid://shopify/Metaobject/248787566727','Plush':'gid://shopify/Metaobject/248787599495','Polyester':'gid://shopify/Metaobject/248787632263','Polypropylene (PP)':'gid://shopify/Metaobject/248787665031','Polyvinyl chloride (PVC)':'gid://shopify/Metaobject/248787697799','Porcelain':'gid://shopify/Metaobject/248787730567','Rattan':'gid://shopify/Metaobject/248787763335','Rubber':'gid://shopify/Metaobject/248787796103','Satin':'gid://shopify/Metaobject/248787828871','Sequins':'gid://shopify/Metaobject/248787861639','Silicone':'gid://shopify/Metaobject/248787894407','Stainless steel':'gid://shopify/Metaobject/248787927175','Steel':'gid://shopify/Metaobject/248787959943','Stone':'gid://shopify/Metaobject/248787992711','Suede':'gid://shopify/Metaobject/248788025479','Synthetic':'gid://shopify/Metaobject/248788058247','Terracotta':'gid://shopify/Metaobject/248788091015','Velour':'gid://shopify/Metaobject/248788123783','Velvet':'gid://shopify/Metaobject/248788156551','Veneer':'gid://shopify/Metaobject/248788189319','Vinyl':'gid://shopify/Metaobject/248788222087','Wax':'gid://shopify/Metaobject/248788254855','Zinc':'gid://shopify/Metaobject/248788287623','Grapevine':'gid://shopify/Metaobject/248712364167','Pine':'gid://shopify/Metaobject/248712364167','Candle':'gid://shopify/Metaobject/248787501191','Lights':'gid://shopify/Metaobject/248787501191'
+  'Fabric':'gid://shopify/Metaobject/245698429063','Resin':'gid://shopify/Metaobject/246375317639','Metal':'gid://shopify/Metaobject/246375547015','Silk':'gid://shopify/Metaobject/246375579783','Ceramic':'gid://shopify/Metaobject/246395371655','Wool':'gid://shopify/Metaobject/247312646279','Plastic':'gid://shopify/Metaobject/247339417735','Wood':'gid://shopify/Metaobject/248712364167','Acrylic':'gid://shopify/Metaobject/248786452615','Aluminum':'gid://shopify/Metaobject/248786485383','Bamboo':'gid://shopify/Metaobject/248786518151','Brass':'gid://shopify/Metaobject/248786550919','Bronze':'gid://shopify/Metaobject/248786583687','Canvas':'gid://shopify/Metaobject/248786616455','Capiz':'gid://shopify/Metaobject/248786649223','Cardboard':'gid://shopify/Metaobject/248786681991','Cast iron':'gid://shopify/Metaobject/248786714759','Chrome':'gid://shopify/Metaobject/248786747527','Concrete':'gid://shopify/Metaobject/248786780295','Copper':'gid://shopify/Metaobject/248786813063','Cork':'gid://shopify/Metaobject/248786845831','Cotton':'gid://shopify/Metaobject/248786878599','Crystal':'gid://shopify/Metaobject/248786911367','Faux fur':'gid://shopify/Metaobject/248786944135','Faux leather':'gid://shopify/Metaobject/248786976903','Feathers':'gid://shopify/Metaobject/248787009671','Felt':'gid://shopify/Metaobject/248787042439','Glass':'gid://shopify/Metaobject/248787075207','Hemp':'gid://shopify/Metaobject/248787107975','Iron':'gid://shopify/Metaobject/248787140743','Jute':'gid://shopify/Metaobject/248787173511','Latex':'gid://shopify/Metaobject/248787206279','Leather':'gid://shopify/Metaobject/248787239047','Marble':'gid://shopify/Metaobject/248787271815','Medium density fiberboard (MDF)':'gid://shopify/Metaobject/248787304583','Melamine':'gid://shopify/Metaobject/248787435655','Nylon':'gid://shopify/Metaobject/248787468423','Other':'gid://shopify/Metaobject/248787501191','Paper':'gid://shopify/Metaobject/248787533959','Papier-mâché':'gid://shopify/Metaobject/248787566727','Plush':'gid://shopify/Metaobject/248787599495','Polyester':'gid://shopify/Metaobject/248787632263','Polypropylene (PP)':'gid://shopify/Metaobject/248787665031','Polyvinyl chloride (PVC)':'gid://shopify/Metaobject/248787697799','Porcelain':'gid://shopify/Metaobject/248787730567','Rattan':'gid://shopify/Metaobject/248787763335','Rubber':'gid://shopify/Metaobject/248787796103','Satin':'gid://shopify/Metaobject/248787828871','Sequins':'gid://shopify/Metaobject/248787861639','Silicone':'gid://shopify/Metaobject/248787894407','Stainless steel':'gid://shopify/Metaobject/248787927175','Steel':'gid://shopify/Metaobject/248787959943','Stone':'gid://shopify/Metaobject/248787992711','Suede':'gid://shopify/Metaobject/248788025479','Synthetic':'gid://shopify/Metaobject/248788058247','Terracotta':'gid://shopify/Metaobject/248788091015','Velour':'gid://shopify/Metaobject/248788123783','Velvet':'gid://shopify/Metaobject/248788156551','Veneer':'gid://shopify/Metaobject/248788189319','Vinyl':'gid://shopify/Metaobject/248788222087','Wax':'gid://shopify/Metaobject/248788254855','Zinc':'gid://shopify/Metaobject/248788287623','Grapevine':'gid://shopify/Metaobject/248843829383','Pine':'gid://shopify/Metaobject/248843862151','Candle':'gid://shopify/Metaobject/248843894919','Lights':'gid://shopify/Metaobject/248843927687'
 };
-// Full planter-material coverage. Crosswalks: Galvanized Steel → Metal, Basket → Other.
+// Full planter-material coverage. Galvanized Steel and Basket are EB-specific custom
+// metaobjects (taxonomy_reference → Metal / Other) so they keep their own label.
 const SHOPIFY_PLANTER_MATERIAL_METAOBJECTS = {
-  'Metal':'gid://shopify/Metaobject/245698330759','Ceramic':'gid://shopify/Metaobject/246395338887','Wood':'gid://shopify/Metaobject/247312613511','Resin':'gid://shopify/Metaobject/247317856391','Bamboo':'gid://shopify/Metaobject/248788353159','Concrete':'gid://shopify/Metaobject/248788385927','Glass':'gid://shopify/Metaobject/248788418695','Other':'gid://shopify/Metaobject/248788451463','Plastic':'gid://shopify/Metaobject/248788484231','Stone':'gid://shopify/Metaobject/248788516999','Terracotta':'gid://shopify/Metaobject/248788549767','Galvanized Steel':'gid://shopify/Metaobject/245698330759','Basket':'gid://shopify/Metaobject/248788451463'
+  'Metal':'gid://shopify/Metaobject/245698330759','Ceramic':'gid://shopify/Metaobject/246395338887','Wood':'gid://shopify/Metaobject/247312613511','Resin':'gid://shopify/Metaobject/247317856391','Bamboo':'gid://shopify/Metaobject/248788353159','Concrete':'gid://shopify/Metaobject/248788385927','Glass':'gid://shopify/Metaobject/248788418695','Other':'gid://shopify/Metaobject/248788451463','Plastic':'gid://shopify/Metaobject/248788484231','Stone':'gid://shopify/Metaobject/248788516999','Terracotta':'gid://shopify/Metaobject/248788549767','Galvanized Steel':'gid://shopify/Metaobject/248843960455','Basket':'gid://shopify/Metaobject/248843993223'
 };
 
 // Wreath-only taxonomy attributes (created via MCP 2026-06-30).
@@ -136,6 +139,21 @@ const SHOPIFY_LIGHTING_METAOBJECTS = {
 const SHOPIFY_PLANT_MATERIAL_ARTIFICIAL = 'gid://shopify/Metaobject/245698396295';
 // Wreaths are synthetic — auto-set shopify.material = Synthetic on every Wreath (own update).
 const SHOPIFY_MATERIAL_SYNTHETIC = 'gid://shopify/Metaobject/248782291079';
+
+// Season (shopify.season) — Wreaths only (AFP has no Season attribute). App field is a
+// multi-select; "All Season" maps to the All-Season metaobject.
+const SHOPIFY_SEASON_METAOBJECTS = {
+  'Spring':'gid://shopify/Metaobject/246382723207','Summer':'gid://shopify/Metaobject/248712691847','Fall':'gid://shopify/Metaobject/248712790151','Winter':'gid://shopify/Metaobject/248712953991','All Season':'gid://shopify/Metaobject/248712986759'
+};
+// Suitable space (shopify.suitable-space) — Wreaths only (AFP uses suitable-location).
+// Airtable "Indoor/Outdoor" single-select → Indoor=Indoors, Outdoor=Outdoors, Both=both.
+const SHOPIFY_SUITABLE_SPACE = { Indoors:'gid://shopify/Metaobject/214182723719', Outdoors:'gid://shopify/Metaobject/214182658183' };
+function mapSuitableSpace(v){
+  if (v === 'Indoor') return [SHOPIFY_SUITABLE_SPACE.Indoors];
+  if (v === 'Outdoor') return [SHOPIFY_SUITABLE_SPACE.Outdoors];
+  if (v === 'Both') return [SHOPIFY_SUITABLE_SPACE.Indoors, SHOPIFY_SUITABLE_SPACE.Outdoors];
+  return [];
+}
 
 // The Shopify Wreaths category exposes only "Material" (no Decoration/Planter material
 // attributes), so for wreaths we fold the chosen Decoration + Planter materials INTO
@@ -165,19 +183,45 @@ const WREATH_MATERIAL_TAX = {
 };
 
 // Build a wreath's shopify.material GID list: always Synthetic, PLUS the chosen
-// Decoration + Planter materials crosswalked to Material-taxonomy metaobjects (reused
-// by label or lazily created). Wreaths only; AFP keeps its own decoration/planter keys.
+// Decoration + Planter materials mapped to Material-taxonomy metaobjects. Wreaths only;
+// AFP keeps its own decoration/planter keys.
+// The Material attribute allows ONE metaobject per taxonomy value, so we RESOLVE BY
+// taxonomy_reference: index existing shopify--material metaobjects by the TaxonomyValue
+// they reference and reuse them (e.g. "Grapevine" already occupies Wood/625 — reuse it
+// rather than fail trying to create a second metaobject for 625). Only create when no
+// metaobject yet references that taxonomy value.
 async function resolveWreathMaterialGids(body){
   const arr = (v) => Array.isArray(v) ? v : (v ? [v] : []);
   const picks = arr(body.decoration_material).concat(arr(body.planter_material));
-  const labelToTax = {};
-  picks.forEach(v => { const t = WREATH_MATERIAL_TAX[v]; if (t) labelToTax[t[0]] = t[1]; });
-  const labels = Object.keys(labelToTax);
-  let mapped = [];
-  if (labels.length) mapped = await resolveMetaobjects('shopify--material', labels,
-    (label) => [{ key: 'label', value: label }, { key: 'taxonomy_reference', value: `gid://shopify/TaxonomyValue/${labelToTax[label]}` }]);
+  const targets = {};                                    // taxValueId -> canonical label (for creation)
+  picks.forEach(v => { const t = WREATH_MATERIAL_TAX[v]; if (t) targets[t[1]] = t[0]; });
   const out = [SHOPIFY_MATERIAL_SYNTHETIC];
-  mapped.forEach(g => { if (!out.includes(g)) out.push(g); });
+  const taxIds = Object.keys(targets);
+  if (!taxIds.length) return out;
+  // Index existing shopify--material metaobjects by their taxonomy_reference id.
+  const byTax = {};
+  try {
+    let cursor = null;
+    do {
+      const data = await shopifyGraphql(`query($after:String){metaobjects(type:"shopify--material",first:250,after:$after){edges{node{id fields{key value}}}pageInfo{hasNextPage endCursor}}}`, { after: cursor });
+      const conn = data && data.data && data.data.metaobjects; if (!conn) break;
+      conn.edges.forEach(e => { const ref = (e.node.fields.find(f => f.key === 'taxonomy_reference') || {}).value; if (ref) byTax[ref.split('/').pop()] = e.node.id; });
+      cursor = conn.pageInfo.hasNextPage ? conn.pageInfo.endCursor : null;
+    } while (cursor);
+  } catch (e) { console.warn('material lookup failed:', e.message); }
+  for (const taxId of taxIds) {
+    let gid = byTax[taxId];
+    if (!gid) {
+      try {
+        const d = await shopifyGraphql(`mutation($mo:MetaobjectCreateInput!){metaobjectCreate(metaobject:$mo){metaobject{id}userErrors{field message}}}`,
+          { mo: { type: 'shopify--material', fields: [{ key: 'label', value: targets[taxId] }, { key: 'taxonomy_reference', value: `gid://shopify/TaxonomyValue/${taxId}` }] } });
+        gid = d && d.data && d.data.metaobjectCreate && d.data.metaobjectCreate.metaobject && d.data.metaobjectCreate.metaobject.id;
+        if (gid) byTax[taxId] = gid;
+        else console.warn('material create failed for', targets[taxId], JSON.stringify((d && d.data && d.data.metaobjectCreate && d.data.metaobjectCreate.userErrors) || (d && d.errors) || {}));
+      } catch (e) { console.warn('material create error:', e.message); }
+    }
+    if (gid && !out.includes(gid)) out.push(gid);
+  }
   return out;
 }
 
@@ -188,13 +232,11 @@ async function resolveWreathMaterialGids(body){
 const CATEGORY_METAFIELD_KEYS = {
   'Artificial Flowering Plants': ['plant-name','suitable-location','arrangement','plant-container-type','stem-length','decoration-material','planter-material'],
   // The Shopify Wreaths taxonomy category (hg-3-76-2) has NO decoration-material or
-  // planter-material attributes — only Celebration type, Lighting options, Shape (plus
-  // the universal Color/Pattern, and auto-set Material/Plant material). Including the
-  // two invalid keys here made every wreath productUpdate fail with userErrors, which
-  // (being atomic) also rolled back the category assignment → category stayed null and
-  // ALL metafields dropped. (Decoration/planter material for wreaths is still in
-  // Airtable; folding it into shopify.material is a separate enhancement.)
-  'Wreaths': ['celebration-type','lighting-options','shape']
+  // planter-material attributes (those would fail the atomic productUpdate and drop the
+  // category). Its valid attributes are Color/Pattern (universal), Plant name, Suitable
+  // space, Season, Celebration type, Lighting options, Shape (+ auto Material/Plant
+  // material). Decoration/planter material for wreaths folds into shopify.material instead.
+  'Wreaths': ['plant-name','suitable-space','season','celebration-type','lighting-options','shape']
 };
 
 // ── Shopify taxonomy value IDs for lazy metaobject creation ───────────────────
@@ -1025,14 +1067,14 @@ app.post('/mark-sold', async (req, res) => {
 });
  
 // ── Version / health (verify what's actually deployed) ────────
-app.get('/version', (req, res) => res.json({ version: '2026-06-30-fixpack3', features: ['inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix: drop invalid decoration/planter keys', 'wreath material = Synthetic + mapped decoration/planter materials', 'lighting GID swap fixed (Illuminated/Non-illuminated)', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'wreath-metafields:shape/lighting/celebration', 'category-gated-metafields'] }));
+app.get('/version', (req, res) => res.json({ version: '2026-06-30-fixpack4', features: ['custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial'] }));
 
 // Resolve the tool-owned taxonomy metafield GIDs for a product, category-gated.
 // Shared by /create-product (replace) and /resync-attributes (merge) so the value→GID
 // wiring lives in one place. Returns per-key GID lists + the set of keys valid for the
 // category (color-pattern is universal). Unmapped values are dropped.
 function buildToolMetafieldGids(product_category, body){
-  const { colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material, celebration_type, lighting_options, shape } = body;
+  const { colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material, celebration_type, lighting_options, shape, season, suitable_space } = body;
   const mapGids = (vals, map) => (Array.isArray(vals) ? vals : (vals ? [vals] : [])).map(v => map[v]).filter(Boolean);
   const colorGids = mapGids(colors, SHOPIFY_COLOR_METAOBJECTS);
   const patternGids = mapGids(pattern, SHOPIFY_PATTERN_METAOBJECTS);
@@ -1047,7 +1089,9 @@ function buildToolMetafieldGids(product_category, body){
     'planter-material':     mapGids(planter_material, SHOPIFY_PLANTER_MATERIAL_METAOBJECTS),
     'celebration-type':     mapGids(celebration_type, SHOPIFY_CELEBRATION_METAOBJECTS),
     'lighting-options':     mapGids(lighting_options, SHOPIFY_LIGHTING_METAOBJECTS),
-    'shape':                mapGids(shape, SHOPIFY_SHAPE_METAOBJECTS)
+    'shape':                mapGids(shape, SHOPIFY_SHAPE_METAOBJECTS),
+    'season':               mapGids(season, SHOPIFY_SEASON_METAOBJECTS),
+    'suitable-space':       mapSuitableSpace(suitable_space)
   };
   const allowed = new Set(['color-pattern'].concat(CATEGORY_METAFIELD_KEYS[product_category] || []));
   return { categoryGid: SHOPIFY_CATEGORY_GIDS[product_category], colorGids, patternGids, perKey, allowed };

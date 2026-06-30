@@ -2863,7 +2863,8 @@ async function rsResync(){
       locations:lpLocArr(f['Listing Display Location']),
       arrangement:asArr(f['Arrangement']), plant_container_type:asArr(f['Plant container type']), stem_length:asArr(f['Stem length']),
       decoration_material:asArr(f['Decoration material']), planter_material:asArr(f['Planter material']),
-      celebration_type:asArr(f['Celebration type']), lighting_options:asArr(f['Lighting options']), shape:asArr(f['Shape']) };
+      celebration_type:asArr(f['Celebration type']), lighting_options:asArr(f['Lighting options']), shape:asArr(f['Shape']),
+      season:asArr(f['Season']), suitable_space:f['Indoor/Outdoor']||((f['Product Category']||npCategoryForType(f['Type']))==='Wreaths'?'Indoor':'') };
     const r=await fetch(SERVER_URL+'/resync-attributes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d=await r.json();
     if(!r.ok||!d.success) throw new Error(d.error||'Re-sync failed');
@@ -2925,7 +2926,10 @@ async function lpPublish(){
     const pubCelebration=asArr(f['Celebration type']);
     const pubLighting=asArr(f['Lighting options']);
     const pubShape=asArr(f['Shape']);
-    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial,celebration_type:pubCelebration,lighting_options:pubLighting,shape:pubShape})});
+    const pubSeason=asArr(f['Season']);
+    // Suitable space (Wreaths only) — default Indoor when unset, per EB convention.
+    const pubSuitableSpace=f['Indoor/Outdoor']||(pubCategory==='Wreaths'?'Indoor':'');
+    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial,celebration_type:pubCelebration,lighting_options:pubLighting,shape:pubShape,season:pubSeason,suitable_space:pubSuitableSpace})});
     clearTimeout(timeout);const data=await res.json();
     if(!res.ok||!data.success) throw new Error(data.error||'Publish failed');
     try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;if(meta)photoFields['Listing Meta Description']=meta;await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:photoFields})});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;if(meta)rec.fields['Listing Meta Description']=meta;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
