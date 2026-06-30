@@ -2477,7 +2477,7 @@ async function lpSaveDimsInline(){
 // generation (editable in Step 2.4); weight/dims/colors come from the Airtable record.
 function lpRenderReview() {
   if(!lpSelectedRecord)return;
-  const f=lpSelectedRecord.fields, meta=(document.getElementById('lp-meta').value.trim()||lpStepTwoCache.meta||'');
+  const f=lpSelectedRecord.fields, meta=((document.getElementById('lp-meta')||{value:''}).value.trim()||lpStepTwoCache.meta||'');
   const dimW=f['Width (in)'],dimH=f['Height (in)'],dimD=f['Depth (in)'];
   const dims=(dimW||dimH||dimD)?`${dimW||'?'}" W × ${dimH||'?'}" H × ${dimD||'?'}" D`:'';
   const oz=lpWeightOzFromRecord(f);
@@ -2786,7 +2786,7 @@ async function lpPublish(){
   const title=(titleEl&&titleEl.value.trim())||lpCurrentTitle||lpFallbackTitle(f), tags=lpBuildTags(f), sku=f['EB Number']||'';
   const price=f['Price ($)']!=null?Number(f['Price ($)']).toFixed(2):'0.00';
   const collections=lpBuildCollections(f), weightOz=lpWeightOzFromRecord(f);
-  const meta=(document.getElementById('lp-meta').value.trim()||lpStepTwoCache.meta||'');
+  const meta=((document.getElementById('lp-meta')||{value:''}).value.trim()||lpStepTwoCache.meta||'');
   const dimW=f['Width (in)'],dimH=f['Height (in)'],dimD=f['Depth (in)'];
   const dims=(dimW||dimH||dimD)?`${dimW||'?'}" W × ${dimH||'?'}" H × ${dimD||'?'}" D`:'';
   const isOutdoor=f['Type']==='Outdoor planter';
