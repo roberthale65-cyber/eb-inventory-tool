@@ -131,6 +131,7 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .thumb-row img{width:62px;height:62px;object-fit:cover;border-radius:8px;border:1px solid var(--border);flex-shrink:0;background:#fff}
 .thumb-row-zoom img{cursor:zoom-in;transition:outline .1s}
 .thumb-row img.sel{outline:3px solid var(--rose);outline-offset:-2px}
+.np-sub-thumbs{margin:0 0 14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
 .np-bigpreview{margin-top:8px}
 .np-bigpreview img{width:100%;max-height:340px;object-fit:contain;background:#fff;border:1px solid var(--border);border-radius:12px;cursor:zoom-out;display:block}
 /* ── Video panel ── */
@@ -474,6 +475,10 @@ button:active{transform:scale(.97)}
     <div id="np-wip-banner" class="info-card amber" style="display:none;margin-bottom:12px"></div>
     <div id="status-np" class="status-bar" style="display:none"><div class="sb-dot"></div><span id="status-np-msg"></span></div>
     <div class="step-block active" id="np-step-1">
+      <!-- ===== Step 1 sub-screens: 1.1 basics → 1.2 shared → 1.3 publishes → 1.4 optional → 1.5 EB number.
+           Category-exclusive fields (1.3/1.4) are re-bucketed by npApplyCategoryBuckets() per Type. ===== -->
+      <!-- ── 1.1 — Basics ── -->
+      <div class="np-sub" id="np-sub-1">
       <div class="np-mode-toggle">
         <button type="button" id="np-mode-add-btn" class="np-mode-btn active" onclick="npSetMode('add')">➕ Add new</button>
         <button type="button" id="np-mode-edit-btn" class="np-mode-btn" onclick="npSetMode('edit')">✏️ Edit existing</button>
@@ -482,8 +487,6 @@ button:active{transform:scale(.97)}
       <div class="section-label" id="np-step1-label">Assign EB number</div>
       <div class="info-card sage" id="np-add-hint"><strong>Every piece starts here.</strong> Fill in the details below and the next available EB number is assigned automatically.</div>
       <div class="info-card teal" id="np-edit-hint" style="display:none"><strong>Editing an existing piece.</strong> Update any details and save — the EB number stays the same.</div>
-      <!-- ===== Screen 1 of 2 — basics ===== -->
-      <div id="np-screen-1">
       <!-- ── Optional: start from an existing Google Drive photo folder ── -->
       <div class="field" id="np-folder-field">
         <label>Already photographed? Start from a Drive folder (optional)</label>
@@ -512,35 +515,72 @@ button:active{transform:scale(.97)}
         <div class="field"><label>Cost ($)</label><input type="text" id="np-cost" placeholder="auto-filled from price"></div>
         <div class="field"><label>Cost % of price</label><input type="number" id="np-cost-pct" min="1" max="100" step="1" value="66" oninput="npAutoFillCost()"></div>
       </div>
-      <div class="btn-row"><button class="btn-primary btn-full" onclick="npGoScreen(2)">Continue to details →</button></div>
+      <div class="btn-row"><button class="btn-primary btn-full" onclick="npSubNext()">Continue to details →</button></div>
       <button class="btn-save-exit" onclick="npSaveAndExitStep1()">💾 Save &amp; finish later</button>
       </div>
-      <!-- ===== Screen 2 of 2 — piece details ===== -->
-      <div id="np-screen-2" style="display:none">
-      <div class="section-label">Piece details</div>
+
+      <!-- ── 1.2 — Shared details (filled for every piece, any category) ── -->
+      <div class="np-sub" id="np-sub-2" style="display:none">
+      <div id="np-thumbs-2" class="np-sub-thumbs" style="display:none"></div>
+      <div class="section-label">Shared details</div>
       <div class="field"><label>Season</label><div id="np-season" class="chip-checks"></div></div>
       <div class="field"><label>Occasion (optional)</label><div id="np-occasion" class="chip-checks"></div></div>
       <div class="grid-2">
         <div class="field"><label>Florals</label><select id="np-florals"></select></div>
         <div class="field"><label>Greenery</label><select id="np-greenery"></select></div>
       </div>
-      <div class="field"><label>Indoor / Outdoor</label><select id="np-indoor-outdoor"><option value="Indoor">Indoor</option><option value="Outdoor">Outdoor</option><option value="Both">Both</option></select><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Publishes to Shopify “Suitable space” on wreaths. Defaults to Indoor.</div></div>
       <div class="field"><label>Style</label><div id="np-style" class="chip-checks"></div></div>
       <div class="field"><label>Color(s)</label><div id="np-colors"></div></div>
+      <div class="field"><label>Pattern</label><div id="np-pattern"></div></div>
       <div class="field"><label>Decoration material</label><div id="np-decoration"></div></div>
       <div class="field"><label>Planter material</label><div id="np-planter"></div></div>
-      <div class="field"><label>Pattern</label><div id="np-pattern"></div></div>
       <div class="field"><label>Plant name</label><div id="np-plantname"></div></div>
-      <div class="field"><label>Arrangement</label><div id="np-arrangement"></div></div>
-      <div class="field"><label>Plant container type</label><div id="np-container"></div></div>
-      <div class="field"><label>Stem length</label><div id="np-stem"></div></div>
-      <div class="field"><label>Celebration type</label><div id="np-celebration"></div></div>
-      <div class="field"><label>Lighting options</label><div id="np-lighting"></div></div>
-      <div class="field"><label>Shape</label><div id="np-shape"></div></div>
       <div class="field"><label>Product description <span style="color:var(--rose)">*</span></label><div style="display:flex;gap:6px;align-items:flex-start"><textarea id="np-description" required placeholder="Extra full, farmhouse style, great for gifting..." spellcheck="true" style="flex:1"></textarea><button type="button" class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px;margin-top:2px" onclick="lpCleanupField('np-description')">✓ Fix</button></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">What makes this piece special — feeds the AI listing title &amp; description.</div></div>
       <div class="field"><label>Internal notes (optional)</label><textarea id="np-notes" placeholder="Custom request, buyer name, materials reminder..."></textarea></div>
+      <div class="btn-row"><button class="btn-primary btn-full" onclick="npSubNext()">Continue →</button></div>
+      <button class="btn btn-full" onclick="npSubPrev()" style="margin-top:8px">← Back</button>
+      <button class="btn-save-exit" onclick="npSaveAndExitStep1()">💾 Save &amp; finish later</button>
+      </div>
+
+      <!-- ── 1.3 — These publish to Shopify (the piece's OWN category fields) ── -->
+      <div class="np-sub" id="np-sub-3" style="display:none">
+      <div id="np-thumbs-3" class="np-sub-thumbs" style="display:none"></div>
+      <div class="section-label">These publish to Shopify</div>
+      <div class="info-card teal" id="np-sub3-hint" style="font-size:12px"></div>
+      <!-- Wreath-exclusive fields live here by default; npApplyCategoryBuckets() swaps in AFP fields for non-wreaths. -->
+      <div id="np-sub-3-fields">
+        <div class="field" id="npf-indoor-outdoor"><label>Indoor / Outdoor</label><select id="np-indoor-outdoor"><option value="Indoor">Indoor</option><option value="Outdoor">Outdoor</option><option value="Both">Both</option></select><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Publishes to Shopify "Suitable space" on wreaths. Defaults to Indoor.</div></div>
+        <div class="field" id="npf-celebration"><label>Celebration type</label><div id="np-celebration"></div></div>
+        <div class="field" id="npf-lighting"><label>Lighting options</label><div id="np-lighting"></div></div>
+        <div class="field" id="npf-shape"><label>Shape</label><div id="np-shape"></div></div>
+      </div>
+      <div class="btn-row"><button class="btn-primary btn-full" onclick="npSubNext()">Continue →</button></div>
+      <button class="btn btn-full" onclick="npSubPrev()" style="margin-top:8px">← Back</button>
+      <button class="btn-save-exit" onclick="npSaveAndExitStep1()">💾 Save &amp; finish later</button>
+      </div>
+
+      <!-- ── 1.4 — Optional, not published to Shopify (the OTHER category's fields) ── -->
+      <div class="np-sub" id="np-sub-4" style="display:none">
+      <div id="np-thumbs-4" class="np-sub-thumbs" style="display:none"></div>
+      <div class="section-label">Optional — not published to Shopify</div>
+      <div class="info-card amber" style="font-size:12px">These don't publish to Shopify for this piece's category, but they're still worth filling — they enrich the record and feed your Meta &amp; Etsy listings.</div>
+      <!-- AFP-exclusive fields live here by default; npApplyCategoryBuckets() swaps in wreath fields for wreaths. -->
+      <div id="np-sub-4-fields">
+        <div class="field" id="npf-arrangement"><label>Arrangement</label><div id="np-arrangement"></div></div>
+        <div class="field" id="npf-container"><label>Plant container type</label><div id="np-container"></div></div>
+        <div class="field" id="npf-stem"><label>Stem length</label><div id="np-stem"></div></div>
+      </div>
+      <div class="btn-row"><button class="btn-primary btn-full" onclick="npSubNext()">Continue →</button></div>
+      <button class="btn btn-full" onclick="npSubPrev()" style="margin-top:8px">← Back</button>
+      <button class="btn-save-exit" onclick="npSaveAndExitStep1()">💾 Save &amp; finish later</button>
+      </div>
+
+      <!-- ── 1.5 — Assign EB number ── -->
+      <div class="np-sub" id="np-sub-5" style="display:none">
+      <div class="section-label" id="np-sub5-head">Assign EB number</div>
+      <div class="info-card sage" id="np-sub5-hint">Everything's captured. Assign the next EB number to this piece — it stays with the piece for good.</div>
       <div class="btn-row"><button class="btn-primary btn-full" id="np-primary-btn" onclick="npPrimaryAction()">✨ Assign EB number →</button></div>
-      <button class="btn btn-full" onclick="npGoScreen(1)" style="margin-top:8px">← Back to basics</button>
+      <button class="btn btn-full" onclick="npSubPrev()" style="margin-top:8px">← Back</button>
       <button class="btn-save-exit" onclick="npSaveAndExitStep1()">💾 Save &amp; finish later</button>
       </div>
     </div>
@@ -1279,6 +1319,7 @@ const CARE_OPTIONS = ['For outdoor wreaths, spray flowers and bows with Scotchga
 let npMode = 'add';
 let npSelectedFolder = null;   // { id, name } chosen in the Step 1.1 Drive folder picker
 let npFolderList = [];         // cached subfolders of the product-media folder
+let npFolderImages = [];       // cached thumbnails of the selected folder (carried across 1.2–1.4)
 const COLLECTION_MAP = {'Wreath':'door-wreaths','Home decor':'tabletop-and-centerpieces','Outdoor planter':'outdoor-pot-arrangements','Centerpiece':'tabletop-and-centerpieces','Wall decor':'nature-and-everyday','Hanging':'nature-and-everyday','Swag':'nature-and-everyday','Custom order':'nature-and-everyday'};
 const COLLECTION_LABELS = {'door-wreaths':'Door wreaths','outdoor-pot-arrangements':'Outdoor pot arrangements','tabletop-and-centerpieces':'Tabletop and centerpieces','nature-and-everyday':'Nature and everyday','holiday-and-seasonal':'Holiday and seasonal','sold-portfolio':'Sold — Portfolio'};
 
@@ -1724,21 +1765,64 @@ function npStep(n) {
   document.getElementById('np-step-pill').textContent = 'Step '+n+' of 4';
   document.getElementById('np-progress').style.width = (n*25)+'%';
   if(n===2){ const cb=document.getElementById('np-tag-printed'); if(cb){ const rec=(npCurrentRecordId&&allRecords.find(r=>r.id===npCurrentRecordId))||allRecords.find(r=>r.fields['EB Number']===npCurrentEB); cb.checked=!!(rec&&rec.fields['Tag printed']); } }
-  if(n===1) npGoScreen(1);
+  if(n===1) npGoSub(5); // returning to Step 1 (e.g. Back from Step 2) lands on the EB-number screen
   wipSaveNP(); window.scrollTo({top:0,behavior:'smooth'});
 }
-// Step 1 is split into two screens: basics (np-screen-1) → details (np-screen-2).
-function npGoScreen(n){
-  const s1=document.getElementById('np-screen-1'), s2=document.getElementById('np-screen-2');
-  if(!s1||!s2) return;
-  s1.style.display = n===2 ? 'none' : 'block';
-  s2.style.display = n===2 ? 'block' : 'none';
-  const pill=document.getElementById('np-step-pill'); if(pill) pill.textContent = n===2 ? 'Step 1 of 4 · details' : 'Step 1 of 4';
-  stepBackFn = n===2 ? () => npGoScreen(1) : (currentNpStep>1 ? () => npStep(currentNpStep-1) : null);
+// ── Step 1 sub-screens (1.1–1.5) ──────────────────────────────────────────────
+// 1.1 basics · 1.2 shared details · 1.3 "publishes to Shopify" (own category) ·
+// 1.4 "optional — not published" (other category) · 1.5 assign EB number.
+// Add-ons have no Shopify category, so 1.3/1.4 are skipped (npActiveSubs).
+let npCurrentSub = 1;
+const NP_AFP_FIELDS = ['npf-arrangement','npf-container','npf-stem'];          // Artificial Flowering Plants only
+const NP_WR_FIELDS  = ['npf-indoor-outdoor','npf-celebration','npf-lighting','npf-shape']; // Wreaths only
+function npCurrentCategory(){
+  const t=document.getElementById('np-type'); if(!t) return '';
+  return npCategoryForType(TYPE_CODES[t.value]); // '' (Add-on) | 'Wreaths' | 'Artificial Flowering Plants'
+}
+// Which sub-screens are active for the current category (Add-on skips 1.3 & 1.4).
+function npActiveSubs(){ return npCurrentCategory()==='' ? [1,2,5] : [1,2,3,4,5]; }
+// Move the category-exclusive field blocks into 1.3 (own category, publishes) or
+// 1.4 (other category, optional). Nodes are relocated (not re-created), so all
+// multi-select state and entered values are preserved across Type changes.
+function npApplyCategoryBuckets(){
+  const pub=document.getElementById('np-sub-3-fields'), opt=document.getElementById('np-sub-4-fields');
+  if(!pub||!opt) return;
+  const cat=npCurrentCategory();
+  let own=[], other=[];
+  if(cat==='Wreaths'){ own=NP_WR_FIELDS; other=NP_AFP_FIELDS; }
+  else if(cat==='Artificial Flowering Plants'){ own=NP_AFP_FIELDS; other=NP_WR_FIELDS; }
+  // Add-on (cat===''): leave fields where they are; 1.3/1.4 are skipped in navigation.
+  own.forEach(id=>{const el=document.getElementById(id); if(el) pub.appendChild(el);});
+  other.forEach(id=>{const el=document.getElementById(id); if(el) opt.appendChild(el);});
+  const hint=document.getElementById('np-sub3-hint');
+  if(hint) hint.textContent = cat==='Wreaths' ? 'Wreath details that publish to your Shopify listing.'
+    : (cat==='Artificial Flowering Plants' ? 'Arrangement details that publish to your Shopify listing.' : '');
+}
+function npGoSub(n){
+  npApplyCategoryBuckets();
+  npCurrentSub=n;
+  for(let i=1;i<=5;i++){const el=document.getElementById('np-sub-'+i); if(el) el.style.display=(i===n)?'block':'none';}
+  const labels={1:'',2:' · details',3:' · Shopify fields',4:' · optional',5:' · EB number'};
+  const pill=document.getElementById('np-step-pill'); if(pill) pill.textContent='Step 1 of 4'+(labels[n]||'');
+  const subs=npActiveSubs(), idx=subs.indexOf(n);
+  stepBackFn = idx>0 ? (()=>npGoSub(subs[idx-1])) : (currentNpStep>1 ? (()=>npStep(currentNpStep-1)) : null);
   updateHeaderBackBtn();
+  npRenderSubThumbs();
   window.scrollTo({top:0,behavior:'smooth'});
 }
-document.getElementById('np-type').addEventListener('change', function() { document.getElementById('np-outdoor-warning').style.display = this.value==='OP'?'block':'none'; npDefaultWreathShape(); });
+function npSubNext(){ const subs=npActiveSubs(), i=subs.indexOf(npCurrentSub); if(i>=0&&i<subs.length-1) npGoSub(subs[i+1]); }
+function npSubPrev(){ const subs=npActiveSubs(), i=subs.indexOf(npCurrentSub); if(i>0) npGoSub(subs[i-1]); }
+// Carry the selected Drive folder's photo thumbnails across 1.2–1.4 for reference.
+function npRenderSubThumbs(){
+  const imgs=npFolderImages||[];
+  ['np-thumbs-2','np-thumbs-3','np-thumbs-4'].forEach(mid=>{
+    const box=document.getElementById(mid); if(!box) return;
+    if(!npSelectedFolder||!imgs.length){ box.style.display='none'; box.innerHTML=''; return; }
+    box.style.display='block';
+    box.innerHTML='<div class="thumb-row thumb-row-zoom">'+imgs.map(f=>'<img src="'+(f.thumbnailLink||'')+'" data-full="'+escHtml(driveUpsize(f.thumbnailLink||''))+'" alt="'+escHtml(f.name)+'" referrerpolicy="no-referrer" onclick="npFolderBigPreview(this)">').join('')+'</div><div class="np-bigpreview" style="display:none"></div>';
+  });
+}
+document.getElementById('np-type').addEventListener('change', function() { document.getElementById('np-outdoor-warning').style.display = this.value==='OP'?'block':'none'; npDefaultWreathShape(); npApplyCategoryBuckets(); });
 
 // Render the Step 1.1 dropdowns + multi-select chip groups from NP_OPTIONS.
 function npRenderSelect(id,opts){const el=document.getElementById(id);if(!el)return;el.innerHTML=opts.map(o=>'<option value="'+escHtml(o)+'">'+escHtml(o)+'</option>').join('');}
@@ -1827,6 +1911,7 @@ function npInitFields(){
   msInit('np-lighting',npAlpha(NP_OPTIONS.lighting));
   msInit('np-shape',npAlpha(NP_OPTIONS.shape));
   npDefaultWreathShape();
+  npApplyCategoryBuckets(); // place 1.3/1.4 fields for the default Type
 }
 // Wreaths are most commonly round — pre-select Round when the piece is a Wreath and no
 // Shape is chosen yet. Non-destructive: only fills an empty selection; user can change it.
@@ -1895,22 +1980,26 @@ function npFolderReflectSelected(){
 }
 // Thumbnail preview so the user can confirm they picked the right folder.
 async function npFolderRenderPreview(folderId){
-  const box=document.getElementById('np-folder-preview'); if(!box)return;
-  if(!folderId){ box.style.display='none'; box.innerHTML=''; return; }
-  box.style.display='block'; box.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:6px 0">Loading thumbnails…</div>';
+  const box=document.getElementById('np-folder-preview');
+  if(!folderId){ npFolderImages=[]; npRenderSubThumbs(); if(box){ box.style.display='none'; box.innerHTML=''; } return; }
+  if(box){ box.style.display='block'; box.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:6px 0">Loading thumbnails…</div>'; }
   try{
     const r=await fetch(SERVER_URL+'/drive-folder-images?folderId='+encodeURIComponent(folderId));
     const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not load photos');
     const imgs=(d.files||[]).slice(0,6), total=d.total!=null?d.total:(d.files||[]).length;
+    npFolderImages=imgs; npRenderSubThumbs(); // cache + carry across 1.2–1.4
+    if(!box) return;
     if(!imgs.length){ box.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:6px 0">No photos in this folder yet.</div>'; return; }
-    box.innerHTML='<div class="thumb-row thumb-row-zoom">'+imgs.map(f=>'<img src="'+(f.thumbnailLink||'')+'" data-full="'+escHtml(driveUpsize(f.thumbnailLink||''))+'" alt="'+escHtml(f.name)+'" referrerpolicy="no-referrer" onclick="npFolderBigPreview(this)">').join('')+'</div>'+(total>imgs.length?'<div style="font-size:11px;color:var(--text-muted);margin-top:3px">+'+(total-imgs.length)+' more</div>':'')+'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">Tap a photo to enlarge it below for reference.</div><div id="np-folder-bigpreview" class="np-bigpreview" style="display:none"></div>';
-  }catch(e){ box.innerHTML='<div style="font-size:11px;color:var(--rose);padding:6px 0">⚠ '+escHtml(e.message)+'</div>'; }
+    box.innerHTML='<div class="thumb-row thumb-row-zoom">'+imgs.map(f=>'<img src="'+(f.thumbnailLink||'')+'" data-full="'+escHtml(driveUpsize(f.thumbnailLink||''))+'" alt="'+escHtml(f.name)+'" referrerpolicy="no-referrer" onclick="npFolderBigPreview(this)">').join('')+'</div>'+(total>imgs.length?'<div style="font-size:11px;color:var(--text-muted);margin-top:3px">+'+(total-imgs.length)+' more</div>':'')+'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">Tap a photo to enlarge it below for reference.</div><div class="np-bigpreview" style="display:none"></div>';
+  }catch(e){ if(box) box.innerHTML='<div style="font-size:11px;color:var(--rose);padding:6px 0">⚠ '+escHtml(e.message)+'</div>'; }
 }
 // Request a larger render of a Google Drive thumbnail link (they end with =s220 / =w200-h150).
 function driveUpsize(t){ if(!t) return t; if(/=s\d+/i.test(t)) return t.replace(/=s\d+(-[a-z0-9]+)*/i,'=s1200'); if(/=w\d+-h\d+/i.test(t)) return t.replace(/=w\d+-h\d+(-[a-z0-9]+)*/i,'=s1200'); return t; }
 // Click a Step 1.1 thumbnail → show it large beneath the row (toggle off on re-tap or tapping the big image).
 function npFolderBigPreview(imgEl){
-  const box=document.getElementById('np-folder-bigpreview'); if(!box||!imgEl)return;
+  if(!imgEl) return;
+  const container=imgEl.closest('#np-folder-preview, .np-sub-thumbs');
+  const box=container ? container.querySelector('.np-bigpreview') : null; if(!box)return;
   const full=imgEl.getAttribute('data-full')||imgEl.src;
   const row=imgEl.parentElement;
   if(box.style.display!=='none' && box.dataset.src===full){ box.style.display='none'; box.dataset.src=''; row.querySelectorAll('img').forEach(t=>t.classList.remove('sel')); return; }
@@ -1929,6 +2018,8 @@ function npSetMode(mode){
   document.getElementById('np-add-hint').style.display=mode==='edit'?'none':'block';
   document.getElementById('np-edit-hint').style.display=mode==='edit'?'block':'none';
   document.getElementById('np-step1-label').textContent=mode==='edit'?'Edit piece details':'Assign EB number';
+  const sub5h=document.getElementById('np-sub5-head'); if(sub5h) sub5h.textContent=mode==='edit'?'Save changes':'Assign EB number';
+  const sub5hint=document.getElementById('np-sub5-hint'); if(sub5hint) sub5hint.textContent=mode==='edit'?"Save your changes — this piece's EB number stays the same.":"Everything's captured. Assign the next EB number to this piece — it stays with the piece for good.";
   const btn=document.getElementById('np-primary-btn');
   if(mode==='edit'){ btn.textContent='💾 Save changes →'; btn.disabled=true; npPopulateEditSelect(); }
   else { btn.textContent='✨ Assign EB number →'; btn.disabled=false; npClearForm(); npCurrentRecordId=null; npCurrentEB=''; npAssignedEB=''; const es=document.getElementById('np-edit-select'); if(es)es.value=''; }
@@ -1980,7 +2071,7 @@ function npClearForm(){
   document.getElementById('np-indoor-outdoor').value='Indoor';
   npSetChecks('np-season',[]); npSetChecks('np-style',[]); npSetChecks('np-colors',[]); npSetChecks('np-decoration',[]); npSetChecks('np-planter',[]); npSetChecks('np-pattern',[]); npSetChecks('np-plantname',[]); npSetChecks('np-arrangement',[]); npSetChecks('np-container',[]); npSetChecks('np-stem',[]); npSetChecks('np-celebration',[]); npSetChecks('np-lighting',[]); npSetChecks('np-shape',[]);
   npDefaultWreathShape(); // Type defaults to Wreath → pre-select Round.
-  npGoScreen(1);
+  npGoSub(1);
 }
 function npAutoFillCost(){
   var price=parseFloat(document.getElementById('np-price').value)||0;
@@ -2034,6 +2125,7 @@ function npLoadRecordForEdit(){
   const ozEdit=f['Item weight (oz)'];
   document.getElementById('np-weight-lb').value=(ozEdit!=null&&ozEdit!=='')?Math.floor(Number(ozEdit)/16):'';
   document.getElementById('np-weight-oz').value=(ozEdit!=null&&ozEdit!=='')?Number(ozEdit)%16:'';
+  npApplyCategoryBuckets(); // re-bucket 1.3/1.4 for the loaded piece's Type
   btn.disabled=false;
 }
 function npPrimaryAction(){ return npMode==='edit' ? npSaveEdit() : npGenerateEB(); }
@@ -4298,7 +4390,9 @@ function wipRestoreNP(saved) {
     const qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=140x140&data='+encodeURIComponent(SHOPIFY_BASE+saved.ebNumber.toLowerCase());
     const qrImg=document.getElementById('np-qr-img');if(qrImg)qrImg.src=qrUrl;
   }
+  npApplyCategoryBuckets(); // re-bucket 1.3/1.4 for the restored Type
   if(saved.step&&saved.step>1)setTimeout(()=>{currentNpStep=saved.step;npStep(saved.step);},200);
+  else npGoSub(1);
 }
 function wipRestoreCost(saved) { if(saved.path){costChoosePath(saved.path);if(saved.path==='manual'){['man-vendor','man-amount','man-date','man-description'].forEach(id=>{const el=document.getElementById(id);if(el&&saved[id])el.value=saved[id];});if(saved.category){costSelectedCat=saved.category;renderCatGrid('man-cat-grid','man-subcat-wrap','man-subcat-grid');}}else if(saved.path==='mileage'){['mile-description','mile-miles','mile-date'].forEach(id=>{const el=document.getElementById(id);if(el&&saved[id])el.value=saved[id];});}}}
 
