@@ -154,6 +154,15 @@ function mapSuitableSpace(v){
   if (v === 'Both') return [SHOPIFY_SUITABLE_SPACE.Indoors, SHOPIFY_SUITABLE_SPACE.Outdoors];
   return [];
 }
+// Indoor/Outdoor → custom.indoor_outdoor (list.single_line_text_field, choices Indoor/Outdoor).
+// UNIVERSAL: written on ALL products since AFP has no suitable-space taxonomy attribute;
+// wreaths ALSO get the native shopify.suitable-space (above). Both = [Indoor, Outdoor].
+function mapIndoorOutdoorList(v){
+  if (v === 'Indoor') return ['Indoor'];
+  if (v === 'Outdoor') return ['Outdoor'];
+  if (v === 'Both') return ['Indoor', 'Outdoor'];
+  return [];
+}
 
 // The Shopify Wreaths category exposes only "Material" (no Decoration/Planter material
 // attributes), so for wreaths we fold the chosen Decoration + Planter materials INTO
@@ -1067,7 +1076,7 @@ app.post('/mark-sold', async (req, res) => {
 });
  
 // ── Version / health (verify what's actually deployed) ────────
-app.get('/version', (req, res) => res.json({ version: '2026-06-30-fixpack5', features: ['custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions'] }));
+app.get('/version', (req, res) => res.json({ version: '2026-06-30-fixpack6', features: ['custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions', 'indoor_outdoor->custom.indoor_outdoor (universal multi-select; wreaths also get native suitable-space)'] }));
 
 // Resolve the tool-owned taxonomy metafield GIDs for a product, category-gated.
 // Shared by /create-product (replace) and /resync-attributes (merge) so the value→GID
@@ -1100,7 +1109,7 @@ function buildToolMetafieldGids(product_category, body){
 // ── Create product ────────────────────────────────────────────
 app.post('/create-product', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized. Visit ' + SERVER_URL + '/auth to complete Shopify OAuth first.' });
-  const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images, quantity, product_category, colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material, celebration_type, lighting_options, shape, care_instructions } = req.body;
+  const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images, quantity, product_category, colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material, celebration_type, lighting_options, shape, care_instructions, indoor_outdoor } = req.body;
   if (!title || !sku) return res.status(400).json({ error: 'title and sku are required' });
   // Inventory quantity — default to 1 (one-of-a-kind) when unset; clamp to a non-negative integer.
   const qty = (quantity != null && quantity !== '' && Number.isFinite(Number(quantity))) ? Math.max(0, Math.round(Number(quantity))) : 1;
@@ -1229,6 +1238,19 @@ app.post('/create-product', async (req, res) => {
         } catch (ciErr) { console.warn('care_instructions update failed (non-fatal):', ciErr.message); }
       }
     }
+    // Indoor/Outdoor → custom.indoor_outdoor (multi-select). Universal across categories
+    // (wreaths also get native shopify.suitable-space). Own update + try/catch; non-fatal.
+    {
+      const ioList = mapIndoorOutdoorList(indoor_outdoor);
+      if (ioList.length) {
+        try {
+          const ioData = await shopifyGraphql(`mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){userErrors{field message}}}`, { product: { id: `gid://shopify/Product/${productId}`, metafields: [{ namespace: 'custom', key: 'indoor_outdoor', type: 'list.single_line_text_field', value: JSON.stringify(ioList) }] } });
+          const ioErrs = ioData?.data?.productUpdate?.userErrors || [];
+          if (ioErrs.length) console.warn('indoor_outdoor not set:', ioErrs.map(e => e.message).join(', '));
+          else console.log('indoor_outdoor set:', sku, '→', ioList.join('+'));
+        } catch (ioErr) { console.warn('indoor_outdoor update failed (non-fatal):', ioErr.message); }
+      }
+    }
     const collectionHandles = Array.isArray(collections) ? collections : [];
     const collectionResults = [];
     for (const handle of collectionHandles) {
@@ -1259,7 +1281,7 @@ app.post('/create-product', async (req, res) => {
 // bidirectional source of truth). NEVER touches title/body/images/price/tags.
 app.post('/resync-attributes', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized — visit /auth' });
-  const { sku, quantity, product_category, care_instructions } = req.body;
+  const { sku, quantity, product_category, care_instructions, indoor_outdoor } = req.body;
   if (!sku) return res.status(400).json({ error: 'sku required' });
   try {
     // 1. Find product + variant + current shopify-namespace metafields by SKU
@@ -1306,6 +1328,14 @@ app.post('/resync-attributes', async (req, res) => {
       try {
         await shopifyGraphql(`mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){userErrors{message}}}`, { product: { id: productId, metafields: [{ namespace: 'custom', key: 'care_instructions', type: 'list.single_line_text_field', value: JSON.stringify(careList) }] } });
       } catch (ciErr) { console.warn('Resync care_instructions failed (non-fatal):', ciErr.message); }
+    }
+
+    // 3c. Indoor/Outdoor → custom.indoor_outdoor (tool-owned multi-select; whole-value replace).
+    const ioList = mapIndoorOutdoorList(indoor_outdoor);
+    if (ioList.length) {
+      try {
+        await shopifyGraphql(`mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){userErrors{message}}}`, { product: { id: productId, metafields: [{ namespace: 'custom', key: 'indoor_outdoor', type: 'list.single_line_text_field', value: JSON.stringify(ioList) }] } });
+      } catch (ioErr) { console.warn('Resync indoor_outdoor failed (non-fatal):', ioErr.message); }
     }
 
     // 4. Reset inventory to the tool Quantity (default 1). Decided behaviour for now.

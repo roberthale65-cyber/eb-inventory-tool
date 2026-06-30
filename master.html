@@ -549,7 +549,6 @@ button:active{transform:scale(.97)}
       <div class="info-card teal" id="np-sub3-hint" style="font-size:12px"></div>
       <!-- Wreath-exclusive fields live here by default; npApplyCategoryBuckets() swaps in AFP fields for non-wreaths. -->
       <div id="np-sub-3-fields">
-        <div class="field" id="npf-indoor-outdoor"><label>Indoor / Outdoor</label><select id="np-indoor-outdoor"><option value="Indoor">Indoor</option><option value="Outdoor">Outdoor</option><option value="Both">Both</option></select><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Publishes to Shopify "Suitable space" on wreaths. Defaults to Indoor.</div></div>
         <div class="field" id="npf-celebration"><label>Celebration type</label><div id="np-celebration"></div></div>
         <div class="field" id="npf-lighting"><label>Lighting options</label><div id="np-lighting"></div></div>
         <div class="field" id="npf-shape"><label>Shape</label><div id="np-shape"></div></div>
@@ -705,7 +704,7 @@ button:active{transform:scale(.97)}
       <div class="section-label">Listing details</div>
       <div class="info-card sage" style="margin-bottom:12px"><strong>Colors, materials, weight &amp; product description come from Step 1.</strong> Just add the listing-specific details below.</div>
       <div class="field"><label>Best display location</label><div id="lp-location"></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Where the piece looks best — maps to Shopify "Suitable location".</div></div>
-      <div class="field"><label>Indoor / Outdoor</label><select id="lp-indoor-outdoor"><option value="Indoor">Indoor</option><option value="Outdoor">Outdoor</option><option value="Both">Both</option></select><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Maps to Shopify "Suitable space" on wreaths. Defaults to Indoor.</div></div>
+      <div class="field"><label>Indoor / Outdoor</label><select id="lp-indoor-outdoor"><option value="Indoor">Indoor</option><option value="Outdoor">Outdoor</option><option value="Both">Both</option></select><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Publishes to every piece (Shopify "Indoor / Outdoor"; wreaths also get native "Suitable space"). Defaults to Indoor.</div></div>
       <div class="field"><label>Care instructions</label><div id="lp-care"></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Select any that apply — publishes to Shopify "Care instructions" (custom.care_instructions).</div></div>
       <div id="lp-s2-save-status" style="display:none;font-size:12px;padding:7px 10px;border-radius:6px;margin-bottom:8px;text-align:center"></div>
       <button class="btn btn-full" id="lp-s2-save-btn" onclick="lpSaveStepTwo()" style="font-size:12px;margin-bottom:8px">💾 Save details to Airtable</button>
@@ -1774,7 +1773,7 @@ function npStep(n) {
 // Add-ons have no Shopify category, so 1.3/1.4 are skipped (npActiveSubs).
 let npCurrentSub = 1;
 const NP_AFP_FIELDS = ['npf-arrangement','npf-container','npf-stem'];          // Artificial Flowering Plants only
-const NP_WR_FIELDS  = ['npf-indoor-outdoor','npf-celebration','npf-lighting','npf-shape']; // Wreaths only
+const NP_WR_FIELDS  = ['npf-celebration','npf-lighting','npf-shape']; // Wreaths only (Indoor/Outdoor moved to Step 2.1)
 function npCurrentCategory(){
   const t=document.getElementById('np-type'); if(!t) return '';
   return npCategoryForType(TYPE_CODES[t.value]); // '' (Add-on) | 'Wreaths' | 'Artificial Flowering Plants'
@@ -2068,7 +2067,6 @@ function npClearForm(){
   npSetChecks('np-occasion',[]);
   document.getElementById('np-florals').value='None';
   document.getElementById('np-greenery').value='None';
-  document.getElementById('np-indoor-outdoor').value='Indoor';
   npSetChecks('np-season',[]); npSetChecks('np-style',[]); npSetChecks('np-colors',[]); npSetChecks('np-decoration',[]); npSetChecks('np-planter',[]); npSetChecks('np-pattern',[]); npSetChecks('np-plantname',[]); npSetChecks('np-arrangement',[]); npSetChecks('np-container',[]); npSetChecks('np-stem',[]); npSetChecks('np-celebration',[]); npSetChecks('np-lighting',[]); npSetChecks('np-shape',[]);
   npDefaultWreathShape(); // Type defaults to Wreath → pre-select Round.
   npGoSub(1);
@@ -2099,7 +2097,6 @@ function npLoadRecordForEdit(){
   document.getElementById('np-cost-pct').value=(_ep>0&&_ec>0)?Math.round(_ec/_ep*100):DEFAULT_COST_PCT;
   document.getElementById('np-florals').value=f['Florals']||'None';
   document.getElementById('np-greenery').value=f['Greenery']||'None';
-  document.getElementById('np-indoor-outdoor').value=f['Indoor/Outdoor']||'Indoor';
   npSetChecks('np-style',f['Style']||[]);
   npSetChecks('np-colors',f['Color(s)']||[]);
   npSetChecks('np-decoration',f['Decoration material']||[]);
@@ -2156,7 +2153,6 @@ function npBuildFieldsFromForm(){
     'Occasion':npGetChecks('np-occasion').join(', ')||'',
     'Florals':document.getElementById('np-florals').value,
     'Greenery':document.getElementById('np-greenery').value,
-    'Indoor/Outdoor':(document.getElementById('np-indoor-outdoor')||{}).value||'Indoor',
     'Style':npGetChecks('np-style'),
     'Color(s)':npGetChecks('np-colors'),
     'Decoration material':npGetChecks('np-decoration'),
@@ -2986,7 +2982,7 @@ async function rsResync(){
       arrangement:asArr(f['Arrangement']), plant_container_type:asArr(f['Plant container type']), stem_length:asArr(f['Stem length']),
       decoration_material:asArr(f['Decoration material']), planter_material:asArr(f['Planter material']),
       celebration_type:asArr(f['Celebration type']), lighting_options:asArr(f['Lighting options']), shape:asArr(f['Shape']),
-      season:asArr(f['Season']), suitable_space:f['Indoor/Outdoor']||((f['Product Category']||npCategoryForType(f['Type']))==='Wreaths'?'Indoor':''), care_instructions:asArr(f['Care instructions']) };
+      season:asArr(f['Season']), suitable_space:f['Indoor/Outdoor']||((f['Product Category']||npCategoryForType(f['Type']))==='Wreaths'?'Indoor':''), indoor_outdoor:f['Indoor/Outdoor']||'', care_instructions:asArr(f['Care instructions']) };
     const r=await fetch(SERVER_URL+'/resync-attributes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d=await r.json();
     if(!r.ok||!d.success) throw new Error(d.error||'Re-sync failed');
@@ -3051,7 +3047,9 @@ async function lpPublish(){
     const pubSeason=asArr(f['Season']);
     // Suitable space (Wreaths only) — default Indoor when unset, per EB convention.
     const pubSuitableSpace=f['Indoor/Outdoor']||(pubCategory==='Wreaths'?'Indoor':'');
-    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial,celebration_type:pubCelebration,lighting_options:pubLighting,shape:pubShape,season:pubSeason,suitable_space:pubSuitableSpace,care_instructions:asArr(f['Care instructions'])})});
+    // Indoor/Outdoor (universal custom metafield) — raw Airtable value, all categories.
+    const pubIndoorOutdoor=f['Indoor/Outdoor']||'';
+    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial,celebration_type:pubCelebration,lighting_options:pubLighting,shape:pubShape,season:pubSeason,suitable_space:pubSuitableSpace,indoor_outdoor:pubIndoorOutdoor,care_instructions:asArr(f['Care instructions'])})});
     clearTimeout(timeout);const data=await res.json();
     if(!res.ok||!data.success) throw new Error(data.error||'Publish failed');
     try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;if(meta)photoFields['Listing Meta Description']=meta;await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:photoFields})});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;if(meta)rec.fields['Listing Meta Description']=meta;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
@@ -4360,7 +4358,6 @@ function wipRestoreNP(saved) {
   if(saved.occasion!==undefined){npSetChecks('np-occasion',saved.occasion?saved.occasion.split(',').map(v=>v.trim()).filter(Boolean):[]);}
   if(saved.florals){const el=document.getElementById('np-florals');if(el)el.value=saved.florals;}
   if(saved.greenery){const el=document.getElementById('np-greenery');if(el)el.value=saved.greenery;}
-  if(saved.indoorOutdoor){const el=document.getElementById('np-indoor-outdoor');if(el)el.value=saved.indoorOutdoor;}
   if(saved.style)npSetChecks('np-style',saved.style);
   if(saved.colors)npSetChecks('np-colors',saved.colors);
   if(saved.decoration)npSetChecks('np-decoration',saved.decoration);
@@ -4405,7 +4402,6 @@ function wipSaveNP() {
     occasion: npGetChecks('np-occasion').join(', '),
     florals:  (document.getElementById('np-florals')||{}).value||'None',
     greenery: (document.getElementById('np-greenery')||{}).value||'None',
-    indoorOutdoor: (document.getElementById('np-indoor-outdoor')||{}).value||'Indoor',
     style:    npGetChecks('np-style'),
     colors:   npGetChecks('np-colors'),
     decoration:npGetChecks('np-decoration'),
