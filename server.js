@@ -1001,10 +1001,15 @@ app.post('/create-product', async (req, res) => {
       // Set available quantity via GraphQL — REST inventory_levels/set.json is
       // deprecated in 2026-04 and silently no-ops, leaving products at 0. The
       // connect above ensures the level exists at the location.
+      // NOTE: 2026-04 InventorySetQuantitiesInput has NO ignoreCompareQuantity field
+      // (that exists only in newer versions — passing it fails the whole mutation with
+      // INVALID_VARIABLE, which is why inventory kept landing at 0). The compare-and-swap
+      // field is now per-quantity `changeFromQuantity`; omitting it skips the CAS check,
+      // which is correct here since we're the source of truth for a brand-new product.
       try {
         const invMutation = `mutation invSet($input:InventorySetQuantitiesInput!){inventorySetQuantities(input:$input){userErrors{code field message}}}`;
         const invInput = {
-          name: 'available', reason: 'correction', ignoreCompareQuantity: true,
+          name: 'available', reason: 'correction',
           quantities: [{ inventoryItemId: `gid://shopify/InventoryItem/${inventoryItemId}`, locationId: `gid://shopify/Location/${locationId}`, quantity: qty }]
         };
         const invData = await shopifyGraphql(invMutation, { input: invInput });
