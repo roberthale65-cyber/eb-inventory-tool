@@ -2949,9 +2949,10 @@ async function lpPublish(){
     if(!res.ok||!data.success) throw new Error(data.error||'Publish failed');
     try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;if(meta)photoFields['Listing Meta Description']=meta;await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:photoFields})});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;if(meta)rec.fields['Listing Meta Description']=meta;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
     lpLastProductId = data.product_id || null;
-    // Clear draft fields now that this piece is live — non-blocking
-    airtableFetch('/'+lpSelectedRecord.id, {method:'PATCH', body:JSON.stringify({fields:{'Draft Title':'','Draft Description':''}})})
-      .catch(()=>{});
+    // KEEP Draft Title/Description in Airtable after publish — they ARE the generated
+    // listing copy (the record of what went live, and the source for Meta/Etsy later).
+    // Previously they were cleared here, silently wiping the title/description from every
+    // published piece.
     WIP.clear('lp');
     lastPublishedProduct={eb:f['EB Number']||'',detail:(f['Type']||'')+(f['Season']?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Occasion']&&f['Occasion']!=='None'?' · '+f['Occasion']:''),adminUrl:data.admin_url,price:f['Price ($)']!=null?String(f['Price ($)']):''}; 
     result.className='publish-result success';result.style.display='block';
