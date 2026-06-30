@@ -1926,7 +1926,10 @@ function npInitFields(){
 // fill order flips with Type — so 1:1 equivalences propagate BOTH ways (Occasion↔Celebration),
 // and whichever field is filled first seeds the other. Many→1 mappings can't be cleanly
 // reversed (a shared target can't pick which source to fill), so they stay forward-only:
-//   Fourth of July & Memorial Day → Summer; Lights & Candle → Illuminated.
+//   Fourth of July & Memorial Day → Summer; Lights & Candle → Illuminated; holiday → Season.
+// Also: Arrangement ↔ Plant container type (shared vessel values, bidirectional); Season
+// 'Summer' ↔ Celebration 'Summer'; Occasion/Celebration → Season (forward-only, sets the
+// EB season code by design).
 // Behaviour: ADDITIVE + non-destructive (never removes the user's picks) and DELTA-based
 // (only newly-checked source values propagate, so deselecting an auto-added target and then
 // editing elsewhere won't re-add it). Target strings match NP_OPTIONS exactly. Reviewed
@@ -1947,7 +1950,25 @@ const NP_INFER = [
       'Baby shower':['Baby Shower'], 'Graduation':['Graduation'], '4th of July':['Fourth of July'] } },
   // Decoration material → Lighting options (forward-only; 'Illuminated' can't pick between
   // Lights and Candle, so no reverse).
-  { from:'np-decoration', to:'np-lighting', map:{ 'Lights':['Illuminated'], 'Candle':['Illuminated'] } }
+  { from:'np-decoration', to:'np-lighting', map:{ 'Lights':['Illuminated'], 'Candle':['Illuminated'] } },
+  // Holiday → Season. Forward-only: a season maps from many holidays, so it can't reverse
+  // to one. Drives the EB season code (by design). Graduation intentionally unmapped
+  // (spans late spring/early summer). Reviewed w/ Niki 2026-06-30.
+  { from:'np-occasion', to:'np-season', map:{
+      'Christmas':['Winter'], "Valentine's Day":['Winter'], 'Easter':['Spring'], "Mother's Day":['Spring'],
+      'Memorial Day':['Summer'], 'Fourth of July':['Summer'], 'Halloween':['Fall'], 'Thanksgiving':['Fall'] } },
+  { from:'np-celebration', to:'np-season', map:{
+      'Christmas':['Winter'], "Valentine's day":['Winter'], 'Easter':['Spring'], "Mother's Day":['Spring'],
+      "Father's Day":['Summer'], '4th of July':['Summer'], 'Summer':['Summer'], 'Halloween':['Fall'] } },
+  // Season → Celebration type (only Summer exists as a celebration type → makes Summer
+  // bidirectional with the Celebration→Season rule above).
+  { from:'np-season', to:'np-celebration', map:{ 'Summer':['Summer'] } },
+  // Arrangement ↔ Plant container type — shared vessel values, bidirectional 1:1; plus the
+  // forward-only "Metal Planter" arrangement → Planter container.
+  { from:'np-arrangement', to:'np-container', map:{
+      'Basket':['Basket'], 'Box':['Box'], 'Vase':['Vase'], 'Planter':['Planter'], 'Pot':['Pot'], 'Metal Planter':['Planter'] } },
+  { from:'np-container', to:'np-arrangement', map:{
+      'Basket':['Basket'], 'Box':['Box'], 'Vase':['Vase'], 'Planter':['Planter'], 'Pot':['Pot'] } }
 ];
 const _npInferPrev = {}; // sourceId → last-seen selections, for delta detection
 // Re-baseline after programmatic field loads (init/clear/edit/WIP) so only genuine user
@@ -1960,10 +1981,15 @@ function npAddChecks(id, vals){
   if(changed) npSetChecks(id, Array.from(cur));
 }
 function npInferOnChange(sourceId){
-  NP_INFER.filter(r=>r.from===sourceId).forEach(r=>{
-    const cur=npGetChecks(r.from), prev=_npInferPrev[r.from]||[];
-    const added=cur.filter(v=>!prev.includes(v)); // only NEWLY-checked source values
-    _npInferPrev[r.from]=cur;
+  const rules=NP_INFER.filter(r=>r.from===sourceId); if(!rules.length) return;
+  // Compute the delta ONCE per source (a source may feed several targets, e.g. Occasion →
+  // Celebration AND Occasion → Season — updating the baseline per-rule would hide the delta
+  // from later rules), then update the baseline once, then apply every rule.
+  const cur=npGetChecks(sourceId), prev=_npInferPrev[sourceId]||[];
+  const added=cur.filter(v=>!prev.includes(v)); // only NEWLY-checked source values
+  _npInferPrev[sourceId]=cur;
+  if(!added.length) return;
+  rules.forEach(r=>{
     const toAdd=[]; added.forEach(v=>(r.map[v]||[]).forEach(t=>toAdd.push(t)));
     if(toAdd.length){
       npAddChecks(r.to, toAdd);
