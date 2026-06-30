@@ -1952,7 +1952,7 @@ function npLoadRecordForEdit(){
   const typeCode=Object.keys(TYPE_CODES).find(k=>TYPE_CODES[k]===f['Type']); if(typeCode)document.getElementById('np-type').value=typeCode;
   document.getElementById('np-outdoor-warning').style.display=document.getElementById('np-type').value==='OP'?'block':'none';
   npSetChecks('np-season',Array.isArray(f['Season'])?f['Season']:(f['Season']?[f['Season']]:[]));
-  npSetChecks('np-occasion',(f['Occasion']&&f['Occasion']!=='None')?f['Occasion'].split(',').map(v=>v.trim()).filter(Boolean):[]);
+  npSetChecks('np-occasion',Array.isArray(f['Occasion'])?f['Occasion']:((f['Occasion']&&f['Occasion']!=='None')?String(f['Occasion']).split(',').map(v=>v.trim()).filter(Boolean):[]));
   document.getElementById('np-price').value=f['Price ($)']!=null?f['Price ($)']:'';
   document.getElementById('np-quantity').value=f['Quantity']!=null?f['Quantity']:1;
   document.getElementById('np-date-made').value=f['Date made']||'';
@@ -2508,11 +2508,13 @@ function lpBuildTags(f){
   const seasons=Array.isArray(seasonRaw)?seasonRaw:(seasonRaw?seasonRaw.split(',').map(s=>s.trim()):[]);
   seasons.forEach(s=>{if(s)tags.push('Season_'+s);});
   if(f['Type'])tags.push('Type_'+f['Type'].replace(/\s/g,'_'));
-  if(f['Occasion']&&f['Occasion']!=='None'){f['Occasion'].split(',').forEach(o=>{const ot=o.trim();if(ot&&ot!=='None')tags.push('Holiday_'+ot.replace(/\s/g,'_'));});}
+  const occasionRaw=f['Occasion'];
+  const occasions=Array.isArray(occasionRaw)?occasionRaw:(occasionRaw?String(occasionRaw).split(','):[]);
+  occasions.forEach(o=>{const ot=String(o).trim();if(ot&&ot!=='None')tags.push('Holiday_'+ot.replace(/\s/g,'_'));});
   tags.push('one-of-a-kind','handmade','faux-floral','Omaha');
   return tags.join(', ');
 }
-function lpBuildCollections(f){const handles=[];const h=COLLECTION_MAP[f['Type']];if(h)handles.push(h);if(f['Occasion']&&f['Occasion']!=='None')handles.push('holiday-and-seasonal');return handles;}
+function lpBuildCollections(f){const handles=[];const h=COLLECTION_MAP[f['Type']];if(h)handles.push(h);const occ=Array.isArray(f['Occasion'])?f['Occasion']:(f['Occasion']?[f['Occasion']]:[]);if(occ.some(o=>o&&o!=='None'))handles.push('holiday-and-seasonal');return handles;}
 
 // Auto-generates a Shopify-optimized title + description via Claude. Colors/materials
 // are sourced from the Step 1 Airtable record (no longer manual inputs).
@@ -2858,7 +2860,7 @@ function lpScoreFolder(folderName, rec) {
   const f = rec.fields;
   const ref   = (f['Reference name'] || '').toLowerCase();
   const type  = (f['Type'] || '').toLowerCase();
-  const occ   = (f['Occasion'] || '').toLowerCase();
+  const occ   = (Array.isArray(f['Occasion']) ? f['Occasion'].join(' ') : (f['Occasion'] || '')).toLowerCase();
   const seas  = Array.isArray(f['Season']) ? f['Season'].join(' ').toLowerCase() : (f['Season'] || '').toLowerCase();
   const folder = folderName.toLowerCase();
   const isSold = /sold\s*$/.test(folder);
