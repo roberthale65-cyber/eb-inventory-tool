@@ -549,7 +549,6 @@ button:active{transform:scale(.97)}
       <div class="info-card teal" id="np-sub3-hint" style="font-size:12px"></div>
       <!-- Wreath-exclusive fields live here by default; npApplyCategoryBuckets() swaps in AFP fields for non-wreaths. -->
       <div id="np-sub-3-fields">
-        <div class="field" id="npf-indoor-outdoor"><label>Indoor / Outdoor</label><select id="np-indoor-outdoor"><option value="Indoor">Indoor</option><option value="Outdoor">Outdoor</option><option value="Both">Both</option></select><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Publishes to Shopify "Suitable space" on wreaths. Defaults to Indoor.</div></div>
         <div class="field" id="npf-celebration"><label>Celebration type</label><div id="np-celebration"></div></div>
         <div class="field" id="npf-lighting"><label>Lighting options</label><div id="np-lighting"></div></div>
         <div class="field" id="npf-shape"><label>Shape</label><div id="np-shape"></div></div>
@@ -563,7 +562,7 @@ button:active{transform:scale(.97)}
       <div class="np-sub" id="np-sub-4" style="display:none">
       <div id="np-thumbs-4" class="np-sub-thumbs" style="display:none"></div>
       <div class="section-label">Optional — not published to Shopify</div>
-      <div class="info-card amber" style="font-size:12px">These don't publish to Shopify for this piece's category, but they're still worth filling — they enrich the record and feed your Meta &amp; Etsy listings.</div>
+      <div class="info-card amber" style="font-size:12px">These don't publish to Shopify for this piece's category, but they're still worth filling if applicable — they enrich the record and feed your Meta &amp; Etsy listings.</div>
       <!-- AFP-exclusive fields live here by default; npApplyCategoryBuckets() swaps in wreath fields for wreaths. -->
       <div id="np-sub-4-fields">
         <div class="field" id="npf-arrangement"><label>Arrangement</label><div id="np-arrangement"></div></div>
@@ -705,7 +704,7 @@ button:active{transform:scale(.97)}
       <div class="section-label">Listing details</div>
       <div class="info-card sage" style="margin-bottom:12px"><strong>Colors, materials, weight &amp; product description come from Step 1.</strong> Just add the listing-specific details below.</div>
       <div class="field"><label>Best display location</label><div id="lp-location"></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Where the piece looks best — maps to Shopify "Suitable location".</div></div>
-      <div class="field"><label>Indoor / Outdoor</label><select id="lp-indoor-outdoor"><option value="Indoor">Indoor</option><option value="Outdoor">Outdoor</option><option value="Both">Both</option></select><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Maps to Shopify "Suitable space" on wreaths. Defaults to Indoor.</div></div>
+      <div class="field"><label>Indoor / Outdoor</label><select id="lp-indoor-outdoor"><option value="Indoor">Indoor</option><option value="Outdoor">Outdoor</option><option value="Both">Both</option></select><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Publishes to every piece (Shopify "Indoor / Outdoor"; wreaths also get native "Suitable space"). Defaults to Indoor.</div></div>
       <div class="field"><label>Care instructions</label><div id="lp-care"></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Select any that apply — publishes to Shopify "Care instructions" (custom.care_instructions).</div></div>
       <div id="lp-s2-save-status" style="display:none;font-size:12px;padding:7px 10px;border-radius:6px;margin-bottom:8px;text-align:center"></div>
       <button class="btn btn-full" id="lp-s2-save-btn" onclick="lpSaveStepTwo()" style="font-size:12px;margin-bottom:8px">💾 Save details to Airtable</button>
@@ -1774,7 +1773,7 @@ function npStep(n) {
 // Add-ons have no Shopify category, so 1.3/1.4 are skipped (npActiveSubs).
 let npCurrentSub = 1;
 const NP_AFP_FIELDS = ['npf-arrangement','npf-container','npf-stem'];          // Artificial Flowering Plants only
-const NP_WR_FIELDS  = ['npf-indoor-outdoor','npf-celebration','npf-lighting','npf-shape']; // Wreaths only
+const NP_WR_FIELDS  = ['npf-celebration','npf-lighting','npf-shape']; // Wreaths only (Indoor/Outdoor moved to Step 2.1)
 function npCurrentCategory(){
   const t=document.getElementById('np-type'); if(!t) return '';
   return npCategoryForType(TYPE_CODES[t.value]); // '' (Add-on) | 'Wreaths' | 'Artificial Flowering Plants'
@@ -1912,6 +1911,93 @@ function npInitFields(){
   msInit('np-shape',npAlpha(NP_OPTIONS.shape));
   npDefaultWreathShape();
   npApplyCategoryBuckets(); // place 1.3/1.4 fields for the default Type
+  // Cross-field inference (see NP_INFER). Attach a 'change' listener to each source field.
+  // 'change' bubbles only on real user toggles — programmatic npSetChecks doesn't dispatch
+  // it — so edit-load/WIP restore never trigger inference (and we reset the delta baseline
+  // after those loads via npResetInferenceState).
+  [...new Set(NP_INFER.map(r=>r.from))].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.addEventListener('change', ()=>npInferOnChange(id));
+  });
+  npResetInferenceState();
+}
+// ── Cross-field inference (BIDIRECTIONAL) ─────────────────────────────────────
+// A USER change to a source field ADDS related values to a target field, to speed entry.
+// Because Celebration type / Lighting options sit on 1.3 for wreaths but 1.4 for AFP, the
+// fill order flips with Type — so 1:1 equivalences propagate BOTH ways (Occasion↔Celebration),
+// and whichever field is filled first seeds the other. Many→1 mappings can't be cleanly
+// reversed (a shared target can't pick which source to fill), so they stay forward-only:
+//   Fourth of July & Memorial Day → Summer; Lights & Candle → Illuminated; holiday → Season.
+// Also: Arrangement ↔ Plant container type (shared vessel values, bidirectional); Season
+// 'Summer' ↔ Celebration 'Summer'; Occasion/Celebration → Season (forward-only, sets the
+// EB season code by design).
+// Behaviour: ADDITIVE + non-destructive (never removes the user's picks) and DELTA-based
+// (only newly-checked source values propagate, so deselecting an auto-added target and then
+// editing elsewhere won't re-add it). Target strings match NP_OPTIONS exactly. Reviewed
+// w/ Niki 2026-06-30; Thanksgiving/Sympathy/Funeral have no celebration-type equivalent.
+const NP_INFER = [
+  // Occasion → Celebration type (1:1 equivalences reversed below; Bridal Shower + the
+  // two Summer rules are forward-only).
+  { from:'np-occasion', to:'np-celebration', map:{
+      'Christmas':['Christmas'], 'Easter':['Easter'], "Mother's Day":["Mother's Day"], 'Halloween':['Halloween'],
+      "Valentine's Day":["Valentine's day"], 'Congratulations':['Congratulations'], 'Wedding':['Wedding'],
+      'Bridal Shower':['Wedding'], 'Baby Shower':['Baby shower'], 'Graduation':['Graduation'],
+      'Fourth of July':['4th of July','Summer'], 'Memorial Day':['Summer'] } },
+  // Celebration type → Occasion (reverse of the 1:1 equivalences only; 'Summer' is NOT
+  // reversed — it maps from both Fourth of July & Memorial Day, so the source is ambiguous).
+  { from:'np-celebration', to:'np-occasion', map:{
+      'Christmas':['Christmas'], 'Easter':['Easter'], "Mother's Day":["Mother's Day"], 'Halloween':['Halloween'],
+      "Valentine's day":["Valentine's Day"], 'Congratulations':['Congratulations'], 'Wedding':['Wedding'],
+      'Baby shower':['Baby Shower'], 'Graduation':['Graduation'], '4th of July':['Fourth of July'] } },
+  // Decoration material → Lighting options (forward-only; 'Illuminated' can't pick between
+  // Lights and Candle, so no reverse).
+  { from:'np-decoration', to:'np-lighting', map:{ 'Lights':['Illuminated'], 'Candle':['Illuminated'] } },
+  // Holiday → Season. Forward-only: a season maps from many holidays, so it can't reverse
+  // to one. Drives the EB season code (by design). Graduation intentionally unmapped
+  // (spans late spring/early summer). Reviewed w/ Niki 2026-06-30.
+  { from:'np-occasion', to:'np-season', map:{
+      'Christmas':['Winter'], "Valentine's Day":['Winter'], 'Easter':['Spring'], "Mother's Day":['Spring'],
+      'Memorial Day':['Summer'], 'Fourth of July':['Summer'], 'Halloween':['Fall'], 'Thanksgiving':['Fall'] } },
+  { from:'np-celebration', to:'np-season', map:{
+      'Christmas':['Winter'], "Valentine's day":['Winter'], 'Easter':['Spring'], "Mother's Day":['Spring'],
+      "Father's Day":['Summer'], '4th of July':['Summer'], 'Summer':['Summer'], 'Halloween':['Fall'] } },
+  // Season → Celebration type (only Summer exists as a celebration type → makes Summer
+  // bidirectional with the Celebration→Season rule above).
+  { from:'np-season', to:'np-celebration', map:{ 'Summer':['Summer'] } },
+  // Arrangement ↔ Plant container type — shared vessel values, bidirectional 1:1; plus the
+  // forward-only "Metal Planter" arrangement → Planter container.
+  { from:'np-arrangement', to:'np-container', map:{
+      'Basket':['Basket'], 'Box':['Box'], 'Vase':['Vase'], 'Planter':['Planter'], 'Pot':['Pot'], 'Metal Planter':['Planter'] } },
+  { from:'np-container', to:'np-arrangement', map:{
+      'Basket':['Basket'], 'Box':['Box'], 'Vase':['Vase'], 'Planter':['Planter'], 'Pot':['Pot'] } }
+];
+const _npInferPrev = {}; // sourceId → last-seen selections, for delta detection
+// Re-baseline after programmatic field loads (init/clear/edit/WIP) so only genuine user
+// changes after the load count as deltas.
+function npResetInferenceState(){ NP_INFER.forEach(r=>{ _npInferPrev[r.from]=npGetChecks(r.from); }); }
+// Union-add values into a multi-select without removing existing selections.
+function npAddChecks(id, vals){
+  const cur=new Set(npGetChecks(id)); let changed=false;
+  (vals||[]).forEach(v=>{ if(!cur.has(v)){ cur.add(v); changed=true; } });
+  if(changed) npSetChecks(id, Array.from(cur));
+}
+function npInferOnChange(sourceId){
+  const rules=NP_INFER.filter(r=>r.from===sourceId); if(!rules.length) return;
+  // Compute the delta ONCE per source (a source may feed several targets, e.g. Occasion →
+  // Celebration AND Occasion → Season — updating the baseline per-rule would hide the delta
+  // from later rules), then update the baseline once, then apply every rule.
+  const cur=npGetChecks(sourceId), prev=_npInferPrev[sourceId]||[];
+  const added=cur.filter(v=>!prev.includes(v)); // only NEWLY-checked source values
+  _npInferPrev[sourceId]=cur;
+  if(!added.length) return;
+  rules.forEach(r=>{
+    const toAdd=[]; added.forEach(v=>(r.map[v]||[]).forEach(t=>toAdd.push(t)));
+    if(toAdd.length){
+      npAddChecks(r.to, toAdd);
+      // Keep the target's baseline current so this programmatic add isn't later read as a
+      // user delta (prevents a no-op reverse-propagation on the next change).
+      if(_npInferPrev[r.to]!==undefined) _npInferPrev[r.to]=npGetChecks(r.to);
+    }
+  });
 }
 // Wreaths are most commonly round — pre-select Round when the piece is a Wreath and no
 // Shape is chosen yet. Non-destructive: only fills an empty selection; user can change it.
@@ -2068,9 +2154,9 @@ function npClearForm(){
   npSetChecks('np-occasion',[]);
   document.getElementById('np-florals').value='None';
   document.getElementById('np-greenery').value='None';
-  document.getElementById('np-indoor-outdoor').value='Indoor';
   npSetChecks('np-season',[]); npSetChecks('np-style',[]); npSetChecks('np-colors',[]); npSetChecks('np-decoration',[]); npSetChecks('np-planter',[]); npSetChecks('np-pattern',[]); npSetChecks('np-plantname',[]); npSetChecks('np-arrangement',[]); npSetChecks('np-container',[]); npSetChecks('np-stem',[]); npSetChecks('np-celebration',[]); npSetChecks('np-lighting',[]); npSetChecks('np-shape',[]);
   npDefaultWreathShape(); // Type defaults to Wreath → pre-select Round.
+  npResetInferenceState(); // cleared fields → empty delta baseline
   npGoSub(1);
 }
 function npAutoFillCost(){
@@ -2099,7 +2185,6 @@ function npLoadRecordForEdit(){
   document.getElementById('np-cost-pct').value=(_ep>0&&_ec>0)?Math.round(_ec/_ep*100):DEFAULT_COST_PCT;
   document.getElementById('np-florals').value=f['Florals']||'None';
   document.getElementById('np-greenery').value=f['Greenery']||'None';
-  document.getElementById('np-indoor-outdoor').value=f['Indoor/Outdoor']||'Indoor';
   npSetChecks('np-style',f['Style']||[]);
   npSetChecks('np-colors',f['Color(s)']||[]);
   npSetChecks('np-decoration',f['Decoration material']||[]);
@@ -2126,6 +2211,7 @@ function npLoadRecordForEdit(){
   document.getElementById('np-weight-lb').value=(ozEdit!=null&&ozEdit!=='')?Math.floor(Number(ozEdit)/16):'';
   document.getElementById('np-weight-oz').value=(ozEdit!=null&&ozEdit!=='')?Number(ozEdit)%16:'';
   npApplyCategoryBuckets(); // re-bucket 1.3/1.4 for the loaded piece's Type
+  npResetInferenceState(); // loaded values → delta baseline (don't propagate them as "new")
   btn.disabled=false;
 }
 function npPrimaryAction(){ return npMode==='edit' ? npSaveEdit() : npGenerateEB(); }
@@ -2156,7 +2242,6 @@ function npBuildFieldsFromForm(){
     'Occasion':npGetChecks('np-occasion').join(', ')||'',
     'Florals':document.getElementById('np-florals').value,
     'Greenery':document.getElementById('np-greenery').value,
-    'Indoor/Outdoor':(document.getElementById('np-indoor-outdoor')||{}).value||'Indoor',
     'Style':npGetChecks('np-style'),
     'Color(s)':npGetChecks('np-colors'),
     'Decoration material':npGetChecks('np-decoration'),
@@ -2986,7 +3071,7 @@ async function rsResync(){
       arrangement:asArr(f['Arrangement']), plant_container_type:asArr(f['Plant container type']), stem_length:asArr(f['Stem length']),
       decoration_material:asArr(f['Decoration material']), planter_material:asArr(f['Planter material']),
       celebration_type:asArr(f['Celebration type']), lighting_options:asArr(f['Lighting options']), shape:asArr(f['Shape']),
-      season:asArr(f['Season']), suitable_space:f['Indoor/Outdoor']||((f['Product Category']||npCategoryForType(f['Type']))==='Wreaths'?'Indoor':''), care_instructions:asArr(f['Care instructions']) };
+      season:asArr(f['Season']), suitable_space:f['Indoor/Outdoor']||((f['Product Category']||npCategoryForType(f['Type']))==='Wreaths'?'Indoor':''), indoor_outdoor:f['Indoor/Outdoor']||'', care_instructions:asArr(f['Care instructions']) };
     const r=await fetch(SERVER_URL+'/resync-attributes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d=await r.json();
     if(!r.ok||!d.success) throw new Error(d.error||'Re-sync failed');
@@ -3051,7 +3136,9 @@ async function lpPublish(){
     const pubSeason=asArr(f['Season']);
     // Suitable space (Wreaths only) — default Indoor when unset, per EB convention.
     const pubSuitableSpace=f['Indoor/Outdoor']||(pubCategory==='Wreaths'?'Indoor':'');
-    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial,celebration_type:pubCelebration,lighting_options:pubLighting,shape:pubShape,season:pubSeason,suitable_space:pubSuitableSpace,care_instructions:asArr(f['Care instructions'])})});
+    // Indoor/Outdoor (universal custom metafield) — raw Airtable value, all categories.
+    const pubIndoorOutdoor=f['Indoor/Outdoor']||'';
+    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial,celebration_type:pubCelebration,lighting_options:pubLighting,shape:pubShape,season:pubSeason,suitable_space:pubSuitableSpace,indoor_outdoor:pubIndoorOutdoor,care_instructions:asArr(f['Care instructions'])})});
     clearTimeout(timeout);const data=await res.json();
     if(!res.ok||!data.success) throw new Error(data.error||'Publish failed');
     try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;if(meta)photoFields['Listing Meta Description']=meta;await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:photoFields})});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;if(meta)rec.fields['Listing Meta Description']=meta;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
@@ -4360,7 +4447,6 @@ function wipRestoreNP(saved) {
   if(saved.occasion!==undefined){npSetChecks('np-occasion',saved.occasion?saved.occasion.split(',').map(v=>v.trim()).filter(Boolean):[]);}
   if(saved.florals){const el=document.getElementById('np-florals');if(el)el.value=saved.florals;}
   if(saved.greenery){const el=document.getElementById('np-greenery');if(el)el.value=saved.greenery;}
-  if(saved.indoorOutdoor){const el=document.getElementById('np-indoor-outdoor');if(el)el.value=saved.indoorOutdoor;}
   if(saved.style)npSetChecks('np-style',saved.style);
   if(saved.colors)npSetChecks('np-colors',saved.colors);
   if(saved.decoration)npSetChecks('np-decoration',saved.decoration);
@@ -4391,6 +4477,7 @@ function wipRestoreNP(saved) {
     const qrImg=document.getElementById('np-qr-img');if(qrImg)qrImg.src=qrUrl;
   }
   npApplyCategoryBuckets(); // re-bucket 1.3/1.4 for the restored Type
+  npResetInferenceState(); // restored values → delta baseline
   if(saved.step&&saved.step>1)setTimeout(()=>{currentNpStep=saved.step;npStep(saved.step);},200);
   else npGoSub(1);
 }
@@ -4405,7 +4492,6 @@ function wipSaveNP() {
     occasion: npGetChecks('np-occasion').join(', '),
     florals:  (document.getElementById('np-florals')||{}).value||'None',
     greenery: (document.getElementById('np-greenery')||{}).value||'None',
-    indoorOutdoor: (document.getElementById('np-indoor-outdoor')||{}).value||'Indoor',
     style:    npGetChecks('np-style'),
     colors:   npGetChecks('np-colors'),
     decoration:npGetChecks('np-decoration'),
