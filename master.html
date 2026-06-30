@@ -665,6 +665,8 @@ button:active{transform:scale(.97)}
       <div class="section-label">Listing details</div>
       <div class="info-card sage" style="margin-bottom:12px"><strong>Colors, materials, weight &amp; product description come from Step 1.</strong> Just add the listing-specific details below.</div>
       <div class="field"><label>Best display location</label><div id="lp-location"></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Where the piece looks best — maps to Shopify "Suitable location".</div></div>
+      <div class="field"><label>Indoor / Outdoor</label><select id="lp-indoor-outdoor"><option value="Indoor">Indoor</option><option value="Outdoor">Outdoor</option><option value="Both">Both</option></select><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Maps to Shopify "Suitable space" on wreaths. Defaults to Indoor.</div></div>
+      <div class="field"><label>Care instructions</label><div id="lp-care"></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Select any that apply — publishes to Shopify "Care instructions" (custom.care_instructions).</div></div>
       <div id="lp-s2-save-status" style="display:none;font-size:12px;padding:7px 10px;border-radius:6px;margin-bottom:8px;text-align:center"></div>
       <button class="btn btn-full" id="lp-s2-save-btn" onclick="lpSaveStepTwo()" style="font-size:12px;margin-bottom:8px">💾 Save details to Airtable</button>
       <div class="btn-row"><button class="btn-primary btn-full" onclick="lpStep(3)">Photos →</button><button class="btn btn-full" onclick="lpStep(1)">← Back</button></div>
@@ -1271,6 +1273,9 @@ const NP_OPTIONS = {
 };
 // Shopify "Suitable location" taxonomy values (Toilet omitted by choice — use Bathroom).
 const LP_LOCATION_OPTIONS = ['Balcony','Bathroom','Bedroom',"Children's room",'Corridor','Courtyard','Dining room','Entrance','Garage','Garden','Hallway','Kitchen','Laundry room','Living room','Other','Patio','Porch','Storage room'];
+// Curated care-instruction options (mirror the Airtable 'Care instructions' multi-select).
+// Add new options to BOTH this list and the Airtable field to keep them in sync.
+const CARE_OPTIONS = ['For outdoor wreaths, spray flowers and bows with Scotchgard to protect against sun fade, water, and dust.'];
 let npMode = 'add';
 let npSelectedFolder = null;   // { id, name } chosen in the Step 1.1 Drive folder picker
 let npFolderList = [];         // cached subfolders of the product-media folder
@@ -1417,7 +1422,10 @@ function lpRenderDisplayLocation(productType) {
   const host = document.getElementById('lp-location'); if(!host) return;
   if(!host.classList.contains('ms')) msInit('lp-location', LP_LOCATION_OPTIONS);
   else { host.querySelectorAll('.ms-opt input').forEach(c=>{c.checked=false;}); msSync(host); }
+  const care = document.getElementById('lp-care');
+  if(care){ if(!care.classList.contains('ms')) msInit('lp-care', CARE_OPTIONS); else { care.querySelectorAll('.ms-opt input').forEach(c=>{c.checked=false;}); msSync(care); } }
 }
+function lpGetCareArr(){ return npGetChecks('lp-care'); }
 function lpGetLocationArr(){ return npGetChecks('lp-location'); }
 function lpGetLocation(){ return lpGetLocationArr().join(', '); }
 function lpSetLocation(val){ npSetChecks('lp-location', lpLocArr(val)); }
@@ -2360,6 +2368,9 @@ function lpStep(n) {
     const _locCurrent = lpGetLocation() || lpStepTwoCache.location;
     lpRenderDisplayLocation(lpSelectedRecord.fields['Type']||'');
     if(_locCurrent) lpSetLocation(_locCurrent);
+    // Load Care instructions + Indoor/Outdoor from the record (Airtable is source of truth)
+    npSetChecks('lp-care', Array.isArray(lpSelectedRecord.fields['Care instructions'])?lpSelectedRecord.fields['Care instructions']:[]);
+    const _ioEl=document.getElementById('lp-indoor-outdoor'); if(_ioEl) _ioEl.value=lpSelectedRecord.fields['Indoor/Outdoor']||'Indoor';
   }
   if(n===3){
     // Silently write Step 2 values back to Airtable so they survive page reloads,
@@ -2368,10 +2379,14 @@ function lpStep(n) {
       const _loc  = lpGetLocation() || lpStepTwoCache.location || '';
       const _meta = (document.getElementById('lp-meta')||{value:''}).value || lpStepTwoCache.meta || '';
       const _spec = (document.getElementById('lp-special')||{value:''}).value || lpStepTwoCache.special || '';
+      const _care = lpGetCareArr();
+      const _io   = (document.getElementById('lp-indoor-outdoor')||{value:''}).value || '';
       const _s2fields = {};
       if (_loc)  _s2fields['Listing Display Location'] = lpLocArr(_loc);
       if (_meta) _s2fields['Listing Meta Description']  = _meta;
       if (_spec) _s2fields['Product description']     = _spec;
+      if (_care.length) _s2fields['Care instructions'] = _care;
+      if (_io) _s2fields['Indoor/Outdoor'] = _io;
       if (Object.keys(_s2fields).length) {
         airtableFetch('/'+lpSelectedRecord.id, {method:'PATCH', body:JSON.stringify({fields:_s2fields})})
           .then(() => { Object.assign(lpSelectedRecord.fields, _s2fields); })
@@ -2879,7 +2894,7 @@ async function rsResync(){
       arrangement:asArr(f['Arrangement']), plant_container_type:asArr(f['Plant container type']), stem_length:asArr(f['Stem length']),
       decoration_material:asArr(f['Decoration material']), planter_material:asArr(f['Planter material']),
       celebration_type:asArr(f['Celebration type']), lighting_options:asArr(f['Lighting options']), shape:asArr(f['Shape']),
-      season:asArr(f['Season']), suitable_space:f['Indoor/Outdoor']||((f['Product Category']||npCategoryForType(f['Type']))==='Wreaths'?'Indoor':'') };
+      season:asArr(f['Season']), suitable_space:f['Indoor/Outdoor']||((f['Product Category']||npCategoryForType(f['Type']))==='Wreaths'?'Indoor':''), care_instructions:asArr(f['Care instructions']) };
     const r=await fetch(SERVER_URL+'/resync-attributes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d=await r.json();
     if(!r.ok||!d.success) throw new Error(d.error||'Re-sync failed');
@@ -2944,7 +2959,7 @@ async function lpPublish(){
     const pubSeason=asArr(f['Season']);
     // Suitable space (Wreaths only) — default Indoor when unset, per EB convention.
     const pubSuitableSpace=f['Indoor/Outdoor']||(pubCategory==='Wreaths'?'Indoor':'');
-    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial,celebration_type:pubCelebration,lighting_options:pubLighting,shape:pubShape,season:pubSeason,suitable_space:pubSuitableSpace})});
+    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial,celebration_type:pubCelebration,lighting_options:pubLighting,shape:pubShape,season:pubSeason,suitable_space:pubSuitableSpace,care_instructions:asArr(f['Care instructions'])})});
     clearTimeout(timeout);const data=await res.json();
     if(!res.ok||!data.success) throw new Error(data.error||'Publish failed');
     try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;if(meta)photoFields['Listing Meta Description']=meta;await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:photoFields})});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;if(meta)rec.fields['Listing Meta Description']=meta;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
@@ -3201,7 +3216,9 @@ async function lpSaveStepTwo() {
   const loc    = lpGetLocation() || lpStepTwoCache.location || '';
   const meta   = (document.getElementById('lp-meta')||{value:''}).value || lpStepTwoCache.meta || '';
   const spec   = (document.getElementById('lp-special')||{value:''}).value || lpStepTwoCache.special || '';
-  if (!loc && !meta && !spec) {
+  const care   = lpGetCareArr();
+  const io     = (document.getElementById('lp-indoor-outdoor')||{value:''}).value || '';
+  if (!loc && !meta && !spec && !care.length && !io) {
     status.style.cssText = 'display:block;background:var(--amber-bg);color:var(--amber-text)';
     status.textContent = 'Fill in at least one field above to save.';
     setTimeout(()=>status.style.display='none', 3000); return;
@@ -3212,6 +3229,8 @@ async function lpSaveStepTwo() {
     if (loc)  fields['Listing Display Location'] = lpLocArr(loc);
     if (meta) fields['Listing Meta Description']  = meta;
     if (spec) fields['Product description']     = spec;
+    if (care.length) fields['Care instructions'] = care;
+    if (io) fields['Indoor/Outdoor'] = io;
     await airtableFetch('/'+lpSelectedRecord.id, {method:'PATCH', body:JSON.stringify({fields})});
     Object.assign(lpSelectedRecord.fields, fields);
     const cached = allRecords.find(r=>r.id===lpSelectedRecord.id);
@@ -3456,7 +3475,7 @@ async function lpAddVideoToShopify() {
 }
 
 
-function lpReset(){lpSelectedRecord=null;lpPhotoItems=[];lpDriveImages=[];lpDriveLinked=false;lpLoadedFolderId=null;lpFolderSelected=null;lpAllFolders=[];lpLastProductId=null;lpVideoFileId=null;lpVideoFileName=null;lpFolderVideos=[];lpVideoLoadedFolderId=null;lpStepTwoCache={location:'',meta:'',special:''};const fsec=document.getElementById('lp-folder-section');if(fsec)fsec.style.display='none';const vsec=document.getElementById('lp-video-section');if(vsec)vsec.style.display='none';const vpick=document.getElementById('lp-video-pick');if(vpick)vpick.style.display='none';const vpl=document.getElementById('lp-video-pick-list');if(vpl)vpl.innerHTML='';lpCurrentDesc='';lpCurrentTitle='';lpGeneratedFor='';['lp-location','lp-meta','lp-special','lp-title'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});const _lpd=document.getElementById('lp-desc');if(_lpd)_lpd.innerHTML='';lpDescResetEditor();lpRenderDisplayLocation('');;const dg=document.getElementById('lp-drive-grid');if(dg)dg.innerHTML='';document.getElementById('lp-eb-select').value='';_clearEbSearch('lp-eb-search','lp-eb-results');document.getElementById('lp-at-preview').style.display='none';document.getElementById('lp-outdoor-warning').style.display='none';const ed=document.getElementById('lp-dims-editor');if(ed)ed.style.display='none';document.getElementById('lp-next-1-btn').disabled=true;document.getElementById('lp-publish-result').style.display='none';const pb=document.getElementById('lp-publish-btn');if(pb){pb.disabled=true;pb.textContent='↑ Publish listing to Shopify';pb.style.background='';pb.style.borderColor='';}lpRenderPhotos();lpStep(1);populateLPSelect();WIP.clear('lp');}
+function lpReset(){lpSelectedRecord=null;lpPhotoItems=[];lpDriveImages=[];lpDriveLinked=false;lpLoadedFolderId=null;lpFolderSelected=null;lpAllFolders=[];lpLastProductId=null;lpVideoFileId=null;lpVideoFileName=null;lpFolderVideos=[];lpVideoLoadedFolderId=null;lpStepTwoCache={location:'',meta:'',special:''};const fsec=document.getElementById('lp-folder-section');if(fsec)fsec.style.display='none';const vsec=document.getElementById('lp-video-section');if(vsec)vsec.style.display='none';const vpick=document.getElementById('lp-video-pick');if(vpick)vpick.style.display='none';const vpl=document.getElementById('lp-video-pick-list');if(vpl)vpl.innerHTML='';lpCurrentDesc='';lpCurrentTitle='';lpGeneratedFor='';['lp-location','lp-meta','lp-special','lp-title'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});const _lpd=document.getElementById('lp-desc');if(_lpd)_lpd.innerHTML='';lpDescResetEditor();lpRenderDisplayLocation('');;const _ioR=document.getElementById('lp-indoor-outdoor');if(_ioR)_ioR.value='Indoor';const dg=document.getElementById('lp-drive-grid');if(dg)dg.innerHTML='';document.getElementById('lp-eb-select').value='';_clearEbSearch('lp-eb-search','lp-eb-results');document.getElementById('lp-at-preview').style.display='none';document.getElementById('lp-outdoor-warning').style.display='none';const ed=document.getElementById('lp-dims-editor');if(ed)ed.style.display='none';document.getElementById('lp-next-1-btn').disabled=true;document.getElementById('lp-publish-result').style.display='none';const pb=document.getElementById('lp-publish-btn');if(pb){pb.disabled=true;pb.textContent='↑ Publish listing to Shopify';pb.style.background='';pb.style.borderColor='';}lpRenderPhotos();lpStep(1);populateLPSelect();WIP.clear('lp');}
 
 
 // ── MARK AS SOLD ──
