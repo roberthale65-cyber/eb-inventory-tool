@@ -1911,37 +1911,67 @@ function npInitFields(){
   msInit('np-shape',npAlpha(NP_OPTIONS.shape));
   npDefaultWreathShape();
   npApplyCategoryBuckets(); // place 1.3/1.4 fields for the default Type
-  // Cross-field inference: a USER change to Occasion/Decoration material (1.2) auto-adds
-  // related Celebration type / Lighting options (1.3/1.4). 'change' bubbles only on real
-  // user toggles — programmatic npSetChecks doesn't dispatch it — so edit-load/WIP restore
-  // never trigger this. See npPropagateInferences.
-  const occEl=document.getElementById('np-occasion'); if(occEl) occEl.addEventListener('change', npPropagateInferences);
-  const decEl=document.getElementById('np-decoration'); if(decEl) decEl.addEventListener('change', npPropagateInferences);
+  // Cross-field inference (see NP_INFER). Attach a 'change' listener to each source field.
+  // 'change' bubbles only on real user toggles — programmatic npSetChecks doesn't dispatch
+  // it — so edit-load/WIP restore never trigger inference (and we reset the delta baseline
+  // after those loads via npResetInferenceState).
+  [...new Set(NP_INFER.map(r=>r.from))].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.addEventListener('change', ()=>npInferOnChange(id));
+  });
+  npResetInferenceState();
 }
-// Source(1.2) → target(1.3/1.4) auto-fill map. Additive + non-destructive: only ADDS the
-// mapped values; never removes the user's own picks (so deselecting a source leaves the
-// target as-is). Targets use the EXACT option strings from NP_OPTIONS.celebration/.lighting.
-// Reviewed with Niki 2026-06-30: Fourth of July→4th of July+Summer; Memorial Day→Summer;
-// Bridal Shower→Wedding; Lights/Candle→Illuminated. Thanksgiving/Sympathy/Funeral: no
-// celebration-type equivalent → intentionally unmapped.
-const NP_OCCASION_TO_CELEBRATION = {
-  'Christmas':['Christmas'], 'Easter':['Easter'], "Mother's Day":["Mother's Day"],
-  'Halloween':['Halloween'], "Valentine's Day":["Valentine's day"], 'Congratulations':['Congratulations'],
-  'Wedding':['Wedding'], 'Bridal Shower':['Wedding'], 'Baby Shower':['Baby shower'], 'Graduation':['Graduation'],
-  'Fourth of July':['4th of July','Summer'], 'Memorial Day':['Summer']
-};
-const NP_DECORATION_TO_LIGHTING = { 'Lights':['Illuminated'], 'Candle':['Illuminated'] };
+// ── Cross-field inference (BIDIRECTIONAL) ─────────────────────────────────────
+// A USER change to a source field ADDS related values to a target field, to speed entry.
+// Because Celebration type / Lighting options sit on 1.3 for wreaths but 1.4 for AFP, the
+// fill order flips with Type — so 1:1 equivalences propagate BOTH ways (Occasion↔Celebration),
+// and whichever field is filled first seeds the other. Many→1 mappings can't be cleanly
+// reversed (a shared target can't pick which source to fill), so they stay forward-only:
+//   Fourth of July & Memorial Day → Summer; Lights & Candle → Illuminated.
+// Behaviour: ADDITIVE + non-destructive (never removes the user's picks) and DELTA-based
+// (only newly-checked source values propagate, so deselecting an auto-added target and then
+// editing elsewhere won't re-add it). Target strings match NP_OPTIONS exactly. Reviewed
+// w/ Niki 2026-06-30; Thanksgiving/Sympathy/Funeral have no celebration-type equivalent.
+const NP_INFER = [
+  // Occasion → Celebration type (1:1 equivalences reversed below; Bridal Shower + the
+  // two Summer rules are forward-only).
+  { from:'np-occasion', to:'np-celebration', map:{
+      'Christmas':['Christmas'], 'Easter':['Easter'], "Mother's Day":["Mother's Day"], 'Halloween':['Halloween'],
+      "Valentine's Day":["Valentine's day"], 'Congratulations':['Congratulations'], 'Wedding':['Wedding'],
+      'Bridal Shower':['Wedding'], 'Baby Shower':['Baby shower'], 'Graduation':['Graduation'],
+      'Fourth of July':['4th of July','Summer'], 'Memorial Day':['Summer'] } },
+  // Celebration type → Occasion (reverse of the 1:1 equivalences only; 'Summer' is NOT
+  // reversed — it maps from both Fourth of July & Memorial Day, so the source is ambiguous).
+  { from:'np-celebration', to:'np-occasion', map:{
+      'Christmas':['Christmas'], 'Easter':['Easter'], "Mother's Day":["Mother's Day"], 'Halloween':['Halloween'],
+      "Valentine's day":["Valentine's Day"], 'Congratulations':['Congratulations'], 'Wedding':['Wedding'],
+      'Baby shower':['Baby Shower'], 'Graduation':['Graduation'], '4th of July':['Fourth of July'] } },
+  // Decoration material → Lighting options (forward-only; 'Illuminated' can't pick between
+  // Lights and Candle, so no reverse).
+  { from:'np-decoration', to:'np-lighting', map:{ 'Lights':['Illuminated'], 'Candle':['Illuminated'] } }
+];
+const _npInferPrev = {}; // sourceId → last-seen selections, for delta detection
+// Re-baseline after programmatic field loads (init/clear/edit/WIP) so only genuine user
+// changes after the load count as deltas.
+function npResetInferenceState(){ NP_INFER.forEach(r=>{ _npInferPrev[r.from]=npGetChecks(r.from); }); }
 // Union-add values into a multi-select without removing existing selections.
 function npAddChecks(id, vals){
   const cur=new Set(npGetChecks(id)); let changed=false;
   (vals||[]).forEach(v=>{ if(!cur.has(v)){ cur.add(v); changed=true; } });
   if(changed) npSetChecks(id, Array.from(cur));
 }
-function npPropagateInferences(){
-  const cel=[]; npGetChecks('np-occasion').forEach(o=>{ (NP_OCCASION_TO_CELEBRATION[o]||[]).forEach(v=>cel.push(v)); });
-  const lit=[]; npGetChecks('np-decoration').forEach(d=>{ (NP_DECORATION_TO_LIGHTING[d]||[]).forEach(v=>lit.push(v)); });
-  if(cel.length) npAddChecks('np-celebration', cel);
-  if(lit.length) npAddChecks('np-lighting', lit);
+function npInferOnChange(sourceId){
+  NP_INFER.filter(r=>r.from===sourceId).forEach(r=>{
+    const cur=npGetChecks(r.from), prev=_npInferPrev[r.from]||[];
+    const added=cur.filter(v=>!prev.includes(v)); // only NEWLY-checked source values
+    _npInferPrev[r.from]=cur;
+    const toAdd=[]; added.forEach(v=>(r.map[v]||[]).forEach(t=>toAdd.push(t)));
+    if(toAdd.length){
+      npAddChecks(r.to, toAdd);
+      // Keep the target's baseline current so this programmatic add isn't later read as a
+      // user delta (prevents a no-op reverse-propagation on the next change).
+      if(_npInferPrev[r.to]!==undefined) _npInferPrev[r.to]=npGetChecks(r.to);
+    }
+  });
 }
 // Wreaths are most commonly round — pre-select Round when the piece is a Wreath and no
 // Shape is chosen yet. Non-destructive: only fills an empty selection; user can change it.
@@ -2100,6 +2130,7 @@ function npClearForm(){
   document.getElementById('np-greenery').value='None';
   npSetChecks('np-season',[]); npSetChecks('np-style',[]); npSetChecks('np-colors',[]); npSetChecks('np-decoration',[]); npSetChecks('np-planter',[]); npSetChecks('np-pattern',[]); npSetChecks('np-plantname',[]); npSetChecks('np-arrangement',[]); npSetChecks('np-container',[]); npSetChecks('np-stem',[]); npSetChecks('np-celebration',[]); npSetChecks('np-lighting',[]); npSetChecks('np-shape',[]);
   npDefaultWreathShape(); // Type defaults to Wreath → pre-select Round.
+  npResetInferenceState(); // cleared fields → empty delta baseline
   npGoSub(1);
 }
 function npAutoFillCost(){
@@ -2154,6 +2185,7 @@ function npLoadRecordForEdit(){
   document.getElementById('np-weight-lb').value=(ozEdit!=null&&ozEdit!=='')?Math.floor(Number(ozEdit)/16):'';
   document.getElementById('np-weight-oz').value=(ozEdit!=null&&ozEdit!=='')?Number(ozEdit)%16:'';
   npApplyCategoryBuckets(); // re-bucket 1.3/1.4 for the loaded piece's Type
+  npResetInferenceState(); // loaded values → delta baseline (don't propagate them as "new")
   btn.disabled=false;
 }
 function npPrimaryAction(){ return npMode==='edit' ? npSaveEdit() : npGenerateEB(); }
@@ -4419,6 +4451,7 @@ function wipRestoreNP(saved) {
     const qrImg=document.getElementById('np-qr-img');if(qrImg)qrImg.src=qrUrl;
   }
   npApplyCategoryBuckets(); // re-bucket 1.3/1.4 for the restored Type
+  npResetInferenceState(); // restored values → delta baseline
   if(saved.step&&saved.step>1)setTimeout(()=>{currentNpStep=saved.step;npStep(saved.step);},200);
   else npGoSub(1);
 }
