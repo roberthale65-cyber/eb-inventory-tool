@@ -73,6 +73,22 @@ const SHOPIFY_COLOR_METAOBJECTS = {
   'Peach':         'gid://shopify/Metaobject/248710430855'
 };
 
+// Plant name / Suitable location / Pattern → existing metaobject GIDs. Hardcoded
+// (NOT runtime query/create) because the 2026-04 Admin API rejects metaobjectCreate
+// for these reserved 'shopify--…' definitions and the metaobjects query returns
+// empty server-side. Same proven approach as SHOPIFY_COLOR_METAOBJECTS. Values not
+// listed here are skipped on publish — add the metaobject in Shopify admin, then
+// add its GID here. (Pattern entries live in the color-pattern definition.)
+const SHOPIFY_PLANT_METAOBJECTS = {
+  'Fern':'gid://shopify/Metaobject/214355804295','Daisy':'gid://shopify/Metaobject/214355902599','Ivy':'gid://shopify/Metaobject/214355968135','Other':'gid://shopify/Metaobject/214356033671','Geranium':'gid://shopify/Metaobject/214392635527','Hydrangea':'gid://shopify/Metaobject/245697446023','Magnolia':'gid://shopify/Metaobject/246351790215','Tulip':'gid://shopify/Metaobject/246352117895','Sunflower':'gid://shopify/Metaobject/246375514247','Spider Mums':'gid://shopify/Metaobject/246375809159','Wisteria':'gid://shopify/Metaobject/246380658823','Decorative Berries Artificial':'gid://shopify/Metaobject/246394093703','Freesia':'gid://shopify/Metaobject/246395240583','Ranunculus':'gid://shopify/Metaobject/246395469959','Rose':'gid://shopify/Metaobject/246395535495','Poppies':'gid://shopify/Metaobject/246539681927','Wax Flowers':'gid://shopify/Metaobject/247317725319','Dahlia':'gid://shopify/Metaobject/247325393031','Pine':'gid://shopify/Metaobject/247325425799','Pansy':'gid://shopify/Metaobject/247338532999','Plum Blossom':'gid://shopify/Metaobject/247340073095','Cherry Blossoms':'gid://shopify/Metaobject/247350919303','Flower Buds':'gid://shopify/Metaobject/247351181447','Ranunculus Roses':'gid://shopify/Metaobject/247775035527','Grape vine':'gid://shopify/Metaobject/247775068295','Wildflower':'gid://shopify/Metaobject/248712396935','Peony':'gid://shopify/Metaobject/248761319559'
+};
+const SHOPIFY_LOCATION_METAOBJECTS = {
+  'Living room':'gid://shopify/Metaobject/214355869831','Kitchen':'gid://shopify/Metaobject/214356000903','Hallway':'gid://shopify/Metaobject/214356066439','Entrance':'gid://shopify/Metaobject/214356099207','Dining room':'gid://shopify/Metaobject/214356131975','Corridor':'gid://shopify/Metaobject/214356164743','Bedroom':'gid://shopify/Metaobject/214356197511','Bathroom':'gid://shopify/Metaobject/214356230279',"Children's room":'gid://shopify/Metaobject/246375055495','Porch':'gid://shopify/Metaobject/246380986503','Laundry room':'gid://shopify/Metaobject/246386458759'
+};
+const SHOPIFY_PATTERN_METAOBJECTS = {
+  'Floral':'gid://shopify/Metaobject/246380920967','Plaid':'gid://shopify/Metaobject/246382624903','Striped':'gid://shopify/Metaobject/246394126471'
+};
+
 // ── Shopify taxonomy value IDs for lazy metaobject creation ───────────────────
 // Used to create missing color-pattern / plant-name / suitable-location
 // metaobjects on publish (existing ones are reused by label). Unknown labels
@@ -886,6 +902,9 @@ app.post('/mark-sold', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
  
+// ── Version / health (verify what's actually deployed) ────────
+app.get('/version', (req, res) => res.json({ version: '2026-06-30-prB', features: ['hardcoded-metaobject-maps:plant/location/pattern', 'inventory-graphql', 'version-endpoint'] }));
+
 // ── Create product ────────────────────────────────────────────
 app.post('/create-product', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized. Visit ' + SERVER_URL + '/auth to complete Shopify OAuth first.' });
@@ -942,8 +961,10 @@ app.post('/create-product', async (req, res) => {
           quantities: [{ inventoryItemId: `gid://shopify/InventoryItem/${inventoryItemId}`, locationId: `gid://shopify/Location/${locationId}`, quantity: qty }]
         };
         const invData = await shopifyGraphql(invMutation, { input: invInput });
+        if (invData?.errors) console.warn('Inventory set GraphQL error:', JSON.stringify(invData.errors));
         const invErrs = invData?.data?.inventorySetQuantities?.userErrors || [];
         if (invErrs.length) console.warn('Inventory set failed:', invErrs.map(e => e.message).join(', '));
+        if (!invData?.errors && !invErrs.length) console.log('Inventory set ok:', sku, '→', qty);
       } catch (invErr) { console.warn('Inventory set error (non-fatal):', invErr.message); }
     }
     // Set the Shopify standard product category (taxonomy) AND the native
@@ -956,19 +977,9 @@ app.post('/create-product', async (req, res) => {
     // Pattern shares the native "Color" attribute (shopify.color-pattern); Plant
     // name and Suitable location are their own metafields. Reuse-or-create the
     // metaobjects, then set everything in one productUpdate. All non-fatal.
-    const patternGids = await resolveMetaobjects('shopify--color-pattern', pattern, label => ([
-      { key: 'label', value: label },
-      { key: 'color_taxonomy_reference', value: JSON.stringify(['gid://shopify/TaxonomyValue/' + TAX_COLOR_MULTI]) },
-      { key: 'pattern_taxonomy_reference', value: 'gid://shopify/TaxonomyValue/' + (TAX_PATTERN[label] || 24509) }
-    ]));
-    const plantGids = await resolveMetaobjects('shopify--plant-name', plant_name, label => ([
-      { key: 'label', value: label },
-      { key: 'taxonomy_reference', value: 'gid://shopify/TaxonomyValue/' + (TAX_PLANT[label] || 20448) }
-    ]));
-    const locationGids = await resolveMetaobjects('shopify--suitable-location', locations, label => ([
-      { key: 'label', value: label },
-      { key: 'taxonomy_reference', value: 'gid://shopify/TaxonomyValue/' + (TAX_LOCATION[label] || 19499) }
-    ]));
+    const patternGids = (Array.isArray(pattern) ? pattern : []).map(p => SHOPIFY_PATTERN_METAOBJECTS[p]).filter(Boolean);
+    const plantGids = (Array.isArray(plant_name) ? plant_name : []).map(p => SHOPIFY_PLANT_METAOBJECTS[p]).filter(Boolean);
+    const locationGids = (Array.isArray(locations) ? locations : []).map(l => SHOPIFY_LOCATION_METAOBJECTS[l]).filter(Boolean);
     const colorPatternGids = colorGids.concat(patternGids);
     if (categoryGid || colorPatternGids.length || plantGids.length || locationGids.length) {
       try {
