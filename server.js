@@ -108,10 +108,23 @@ const SHOPIFY_PLANTER_MATERIAL_METAOBJECTS = {
   'Metal':'gid://shopify/Metaobject/245698330759','Ceramic':'gid://shopify/Metaobject/246395338887','Wood':'gid://shopify/Metaobject/247312613511','Resin':'gid://shopify/Metaobject/247317856391'
 };
 
+// Wreath-only taxonomy attributes (created via MCP 2026-06-30).
+const SHOPIFY_SHAPE_METAOBJECTS = {
+  'Arrow':'gid://shopify/Metaobject/248781078663','Conical':'gid://shopify/Metaobject/248781111431','Custom':'gid://shopify/Metaobject/248781144199','Cylindrical':'gid://shopify/Metaobject/248781176967','Diamond':'gid://shopify/Metaobject/248781209735','Flower':'gid://shopify/Metaobject/248781242503','Free-form':'gid://shopify/Metaobject/248781275271','Heart':'gid://shopify/Metaobject/248781308039','Heptagonal':'gid://shopify/Metaobject/248781340807','Hexagonal':'gid://shopify/Metaobject/248781373575','Kidney-shaped':'gid://shopify/Metaobject/248781406343','Octagonal':'gid://shopify/Metaobject/248781439111','Other':'gid://shopify/Metaobject/248781471879','Oval':'gid://shopify/Metaobject/248781504647','Pentagonal':'gid://shopify/Metaobject/248781537415','Rectangular':'gid://shopify/Metaobject/248781570183','Round':'gid://shopify/Metaobject/246382690439','Semicircular':'gid://shopify/Metaobject/248781602951','Square':'gid://shopify/Metaobject/248781635719','Star':'gid://shopify/Metaobject/248781668487','Trapezoidal':'gid://shopify/Metaobject/248781701255','Triangular':'gid://shopify/Metaobject/248781734023'
+};
+const SHOPIFY_CELEBRATION_METAOBJECTS = {
+  '4th of July':'gid://shopify/Metaobject/246394060935','Anniversary':'gid://shopify/Metaobject/248781766791','Baby gender reveal':'gid://shopify/Metaobject/248781799559','Baby shower':'gid://shopify/Metaobject/247775133831','Birthday':'gid://shopify/Metaobject/247775166599','Christmas':'gid://shopify/Metaobject/248781832327','Concert':'gid://shopify/Metaobject/248781865095','Conference':'gid://shopify/Metaobject/248781897863','Congratulations':'gid://shopify/Metaobject/248781930631','Easter':'gid://shopify/Metaobject/247775199367',"Father's Day":'gid://shopify/Metaobject/248781963399','Get well soon':'gid://shopify/Metaobject/246382657671','Graduation':'gid://shopify/Metaobject/248781996167','Halloween':'gid://shopify/Metaobject/248782028935',"Mother's Day":'gid://shopify/Metaobject/247775232135','New baby':'gid://shopify/Metaobject/247775264903','New home':'gid://shopify/Metaobject/246382755975','Other':'gid://shopify/Metaobject/248782061703','Retirement':'gid://shopify/Metaobject/248782094471','Summer':'gid://shopify/Metaobject/248782127239','Thank you':'gid://shopify/Metaobject/246382788743','Theater performance':'gid://shopify/Metaobject/248782160007','Travel':'gid://shopify/Metaobject/248782192775',"Valentine's day":'gid://shopify/Metaobject/248782225543','Wedding':'gid://shopify/Metaobject/247775101063'
+};
+const SHOPIFY_LIGHTING_METAOBJECTS = {
+  'Illuminated':'gid://shopify/Metaobject/246448423047','Non-illuminated':'gid://shopify/Metaobject/248750932103','Other':'gid://shopify/Metaobject/248782258311'
+};
+
 // Every categorised EB piece is artificial — set shopify.plant-material = Artificial
 // automatically (not surfaced in Airtable/the tool). Set in its own productUpdate so
 // a category that rejects this attribute can't drop the other metafields.
 const SHOPIFY_PLANT_MATERIAL_ARTIFICIAL = 'gid://shopify/Metaobject/245698396295';
+// Wreaths are synthetic — auto-set shopify.material = Synthetic on every Wreath (own update).
+const SHOPIFY_MATERIAL_SYNTHETIC = 'gid://shopify/Metaobject/248782291079';
 
 // Which shopify-namespace taxonomy metafields are valid for each product category.
 // Shopify REJECTS a productUpdate that sets a metafield outside the category's
@@ -119,7 +132,7 @@ const SHOPIFY_PLANT_MATERIAL_ARTIFICIAL = 'gid://shopify/Metaobject/245698396295
 // as universal (works on uncategorised Add-ons too, preserving prior behaviour).
 const CATEGORY_METAFIELD_KEYS = {
   'Artificial Flowering Plants': ['plant-name','suitable-location','arrangement','plant-container-type','stem-length','decoration-material','planter-material'],
-  'Wreaths': ['decoration-material','planter-material']
+  'Wreaths': ['decoration-material','planter-material','celebration-type','lighting-options','shape']
 };
 
 // ── Shopify taxonomy value IDs for lazy metaobject creation ───────────────────
@@ -950,12 +963,12 @@ app.post('/mark-sold', async (req, res) => {
 });
  
 // ── Version / health (verify what's actually deployed) ────────
-app.get('/version', (req, res) => res.json({ version: '2026-06-30-prB2', features: ['hardcoded-metaobject-maps:plant/location/pattern/arrangement/container/stem/decoration/planter', 'category-gated-metafields', 'write_inventory-scope', 'inventory-graphql', 'version-endpoint'] }));
+app.get('/version', (req, res) => res.json({ version: '2026-06-30-wreath1', features: ['inventory-set-fixed-2026-04', 'plant-material=Artificial', 'material=Synthetic(wreaths)', 'wreath-metafields:shape/lighting/celebration', 'category-gated-metafields', 'version-endpoint'] }));
 
 // ── Create product ────────────────────────────────────────────
 app.post('/create-product', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized. Visit ' + SERVER_URL + '/auth to complete Shopify OAuth first.' });
-  const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images, quantity, product_category, colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material } = req.body;
+  const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images, quantity, product_category, colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material, celebration_type, lighting_options, shape } = req.body;
   if (!title || !sku) return res.status(400).json({ error: 'title and sku are required' });
   // Inventory quantity — default to 1 (one-of-a-kind) when unset; clamp to a non-negative integer.
   const qty = (quantity != null && quantity !== '' && Number.isFinite(Number(quantity))) ? Math.max(0, Math.round(Number(quantity))) : 1;
@@ -1043,7 +1056,10 @@ app.post('/create-product', async (req, res) => {
       'plant-container-type':mapGids(plant_container_type, SHOPIFY_CONTAINER_METAOBJECTS),
       'stem-length':         mapGids(stem_length, SHOPIFY_STEM_METAOBJECTS),
       'decoration-material': mapGids(decoration_material, SHOPIFY_DECORATION_MATERIAL_METAOBJECTS),
-      'planter-material':    mapGids(planter_material, SHOPIFY_PLANTER_MATERIAL_METAOBJECTS)
+      'planter-material':    mapGids(planter_material, SHOPIFY_PLANTER_MATERIAL_METAOBJECTS),
+      'celebration-type':    mapGids(celebration_type, SHOPIFY_CELEBRATION_METAOBJECTS),
+      'lighting-options':    mapGids(lighting_options, SHOPIFY_LIGHTING_METAOBJECTS),
+      'shape':               mapGids(shape, SHOPIFY_SHAPE_METAOBJECTS)
     };
     const allowedKeys = CATEGORY_METAFIELD_KEYS[product_category] || [];
     const mf = [];
@@ -1077,6 +1093,17 @@ app.post('/create-product', async (req, res) => {
         if (pmErrs.length) console.warn('plant-material (Artificial) not set:', pmErrs.map(e => e.message).join(', '));
         else console.log('plant-material set: Artificial →', sku);
       } catch (pmErr) { console.warn('plant-material update failed (non-fatal):', pmErr.message); }
+    }
+    // Wreaths are synthetic — auto-set shopify.material = Synthetic. Own update (Material
+    // is a Wreaths attribute; not valid for AFP, so gate on category and isolate it).
+    if (product_category === 'Wreaths') {
+      try {
+        const matMutation = `mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){userErrors{field message}}}`;
+        const matData = await shopifyGraphql(matMutation, { product: { id: `gid://shopify/Product/${productId}`, metafields: [{ namespace: 'shopify', key: 'material', type: 'list.metaobject_reference', value: JSON.stringify([SHOPIFY_MATERIAL_SYNTHETIC]) }] } });
+        const matErrs = matData?.data?.productUpdate?.userErrors || [];
+        if (matErrs.length) console.warn('material (Synthetic) not set:', matErrs.map(e => e.message).join(', '));
+        else console.log('material set: Synthetic →', sku);
+      } catch (matErr) { console.warn('material update failed (non-fatal):', matErr.message); }
     }
     const collectionHandles = Array.isArray(collections) ? collections : [];
     const collectionResults = [];
