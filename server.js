@@ -88,6 +88,34 @@ const SHOPIFY_LOCATION_METAOBJECTS = {
 const SHOPIFY_PATTERN_METAOBJECTS = {
   'Floral':'gid://shopify/Metaobject/246380920967','Plaid':'gid://shopify/Metaobject/246382624903','Striped':'gid://shopify/Metaobject/246394126471'
 };
+// Additional shopify-namespace taxonomy attributes (same hardcoded-GID approach —
+// the Admin API can't query/create these reserved metaobjects, but the values
+// below already exist in the store). Harvested via the Shopify MCP 2026-06-30.
+// Unlisted values are skipped on publish; add the metaobject in Shopify, then its GID here.
+const SHOPIFY_ARRANGEMENT_METAOBJECTS = {
+  'Other':'gid://shopify/Metaobject/214355771527','Wall-Door Pocket':'gid://shopify/Metaobject/246336356487','Centerpiece':'gid://shopify/Metaobject/246351331463','Metal Planter':'gid://shopify/Metaobject/246373056647','Home Decor':'gid://shopify/Metaobject/246375415943','Wall Pocket':'gid://shopify/Metaobject/246375940231','Door Decor':'gid://shopify/Metaobject/246380593287','Vase':'gid://shopify/Metaobject/246395306119','Pot':'gid://shopify/Metaobject/247336304775','Planter':'gid://shopify/Metaobject/247339843719'
+};
+const SHOPIFY_CONTAINER_METAOBJECTS = {
+  'Planter':'gid://shopify/Metaobject/245698363527','Pot':'gid://shopify/Metaobject/246395437191','Vase':'gid://shopify/Metaobject/246395502727'
+};
+const SHOPIFY_STEM_METAOBJECTS = {
+  'Medium':'gid://shopify/Metaobject/246395404423','Long':'gid://shopify/Metaobject/246539714695','Short':'gid://shopify/Metaobject/248750866567'
+};
+const SHOPIFY_DECORATION_MATERIAL_METAOBJECTS = {
+  'Fabric':'gid://shopify/Metaobject/245698429063','Resin':'gid://shopify/Metaobject/246375317639','Metal':'gid://shopify/Metaobject/246375547015','Silk':'gid://shopify/Metaobject/246375579783','Ceramic':'gid://shopify/Metaobject/246395371655','Wool':'gid://shopify/Metaobject/247312646279','Plastic':'gid://shopify/Metaobject/247339417735','Wood':'gid://shopify/Metaobject/248712364167'
+};
+const SHOPIFY_PLANTER_MATERIAL_METAOBJECTS = {
+  'Metal':'gid://shopify/Metaobject/245698330759','Ceramic':'gid://shopify/Metaobject/246395338887','Wood':'gid://shopify/Metaobject/247312613511','Resin':'gid://shopify/Metaobject/247317856391'
+};
+
+// Which shopify-namespace taxonomy metafields are valid for each product category.
+// Shopify REJECTS a productUpdate that sets a metafield outside the category's
+// attribute set, so we filter by category before sending. color-pattern is treated
+// as universal (works on uncategorised Add-ons too, preserving prior behaviour).
+const CATEGORY_METAFIELD_KEYS = {
+  'Artificial Flowering Plants': ['plant-name','suitable-location','arrangement','plant-container-type','stem-length','decoration-material','planter-material'],
+  'Wreaths': ['decoration-material','planter-material']
+};
 
 // ── Shopify taxonomy value IDs for lazy metaobject creation ───────────────────
 // Used to create missing color-pattern / plant-name / suitable-location
@@ -233,7 +261,10 @@ app.get('/health', async (req, res) => {
 app.get('/auth', (req, res) => {
   const state = crypto.randomBytes(16).toString('hex');
   const redirectUri = `${SERVER_URL}/auth/callback`;
-  const scopes = 'read_products,write_products';
+  // write_inventory/read_inventory are REQUIRED for inventorySetQuantities — without
+  // them the inventory write is silently denied and products land at 0 available.
+  // Changing this string requires re-running /auth so Shopify re-grants the scopes.
+  const scopes = 'read_products,write_products,read_inventory,write_inventory';
   const authUrl = `https://${SHOPIFY_STORE}/admin/oauth/authorize?client_id=${SHOPIFY_API_KEY}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
   res.redirect(authUrl);
 });
@@ -903,12 +934,12 @@ app.post('/mark-sold', async (req, res) => {
 });
  
 // ── Version / health (verify what's actually deployed) ────────
-app.get('/version', (req, res) => res.json({ version: '2026-06-30-prB', features: ['hardcoded-metaobject-maps:plant/location/pattern', 'inventory-graphql', 'version-endpoint'] }));
+app.get('/version', (req, res) => res.json({ version: '2026-06-30-prB2', features: ['hardcoded-metaobject-maps:plant/location/pattern/arrangement/container/stem/decoration/planter', 'category-gated-metafields', 'write_inventory-scope', 'inventory-graphql', 'version-endpoint'] }));
 
 // ── Create product ────────────────────────────────────────────
 app.post('/create-product', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized. Visit ' + SERVER_URL + '/auth to complete Shopify OAuth first.' });
-  const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images, quantity, product_category, colors, pattern, plant_name, locations } = req.body;
+  const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images, quantity, product_category, colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material } = req.body;
   if (!title || !sku) return res.status(400).json({ error: 'title and sku are required' });
   // Inventory quantity — default to 1 (one-of-a-kind) when unset; clamp to a non-negative integer.
   const qty = (quantity != null && quantity !== '' && Number.isFinite(Number(quantity))) ? Math.max(0, Math.round(Number(quantity))) : 1;
@@ -978,22 +1009,40 @@ app.post('/create-product', async (req, res) => {
     // name and Suitable location are their own metafields. Reuse-or-create the
     // metaobjects, then set everything in one productUpdate. All non-fatal.
     const patternGids = (Array.isArray(pattern) ? pattern : []).map(p => SHOPIFY_PATTERN_METAOBJECTS[p]).filter(Boolean);
-    const plantGids = (Array.isArray(plant_name) ? plant_name : []).map(p => SHOPIFY_PLANT_METAOBJECTS[p]).filter(Boolean);
-    const locationGids = (Array.isArray(locations) ? locations : []).map(l => SHOPIFY_LOCATION_METAOBJECTS[l]).filter(Boolean);
     const colorPatternGids = colorGids.concat(patternGids);
-    if (categoryGid || colorPatternGids.length || plantGids.length || locationGids.length) {
+    // Resolve each taxonomy attribute to its metaobject GIDs. Unmapped values are
+    // dropped. Category gating below decides which of these actually get sent —
+    // Shopify rejects the whole productUpdate if a metafield is invalid for the
+    // product's category, so we filter by CATEGORY_METAFIELD_KEYS.
+    const mapGids = (vals, map) => (Array.isArray(vals) ? vals : (vals ? [vals] : [])).map(v => map[v]).filter(Boolean);
+    const taxFields = {
+      'plant-name':          mapGids(plant_name, SHOPIFY_PLANT_METAOBJECTS),
+      'suitable-location':   mapGids(locations, SHOPIFY_LOCATION_METAOBJECTS),
+      'arrangement':         mapGids(arrangement, SHOPIFY_ARRANGEMENT_METAOBJECTS),
+      'plant-container-type':mapGids(plant_container_type, SHOPIFY_CONTAINER_METAOBJECTS),
+      'stem-length':         mapGids(stem_length, SHOPIFY_STEM_METAOBJECTS),
+      'decoration-material': mapGids(decoration_material, SHOPIFY_DECORATION_MATERIAL_METAOBJECTS),
+      'planter-material':    mapGids(planter_material, SHOPIFY_PLANTER_MATERIAL_METAOBJECTS)
+    };
+    const allowedKeys = CATEGORY_METAFIELD_KEYS[product_category] || [];
+    const mf = [];
+    // color-pattern ("Color") is universal — set it regardless of category.
+    if (colorPatternGids.length) mf.push({ namespace: 'shopify', key: 'color-pattern', type: 'list.metaobject_reference', value: JSON.stringify(colorPatternGids) });
+    // Everything else only when valid for the product's category.
+    for (const key of allowedKeys) {
+      const gids = taxFields[key];
+      if (gids && gids.length) mf.push({ namespace: 'shopify', key, type: 'list.metaobject_reference', value: JSON.stringify(gids) });
+    }
+    if (categoryGid || mf.length) {
       try {
         const productInput = { id: `gid://shopify/Product/${productId}` };
         if (categoryGid) productInput.category = categoryGid;
-        const mf = [];
-        if (colorPatternGids.length) mf.push({ namespace: 'shopify', key: 'color-pattern', type: 'list.metaobject_reference', value: JSON.stringify(colorPatternGids) });
-        if (plantGids.length) mf.push({ namespace: 'shopify', key: 'plant-name', type: 'list.metaobject_reference', value: JSON.stringify(plantGids) });
-        if (locationGids.length) mf.push({ namespace: 'shopify', key: 'suitable-location', type: 'list.metaobject_reference', value: JSON.stringify(locationGids) });
         if (mf.length) productInput.metafields = mf;
         const upMutation = `mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){product{id category{id name}}userErrors{field message}}}`;
         const upData = await shopifyGraphql(upMutation, { product: productInput });
         const upErrors = upData?.data?.productUpdate?.userErrors || [];
-        if (upErrors.length) console.warn('Category/color/pattern/plant/location not set:', upErrors.map(e => e.message).join(', '));
+        if (upErrors.length) console.warn('Category/metafield update userErrors:', upErrors.map(e => e.message).join(', '));
+        else console.log('Metafields set:', sku, '→', mf.map(m => m.key).join(', ') || '(none)', categoryGid ? '+ category' : '');
       } catch (upErr) { console.warn('Category/metafield update failed (non-fatal):', upErr.message); }
     }
     const collectionHandles = Array.isArray(collections) ? collections : [];
@@ -1013,7 +1062,8 @@ app.post('/create-product', async (req, res) => {
     }
     const productUrl = `https://eternalbloomsbypatti.com/products/${data.product.handle}`;
     const heroImageUrl = data.product.images && data.product.images.length > 0 ? data.product.images[0].src : null;
-    res.json({ success: true, product_id: productId, handle: data.product.handle, shopify_url: productUrl, admin_url: `https://admin.shopify.com/store/zdzva0-tj/products/${productId}`, hero_image_url: heroImageUrl, collections_assigned: collectionResults, quantity: qty, category: (categoryGid ? product_category : null), colors_set: colorGids.length, pattern_set: patternGids.length, plant_set: plantGids.length, locations_set: locationGids.length });
+    const metafieldsSet = mf.reduce((acc, m) => { acc[m.key] = JSON.parse(m.value).length; return acc; }, {});
+    res.json({ success: true, product_id: productId, handle: data.product.handle, shopify_url: productUrl, admin_url: `https://admin.shopify.com/store/zdzva0-tj/products/${productId}`, hero_image_url: heroImageUrl, collections_assigned: collectionResults, quantity: qty, category: (categoryGid ? product_category : null), colors_set: colorGids.length, pattern_set: patternGids.length, metafields_set: metafieldsSet });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
  

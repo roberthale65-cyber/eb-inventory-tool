@@ -2819,7 +2819,15 @@ async function lpPublish(){
     const pubPattern=Array.isArray(f['Pattern'])?f['Pattern']:(f['Pattern']?[f['Pattern']]:[]);
     const pubPlant=Array.isArray(f['Plant name'])?f['Plant name']:(f['Plant name']?[f['Plant name']]:[]);
     const pubLocations=lpGetLocationArr().length?lpGetLocationArr():lpLocArr(f['Listing Display Location']);
-    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations})});
+    // Additional taxonomy attributes — sent for all pieces; the server gates them
+    // by product category so only valid ones reach Shopify.
+    const asArr=v=>Array.isArray(v)?v:(v?[v]:[]);
+    const pubArrangement=asArr(f['Arrangement']);
+    const pubContainer=asArr(f['Plant container type']);
+    const pubStem=asArr(f['Stem length']);
+    const pubDecorationMaterial=asArr(f['Decoration material']);
+    const pubPlanterMaterial=asArr(f['Planter material']);
+    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial})});
     clearTimeout(timeout);const data=await res.json();
     if(!res.ok||!data.success) throw new Error(data.error||'Publish failed');
     try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;if(meta)photoFields['Listing Meta Description']=meta;await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:photoFields})});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;if(meta)rec.fields['Listing Meta Description']=meta;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
