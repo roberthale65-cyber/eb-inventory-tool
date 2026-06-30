@@ -963,7 +963,33 @@ app.post('/mark-sold', async (req, res) => {
 });
  
 // ── Version / health (verify what's actually deployed) ────────
-app.get('/version', (req, res) => res.json({ version: '2026-06-30-wreath1', features: ['inventory-set-fixed-2026-04', 'plant-material=Artificial', 'material=Synthetic(wreaths)', 'wreath-metafields:shape/lighting/celebration', 'category-gated-metafields', 'version-endpoint'] }));
+app.get('/version', (req, res) => res.json({ version: '2026-06-30-resync1', features: ['resync-attributes(add-only+inventory)', 'inventory-set-fixed-2026-04', 'plant-material=Artificial', 'material=Synthetic(wreaths)', 'wreath-metafields:shape/lighting/celebration', 'category-gated-metafields', 'version-endpoint'] }));
+
+// Resolve the tool-owned taxonomy metafield GIDs for a product, category-gated.
+// Shared by /create-product (replace) and /resync-attributes (merge) so the value→GID
+// wiring lives in one place. Returns per-key GID lists + the set of keys valid for the
+// category (color-pattern is universal). Unmapped values are dropped.
+function buildToolMetafieldGids(product_category, body){
+  const { colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material, celebration_type, lighting_options, shape } = body;
+  const mapGids = (vals, map) => (Array.isArray(vals) ? vals : (vals ? [vals] : [])).map(v => map[v]).filter(Boolean);
+  const colorGids = mapGids(colors, SHOPIFY_COLOR_METAOBJECTS);
+  const patternGids = mapGids(pattern, SHOPIFY_PATTERN_METAOBJECTS);
+  const perKey = {
+    'color-pattern':        colorGids.concat(patternGids),
+    'plant-name':           mapGids(plant_name, SHOPIFY_PLANT_METAOBJECTS),
+    'suitable-location':    mapGids(locations, SHOPIFY_LOCATION_METAOBJECTS),
+    'arrangement':          mapGids(arrangement, SHOPIFY_ARRANGEMENT_METAOBJECTS),
+    'plant-container-type': mapGids(plant_container_type, SHOPIFY_CONTAINER_METAOBJECTS),
+    'stem-length':          mapGids(stem_length, SHOPIFY_STEM_METAOBJECTS),
+    'decoration-material':  mapGids(decoration_material, SHOPIFY_DECORATION_MATERIAL_METAOBJECTS),
+    'planter-material':     mapGids(planter_material, SHOPIFY_PLANTER_MATERIAL_METAOBJECTS),
+    'celebration-type':     mapGids(celebration_type, SHOPIFY_CELEBRATION_METAOBJECTS),
+    'lighting-options':     mapGids(lighting_options, SHOPIFY_LIGHTING_METAOBJECTS),
+    'shape':                mapGids(shape, SHOPIFY_SHAPE_METAOBJECTS)
+  };
+  const allowed = new Set(['color-pattern'].concat(CATEGORY_METAFIELD_KEYS[product_category] || []));
+  return { categoryGid: SHOPIFY_CATEGORY_GIDS[product_category], colorGids, patternGids, perKey, allowed };
+}
 
 // ── Create product ────────────────────────────────────────────
 app.post('/create-product', async (req, res) => {
@@ -1037,38 +1063,12 @@ app.post('/create-product', async (req, res) => {
     // productUpdate GraphQL mutation. Category is skipped for Add-ons (no mapping).
     // Colors map to color-pattern metaobjects (exact EB shade label + nearest
     // standard-color taxonomy ref); unknown color names are dropped. Non-fatal.
-    const categoryGid = SHOPIFY_CATEGORY_GIDS[product_category];
-    const colorGids = (Array.isArray(colors) ? colors : []).map(c => SHOPIFY_COLOR_METAOBJECTS[c]).filter(Boolean);
-    // Pattern shares the native "Color" attribute (shopify.color-pattern); Plant
-    // name and Suitable location are their own metafields. Reuse-or-create the
-    // metaobjects, then set everything in one productUpdate. All non-fatal.
-    const patternGids = (Array.isArray(pattern) ? pattern : []).map(p => SHOPIFY_PATTERN_METAOBJECTS[p]).filter(Boolean);
-    const colorPatternGids = colorGids.concat(patternGids);
-    // Resolve each taxonomy attribute to its metaobject GIDs. Unmapped values are
-    // dropped. Category gating below decides which of these actually get sent —
-    // Shopify rejects the whole productUpdate if a metafield is invalid for the
-    // product's category, so we filter by CATEGORY_METAFIELD_KEYS.
-    const mapGids = (vals, map) => (Array.isArray(vals) ? vals : (vals ? [vals] : [])).map(v => map[v]).filter(Boolean);
-    const taxFields = {
-      'plant-name':          mapGids(plant_name, SHOPIFY_PLANT_METAOBJECTS),
-      'suitable-location':   mapGids(locations, SHOPIFY_LOCATION_METAOBJECTS),
-      'arrangement':         mapGids(arrangement, SHOPIFY_ARRANGEMENT_METAOBJECTS),
-      'plant-container-type':mapGids(plant_container_type, SHOPIFY_CONTAINER_METAOBJECTS),
-      'stem-length':         mapGids(stem_length, SHOPIFY_STEM_METAOBJECTS),
-      'decoration-material': mapGids(decoration_material, SHOPIFY_DECORATION_MATERIAL_METAOBJECTS),
-      'planter-material':    mapGids(planter_material, SHOPIFY_PLANTER_MATERIAL_METAOBJECTS),
-      'celebration-type':    mapGids(celebration_type, SHOPIFY_CELEBRATION_METAOBJECTS),
-      'lighting-options':    mapGids(lighting_options, SHOPIFY_LIGHTING_METAOBJECTS),
-      'shape':               mapGids(shape, SHOPIFY_SHAPE_METAOBJECTS)
-    };
-    const allowedKeys = CATEGORY_METAFIELD_KEYS[product_category] || [];
+    // Resolve tool-owned taxonomy GIDs (category-gated) via the shared builder, then
+    // REPLACE each valid metafield's value (new product → nothing to merge with).
+    const { categoryGid, colorGids, patternGids, perKey, allowed } = buildToolMetafieldGids(product_category, req.body);
     const mf = [];
-    // color-pattern ("Color") is universal — set it regardless of category.
-    if (colorPatternGids.length) mf.push({ namespace: 'shopify', key: 'color-pattern', type: 'list.metaobject_reference', value: JSON.stringify(colorPatternGids) });
-    // Everything else only when valid for the product's category.
-    for (const key of allowedKeys) {
-      const gids = taxFields[key];
-      if (gids && gids.length) mf.push({ namespace: 'shopify', key, type: 'list.metaobject_reference', value: JSON.stringify(gids) });
+    for (const key of Object.keys(perKey)) {
+      if (allowed.has(key) && perKey[key].length) mf.push({ namespace: 'shopify', key, type: 'list.metaobject_reference', value: JSON.stringify(perKey[key]) });
     }
     if (categoryGid || mf.length) {
       try {
@@ -1126,7 +1126,72 @@ app.post('/create-product', async (req, res) => {
     res.json({ success: true, product_id: productId, handle: data.product.handle, shopify_url: productUrl, admin_url: `https://admin.shopify.com/store/zdzva0-tj/products/${productId}`, hero_image_url: heroImageUrl, collections_assigned: collectionResults, quantity: qty, category: (categoryGid ? product_category : null), colors_set: colorGids.length, pattern_set: patternGids.length, metafields_set: metafieldsSet });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
- 
+
+// ── Re-sync attributes & inventory to an EXISTING product ─────
+// Re-applies tool-owned structured data to an already-published product (matched by
+// SKU) WITHOUT recreating it. ADD-ONLY/merge for taxonomy metafields: unions the tool's
+// GIDs with whatever is already on the product, so values added in Shopify are KEPT and
+// nothing is removed. Resets inventory to the tool Quantity (revisit once Airtable is a
+// bidirectional source of truth). NEVER touches title/body/images/price/tags.
+app.post('/resync-attributes', async (req, res) => {
+  if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized — visit /auth' });
+  const { sku, quantity, product_category } = req.body;
+  if (!sku) return res.status(400).json({ error: 'sku required' });
+  try {
+    // 1. Find product + variant + current shopify-namespace metafields by SKU
+    const lookup = await shopifyGraphql(`query($q:String!){productVariants(first:1,query:$q){edges{node{id sku inventoryItem{id} product{id metafields(first:50,namespace:"shopify"){edges{node{key value}}}}}}}}`, { q: `sku:${sku}` });
+    const node = lookup?.data?.productVariants?.edges?.[0]?.node;
+    if (!node) return res.status(404).json({ error: 'No Shopify product found for SKU ' + sku });
+    const productId = node.product.id;                 // already a GID
+    const inventoryItemId = node.inventoryItem && node.inventoryItem.id;
+    const current = {};
+    (node.product.metafields && node.product.metafields.edges || []).forEach(e => { current[e.node.key] = e.node.value; });
+    const curList = (key) => { try { return current[key] ? JSON.parse(current[key]) : []; } catch(_) { return []; } };
+
+    // 2. Build tool GIDs (category-gated) and MERGE (union) with current — never remove
+    const { categoryGid, perKey, allowed } = buildToolMetafieldGids(product_category, req.body);
+    const mf = [];
+    const added = {};
+    const unionInto = (key, toolGids) => {
+      const union = curList(key).slice();
+      let n = 0;
+      toolGids.forEach(g => { if (!union.includes(g)) { union.push(g); n++; } });
+      if (n > 0) { mf.push({ namespace: 'shopify', key, type: 'list.metaobject_reference', value: JSON.stringify(union) }); added[key] = n; }
+    };
+    for (const key of Object.keys(perKey)) { if (allowed.has(key) && perKey[key].length) unionInto(key, perKey[key]); }
+    // Auto-rules (also add-only): plant-material=Artificial on any category, material=Synthetic on Wreaths
+    if (categoryGid) unionInto('plant-material', [SHOPIFY_PLANT_MATERIAL_ARTIFICIAL]);
+    if (product_category === 'Wreaths') unionInto('material', [SHOPIFY_MATERIAL_SYNTHETIC]);
+
+    // 3. Apply category + merged metafields (one productUpdate; add-only so safe)
+    let mfErrors = [];
+    if (categoryGid || mf.length) {
+      const productInput = { id: productId };
+      if (categoryGid) productInput.category = categoryGid;
+      if (mf.length) productInput.metafields = mf;
+      const upData = await shopifyGraphql(`mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){userErrors{field message}}}`, { product: productInput });
+      mfErrors = upData?.data?.productUpdate?.userErrors || [];
+      if (mfErrors.length) console.warn('Resync metafield userErrors:', mfErrors.map(e => e.message).join(', '));
+      else console.log('Resync metafields:', sku, '→ added', JSON.stringify(added));
+    }
+
+    // 4. Reset inventory to the tool Quantity (default 1). Decided behaviour for now.
+    let inventory = null;
+    const qty = (quantity != null && quantity !== '' && Number.isFinite(Number(quantity))) ? Math.max(0, Math.round(Number(quantity))) : 1;
+    if (inventoryItemId) {
+      const locRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/locations.json`, { headers: { 'X-Shopify-Access-Token': shopifyAccessToken } });
+      const locData = await locRes.json();
+      const locationId = locData.locations && locData.locations[0] && locData.locations[0].id;
+      if (locationId) {
+        const invData = await shopifyGraphql(`mutation invSet($input:InventorySetQuantitiesInput!){inventorySetQuantities(input:$input){userErrors{message}}}`, { input: { name: 'available', reason: 'correction', quantities: [{ inventoryItemId, locationId: `gid://shopify/Location/${locationId}`, quantity: qty }] } });
+        const invErrs = invData?.data?.inventorySetQuantities?.userErrors || [];
+        inventory = invErrs.length ? ('error: ' + invErrs.map(e => e.message).join(', ')) : qty;
+      }
+    }
+    res.json({ success: mfErrors.length === 0, product_id: String(productId).split('/').pop(), added, inventory, note: 'Add-only: existing Shopify values kept; title/description/images/price untouched.' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Drive: list video files in a specific folder ─────────────
 app.get('/drive-folder-videos', async (req, res) => {
   const { folderId } = req.query;
