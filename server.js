@@ -108,6 +108,11 @@ const SHOPIFY_PLANTER_MATERIAL_METAOBJECTS = {
   'Metal':'gid://shopify/Metaobject/245698330759','Ceramic':'gid://shopify/Metaobject/246395338887','Wood':'gid://shopify/Metaobject/247312613511','Resin':'gid://shopify/Metaobject/247317856391'
 };
 
+// Every categorised EB piece is artificial — set shopify.plant-material = Artificial
+// automatically (not surfaced in Airtable/the tool). Set in its own productUpdate so
+// a category that rejects this attribute can't drop the other metafields.
+const SHOPIFY_PLANT_MATERIAL_ARTIFICIAL = 'gid://shopify/Metaobject/245698396295';
+
 // Which shopify-namespace taxonomy metafields are valid for each product category.
 // Shopify REJECTS a productUpdate that sets a metafield outside the category's
 // attribute set, so we filter by category before sending. color-pattern is treated
@@ -1055,6 +1060,18 @@ app.post('/create-product', async (req, res) => {
         if (upErrors.length) console.warn('Category/metafield update userErrors:', upErrors.map(e => e.message).join(', '));
         else console.log('Metafields set:', sku, '→', mf.map(m => m.key).join(', ') || '(none)', categoryGid ? '+ category' : '');
       } catch (upErr) { console.warn('Category/metafield update failed (non-fatal):', upErr.message); }
+    }
+    // Plant material is always "Artificial" for every categorised product (skip
+    // Add-ons, which have no category). Separate productUpdate + own try/catch so a
+    // category that doesn't accept this attribute can't drop the metafields above.
+    if (categoryGid) {
+      try {
+        const pmMutation = `mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){userErrors{field message}}}`;
+        const pmData = await shopifyGraphql(pmMutation, { product: { id: `gid://shopify/Product/${productId}`, metafields: [{ namespace: 'shopify', key: 'plant-material', type: 'list.metaobject_reference', value: JSON.stringify([SHOPIFY_PLANT_MATERIAL_ARTIFICIAL]) }] } });
+        const pmErrs = pmData?.data?.productUpdate?.userErrors || [];
+        if (pmErrs.length) console.warn('plant-material (Artificial) not set:', pmErrs.map(e => e.message).join(', '));
+        else console.log('plant-material set: Artificial →', sku);
+      } catch (pmErr) { console.warn('plant-material update failed (non-fatal):', pmErr.message); }
     }
     const collectionHandles = Array.isArray(collections) ? collections : [];
     const collectionResults = [];
