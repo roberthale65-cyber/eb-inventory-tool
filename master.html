@@ -427,6 +427,7 @@ button:active{transform:scale(.97)}
     <div class="mode-card bin-mgmt" onclick="goTo('screen-bin-mgmt')"><span class="mode-icon">📦</span><div class="mode-title">Bin management</div><div class="mode-desc">Print bin labels, scan to assign pieces, update anytime</div><div class="mode-arrow">→</div></div>
     <div class="mode-card readiness" onclick="goTo('screen-readiness')"><span class="mode-icon">&#x1F4CB;</span><div class="mode-title">Listing readiness</div><div class="mode-desc">See what each piece is missing before it can publish to Shopify</div><div class="mode-arrow">→</div></div>
     <div class="mode-card log-cost" onclick="goTo('screen-costs')"><span class="mode-icon">&#x1F9FE;</span><div class="mode-title">Log a cost</div><div class="mode-desc">Snap a receipt, log mileage, or enter manually — saved to Airtable</div><div class="mode-arrow">→</div></div>
+    <div class="mode-card resync" onclick="goTo('screen-resync')"><span class="mode-icon">&#x21BB;</span><div class="mode-title">Re-sync to Shopify</div><div class="mode-desc">Push attribute &amp; inventory updates to an already-published piece — keeps title, photos &amp; price</div><div class="mode-arrow">→</div></div>
   </div>
   <div class="quick-links">
     <div class="quick-links-title">Quick links</div>
@@ -777,8 +778,6 @@ button:active{transform:scale(.97)}
         <div id="lp-publish-summary" style="font-size:13px;line-height:1.9;margin-bottom:14px"></div>
         <div id="lp-blocks" class="block-list" style="display:none"></div>
         <button class="btn-publish" id="lp-publish-btn" onclick="lpPublish()" disabled>↑ Publish listing to Shopify</button>
-        <button class="btn btn-full" id="lp-resync-btn" onclick="lpResync()" style="margin-top:8px">↻ Re-sync attributes &amp; inventory</button>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">For a piece that's already on Shopify: adds any new attributes &amp; resets inventory. Keeps everything you've edited in Shopify (title, description, photos, price) and never removes attributes.</div>
         <div id="lp-publish-result" style="display:none" class="publish-result"></div>
         <!-- ── Video panel — appears after successful publish ── -->
         <div id="lp-video-section" style="display:none;margin-top:14px">
@@ -1014,6 +1013,30 @@ button:active{transform:scale(.97)}
         <button class="btn btn-full" onclick="avCheckVideos()" style="font-size:12px">↺ Check again</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- RE-SYNC TO SHOPIFY SCREEN -->
+<div id="screen-resync" class="screen">
+  <div class="wizard-header"><button class="hdr-nav-btn home-btn" onclick="goHome()" title="Home screen">⌂ Home</button><div class="wizard-title">Re-sync to Shopify</div><div class="wizard-step-pill" id="rs-step-pill">Select piece</div></div>
+  <div class="wizard-body">
+    <div class="info-card sage" style="margin-bottom:14px"><strong>For pieces already on Shopify.</strong> Adds any new attributes from the tool and resets inventory to the tool quantity. Keeps everything you've edited in Shopify (title, description, photos, price) and never removes attributes.</div>
+    <div class="section-label">Select a published piece</div>
+    <div class="field"><label>Choose a listed piece</label>
+      <div style="position:relative">
+        <input type="text" id="rs-search" placeholder="🔍 Type EB number or name…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          style="width:100%;padding:11px 14px;font-size:14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);outline:none;color:var(--text);box-sizing:border-box"
+          oninput="rsSearchInput(this.value)" onfocus="rsSearchInput(this.value)"
+          onblur="setTimeout(()=>{const r=document.getElementById('rs-results');if(r)r.style.display='none';},220)">
+        <div id="rs-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);max-height:260px;overflow-y:auto;z-index:500"></div>
+      </div>
+    </div>
+    <div id="rs-piece-card" style="display:none;background:var(--sage-bg);border:1.5px solid rgba(92,122,92,0.2);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:12px">
+      <div style="font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--sage)" id="rs-piece-eb">—</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:2px" id="rs-piece-detail">—</div>
+    </div>
+    <button class="btn-publish" id="rs-btn" onclick="rsResync()" disabled>↻ Re-sync attributes &amp; inventory</button>
+    <div id="rs-result" style="display:none" class="publish-result"></div>
   </div>
 </div>
 
@@ -1373,6 +1396,7 @@ function goTo(screenId) {
   if(screenId==='screen-cost-summary') loadCostSummary();
   if(screenId==='screen-costs') loadCostRecentAndStrip();
   if(screenId==='screen-video') avScreenInit();
+  if(screenId==='screen-resync') rsScreenInit();
   if(screenId==='screen-print-tag') ptInit();
   if(screenId==='screen-backlog') blOnScreenEnter();
   if(screenId==='screen-readiness') readinessRender();
@@ -2786,19 +2810,57 @@ function lpUpdatePublishSummary(){
 // Re-sync structured attributes + inventory to an already-published product (matched by
 // EB number). Add-only on the server: keeps anything edited in Shopify, never removes;
 // does NOT touch title/description/photos/price. Resets inventory to the tool Quantity.
-async function lpResync(){
-  if(!lpSelectedRecord)return;
-  const f=lpSelectedRecord.fields, sku=f['EB Number']||'';
-  if(!sku){alert('This piece has no EB number yet — assign one and publish first.');return;}
+// Lives on its OWN home screen (screen-resync) for ALREADY-PUBLISHED pieces — separate
+// from the Step 2 publish flow (whose dropdown is unpublished pieces only).
+let rsSelectedRecord = null;
+let rsAllListedOpts = [];
+function rsScreenInit(){
+  rsSelectedRecord = null;
+  ['rs-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['rs-results','rs-piece-card','rs-result'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+  const btn=document.getElementById('rs-btn'); if(btn)btn.disabled=true;
+  document.getElementById('rs-step-pill').textContent='Select piece';
+  rsAllListedOpts = sortPiecesByEB(allRecords
+    .filter(r => r.fields['Status']==='Listed' && r.fields['Shopify URL']))
+    .map(r => ({ value:r.id, label: pieceLabel(r.fields) || r.id }));
+}
+function rsSearchInput(val){
+  const results=document.getElementById('rs-results');
+  const q=val.trim().toLowerCase();
+  const matches=q?rsAllListedOpts.filter(o=>o.label.toLowerCase().includes(q)).slice(0,12):rsAllListedOpts.slice(0,12);
+  if(!matches.length){results.style.display='none';return;}
+  results.style.display='block';
+  results.innerHTML=matches.map(o=>`<div style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)" onmousedown="rsSelectRecord('${o.value}')" onmouseover="this.style.background='var(--ivory-dark)'" onmouseout="this.style.background=''">${escHtml(o.label)}</div>`).join('');
+}
+function rsSelectRecord(recId){
+  document.getElementById('rs-results').style.display='none';
+  rsSelectedRecord=allRecords.find(r=>r.id===recId);
+  if(!rsSelectedRecord)return;
+  const f=rsSelectedRecord.fields;
+  const eb=(f['EB Number']||'').match(/^(EB-\d{2}[A-Z]{2}-[A-Z]{2,3}-\d{3})/i);
+  const ebDisplay=eb?eb[1]:(f['EB Number']||'—');
+  const seasonDisp=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||'');
+  document.getElementById('rs-search').value=pieceLabel(f)||ebDisplay;
+  document.getElementById('rs-piece-eb').textContent=ebDisplay;
+  document.getElementById('rs-piece-detail').textContent=[f['Type'],seasonDisp,f['Product Category']||npCategoryForType(f['Type'])].filter(Boolean).join(' · ');
+  document.getElementById('rs-piece-card').style.display='block';
+  document.getElementById('rs-result').style.display='none';
+  document.getElementById('rs-step-pill').textContent=ebDisplay;
+  const btn=document.getElementById('rs-btn'); if(btn)btn.disabled=false;
+}
+async function rsResync(){
+  if(!rsSelectedRecord)return;
+  const f=rsSelectedRecord.fields, sku=f['EB Number']||'';
+  if(!sku){alert('This piece has no EB number.');return;}
   const asArr=v=>Array.isArray(v)?v:(v?[v]:[]);
-  const btn=document.getElementById('lp-resync-btn'), result=document.getElementById('lp-publish-result');
+  const btn=document.getElementById('rs-btn'), result=document.getElementById('rs-result');
   btn.disabled=true;btn.textContent='⏳ Re-syncing…';result.style.display='none';
   try{
     const payload={ sku,
       product_category:f['Product Category']||npCategoryForType(f['Type'])||'',
       quantity:(f['Quantity']!=null&&f['Quantity']!=='')?f['Quantity']:1,
       colors:asArr(f['Color(s)']), pattern:asArr(f['Pattern']), plant_name:asArr(f['Plant name']),
-      locations:lpGetLocationArr().length?lpGetLocationArr():lpLocArr(f['Listing Display Location']),
+      locations:lpLocArr(f['Listing Display Location']),
       arrangement:asArr(f['Arrangement']), plant_container_type:asArr(f['Plant container type']), stem_length:asArr(f['Stem length']),
       decoration_material:asArr(f['Decoration material']), planter_material:asArr(f['Planter material']),
       celebration_type:asArr(f['Celebration type']), lighting_options:asArr(f['Lighting options']), shape:asArr(f['Shape']) };
