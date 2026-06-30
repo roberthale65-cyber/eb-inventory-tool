@@ -524,6 +524,7 @@ button:active{transform:scale(.97)}
         <div class="field"><label>Florals</label><select id="np-florals"></select></div>
         <div class="field"><label>Greenery</label><select id="np-greenery"></select></div>
       </div>
+      <div class="field"><label>Indoor / Outdoor</label><select id="np-indoor-outdoor"><option value="Indoor">Indoor</option><option value="Outdoor">Outdoor</option><option value="Both">Both</option></select><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Publishes to Shopify “Suitable space” on wreaths. Defaults to Indoor.</div></div>
       <div class="field"><label>Style</label><div id="np-style" class="chip-checks"></div></div>
       <div class="field"><label>Color(s)</label><div id="np-colors"></div></div>
       <div class="field"><label>Decoration material</label><div id="np-decoration"></div></div>
@@ -1414,7 +1415,7 @@ function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&
 function lpLocArr(v){ return Array.isArray(v) ? v.filter(Boolean) : String(v||'').split(',').map(s=>s.trim()).filter(Boolean); }
 function lpRenderDisplayLocation(productType) {
   const host = document.getElementById('lp-location'); if(!host) return;
-  if(!host.classList.contains('ms')) msInit('lp-location', LP_LOCATION_OPTIONS, {allowCustom:true});
+  if(!host.classList.contains('ms')) msInit('lp-location', LP_LOCATION_OPTIONS);
   else { host.querySelectorAll('.ms-opt input').forEach(c=>{c.checked=false;}); msSync(host); }
 }
 function lpGetLocationArr(){ return npGetChecks('lp-location'); }
@@ -1729,7 +1730,7 @@ function npGoScreen(n){
   updateHeaderBackBtn();
   window.scrollTo({top:0,behavior:'smooth'});
 }
-document.getElementById('np-type').addEventListener('change', function() { document.getElementById('np-outdoor-warning').style.display = this.value==='OP'?'block':'none'; });
+document.getElementById('np-type').addEventListener('change', function() { document.getElementById('np-outdoor-warning').style.display = this.value==='OP'?'block':'none'; npDefaultWreathShape(); });
 
 // Render the Step 1.1 dropdowns + multi-select chip groups from NP_OPTIONS.
 function npRenderSelect(id,opts){const el=document.getElementById(id);if(!el)return;el.innerHTML=opts.map(o=>'<option value="'+escHtml(o)+'">'+escHtml(o)+'</option>').join('');}
@@ -1743,7 +1744,10 @@ function msInit(id, options, conf){
   conf = conf || {};
   const host = document.getElementById(id); if(!host) return;
   host.classList.remove('chip-checks'); host.classList.add('ms'); host.innerHTML='';
-  host._msAllowCustom = !!conf.allowCustom;
+  // Custom entries are disabled everywhere: users may only pick from the curated,
+  // Shopify-mapped options. Free-typed values wouldn't map to a metaobject (they'd
+  // silently drop on publish) or would add extraneous options, so we never allow them.
+  host._msAllowCustom = false;
   const control = document.createElement('div'); control.className='ms-control';
   const chips = document.createElement('span'); chips.className='ms-chips';
   const search = document.createElement('input'); search.className='ms-search'; search.type='text'; search.autocomplete='off';
@@ -1802,18 +1806,25 @@ function npInitFields(){
   msInit('np-occasion',npAlpha(NP_OPTIONS.occasion.filter(o=>o!=='None')));
   npRenderSelect('np-florals',NP_OPTIONS.florals);
   npRenderSelect('np-greenery',NP_OPTIONS.greenery);
-  msInit('np-style',npAlpha(NP_OPTIONS.style),{allowCustom:true});
+  msInit('np-style',npAlpha(NP_OPTIONS.style));
   msInit('np-colors',npAlpha(NP_OPTIONS.colors));
-  msInit('np-decoration',npAlpha(NP_OPTIONS.decoration),{allowCustom:true});
-  msInit('np-planter',npAlpha(NP_OPTIONS.planter),{allowCustom:true});
+  msInit('np-decoration',npAlpha(NP_OPTIONS.decoration));
+  msInit('np-planter',npAlpha(NP_OPTIONS.planter));
   msInit('np-pattern',npAlpha(NP_OPTIONS.pattern));
-  msInit('np-plantname',npAlpha(NP_OPTIONS.plantname),{allowCustom:true});
-  msInit('np-arrangement',npAlpha(NP_OPTIONS.arrangement),{allowCustom:true});
+  msInit('np-plantname',npAlpha(NP_OPTIONS.plantname));
+  msInit('np-arrangement',npAlpha(NP_OPTIONS.arrangement));
   msInit('np-container',npAlpha(NP_OPTIONS.container));
   msInit('np-stem',npAlpha(NP_OPTIONS.stem));
   msInit('np-celebration',npAlpha(NP_OPTIONS.celebration));
   msInit('np-lighting',npAlpha(NP_OPTIONS.lighting));
   msInit('np-shape',npAlpha(NP_OPTIONS.shape));
+  npDefaultWreathShape();
+}
+// Wreaths are most commonly round — pre-select Round when the piece is a Wreath and no
+// Shape is chosen yet. Non-destructive: only fills an empty selection; user can change it.
+function npDefaultWreathShape(){
+  const t=document.getElementById('np-type'); if(!t) return;
+  if(t.value==='WR' && npGetChecks('np-shape').length===0) npSetChecks('np-shape',['Round']);
 }
 function npGetChecks(id){return Array.from(document.querySelectorAll('#'+id+' input[type=checkbox]:checked')).map(c=>c.value);}
 function npSetChecks(id,vals){const host=document.getElementById(id);const set=new Set(vals||[]);
@@ -1958,7 +1969,9 @@ function npClearForm(){
   npSetChecks('np-occasion',[]);
   document.getElementById('np-florals').value='None';
   document.getElementById('np-greenery').value='None';
+  document.getElementById('np-indoor-outdoor').value='Indoor';
   npSetChecks('np-season',[]); npSetChecks('np-style',[]); npSetChecks('np-colors',[]); npSetChecks('np-decoration',[]); npSetChecks('np-planter',[]); npSetChecks('np-pattern',[]); npSetChecks('np-plantname',[]); npSetChecks('np-arrangement',[]); npSetChecks('np-container',[]); npSetChecks('np-stem',[]); npSetChecks('np-celebration',[]); npSetChecks('np-lighting',[]); npSetChecks('np-shape',[]);
+  npDefaultWreathShape(); // Type defaults to Wreath → pre-select Round.
   npGoScreen(1);
 }
 function npAutoFillCost(){
@@ -1987,6 +2000,7 @@ function npLoadRecordForEdit(){
   document.getElementById('np-cost-pct').value=(_ep>0&&_ec>0)?Math.round(_ec/_ep*100):DEFAULT_COST_PCT;
   document.getElementById('np-florals').value=f['Florals']||'None';
   document.getElementById('np-greenery').value=f['Greenery']||'None';
+  document.getElementById('np-indoor-outdoor').value=f['Indoor/Outdoor']||'Indoor';
   npSetChecks('np-style',f['Style']||[]);
   npSetChecks('np-colors',f['Color(s)']||[]);
   npSetChecks('np-decoration',f['Decoration material']||[]);
@@ -2042,6 +2056,7 @@ function npBuildFieldsFromForm(){
     'Occasion':npGetChecks('np-occasion').join(', ')||'',
     'Florals':document.getElementById('np-florals').value,
     'Greenery':document.getElementById('np-greenery').value,
+    'Indoor/Outdoor':(document.getElementById('np-indoor-outdoor')||{}).value||'Indoor',
     'Style':npGetChecks('np-style'),
     'Color(s)':npGetChecks('np-colors'),
     'Decoration material':npGetChecks('np-decoration'),
@@ -4233,6 +4248,7 @@ function wipRestoreNP(saved) {
   if(saved.occasion!==undefined){npSetChecks('np-occasion',saved.occasion?saved.occasion.split(',').map(v=>v.trim()).filter(Boolean):[]);}
   if(saved.florals){const el=document.getElementById('np-florals');if(el)el.value=saved.florals;}
   if(saved.greenery){const el=document.getElementById('np-greenery');if(el)el.value=saved.greenery;}
+  if(saved.indoorOutdoor){const el=document.getElementById('np-indoor-outdoor');if(el)el.value=saved.indoorOutdoor;}
   if(saved.style)npSetChecks('np-style',saved.style);
   if(saved.colors)npSetChecks('np-colors',saved.colors);
   if(saved.decoration)npSetChecks('np-decoration',saved.decoration);
@@ -4275,6 +4291,7 @@ function wipSaveNP() {
     occasion: npGetChecks('np-occasion').join(', '),
     florals:  (document.getElementById('np-florals')||{}).value||'None',
     greenery: (document.getElementById('np-greenery')||{}).value||'None',
+    indoorOutdoor: (document.getElementById('np-indoor-outdoor')||{}).value||'Indoor',
     style:    npGetChecks('np-style'),
     colors:   npGetChecks('np-colors'),
     decoration:npGetChecks('np-decoration'),
