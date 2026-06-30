@@ -3521,11 +3521,11 @@ function printQRTag(ebNumber, price) {
   var win = window.open('', '_blank');
   var refName = rec ? (rec.fields['Reference name'] || '').trim() : '';
   var inner = '<div class="top"><div class="left"><div class="brand">Eternal Blooms</div><div class="eb">' + cleanEB + '</div>' + (priceDisplay ? '<div class="price">' + priceDisplay + '</div>' : '') + '</div><img src="' + qrUrl + '" alt="QR"></div>' + (refName ? '<div class="sub">' + escHtml(refName) + '</div>' : '');
-  var css = ['<style>','@page { size: 3in 2in; margin: 0; }','html, body { margin: 0 !important; padding: 0 !important; }','body { width: 3in; overflow: hidden; }','* { box-sizing: border-box; }','.tag { width: 3in; height: 2in; display: flex; flex-direction: column; justify-content: space-between; font-family: Arial, sans-serif; background: #fff; padding: 0.09in 0.11in; overflow: hidden; }','.top { display: flex; flex-direction: row; align-items: center; justify-content: space-between; flex: 1; }','.left { display: flex; flex-direction: column; justify-content: center; flex: 1; padding-right: 0.08in; overflow: hidden; min-width: 0; }','.brand { font-size: 10pt; font-weight: 400; letter-spacing: .1em; text-transform: uppercase; color: #bb8588; margin-bottom: 4px; white-space: nowrap; }','.eb { font-size: 10pt; font-weight: 800; letter-spacing: .03em; color: #2b2622; line-height: 1.15; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }','.price { font-size: 14pt; font-weight: 800; color: #bb8588; }','.sub { font-size: 14pt; color: #bb8588; text-align: center; width: 100%; letter-spacing: .02em; padding-top: 0.02in; }','img { width: 1in; height: 1in; flex-shrink: 0; display: block; }','</style>'].join('\n');
+  var css = ['<style>','@page { size: 3in 2in; margin: 0mm; }','@media print { @page { margin: 0mm !important; } html, body { margin: 0 !important; padding: 0 !important; } }','html, body { margin: 0 !important; padding: 0 !important; }','body { width: 3in; overflow: hidden; }','* { box-sizing: border-box; }','.tag { width: 3in; height: 2in; display: flex; flex-direction: column; justify-content: space-between; font-family: Arial, sans-serif; background: #fff; padding: 0.09in 0.11in; overflow: hidden; }','.top { display: flex; flex-direction: row; align-items: center; justify-content: space-between; flex: 1; }','.left { display: flex; flex-direction: column; justify-content: center; flex: 1; padding-right: 0.08in; overflow: hidden; min-width: 0; }','.brand { font-size: 10pt; font-weight: 400; letter-spacing: .1em; text-transform: uppercase; color: #bb8588; margin-bottom: 4px; white-space: nowrap; }','.eb { font-size: 10pt; font-weight: 800; letter-spacing: .03em; color: #2b2622; line-height: 1.15; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }','.price { font-size: 14pt; font-weight: 800; color: #bb8588; }','.sub { font-size: 14pt; color: #bb8588; text-align: center; width: 100%; letter-spacing: .02em; padding-top: 0.02in; }','img { width: 1in; height: 1in; flex-shrink: 0; display: block; }','</style>'].join('\n');
   var body = isWreath
     ? '<div class="tag" style="break-after:page;page-break-after:always;">' + inner + '</div><div class="tag">' + inner + '</div>'
     : '<div class="tag">' + inner + '</div>';
-  var html = '<!DOCTYPE html><html><head><title>Tag ' + cleanEB + '</title>' + css + '</head><body>' + body + '<script>window.onload=function(){setTimeout(function(){window.print();},800);};<\/script></body></html>';
+  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>' + css + '</head><body>' + body + '<script>window.onload=function(){setTimeout(function(){window.print();},800);};<\/script></body></html>';
   win.document.write(html); win.document.close();
 }
 
@@ -3701,9 +3701,9 @@ async function bmPrintLabel() {
   const qrUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=480x480&data=' + encodeURIComponent(qrData);
   const win = window.open('', '_blank');
   const html = [
-    '<!DOCTYPE html><html><head><title>Bin ' + binNum + '</title>',
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>',
     '<style>',
-    '@page { size: 4in 6in; margin: 0; }',
+    '@page { size: 4in 6in; margin: 0mm; }','@media print { @page { margin: 0mm !important; } }',
     '* { box-sizing: border-box; margin: 0; padding: 0; }',
     'body { width: 4in; height: 6in; font-family: Arial, sans-serif; background: #fff;',
     '  display: flex; flex-direction: column; align-items: center; padding: 0.18in 0.22in; }',
@@ -3821,9 +3821,9 @@ function bmReprintLabel() {
   const qrUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=480x480&data=' + encodeURIComponent(qrData);
   const win = window.open('', '_blank');
   const html = [
-    '<!DOCTYPE html><html><head><title>Bin ' + binNum + '</title>',
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>',
     '<style>',
-    '@page { size: 4in 6in; margin: 0; }',
+    '@page { size: 4in 6in; margin: 0mm; }','@media print { @page { margin: 0mm !important; } }',
     '* { box-sizing: border-box; margin: 0; padding: 0; }',
     'body { width: 4in; height: 6in; font-family: Arial, sans-serif; background: #fff;',
     '  display: flex; flex-direction: column; align-items: center; padding: 0.18in 0.22in; }',
