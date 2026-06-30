@@ -250,6 +250,17 @@ app.get('/health', async (req, res) => {
       });
       checks.shopify = r.ok ? 'ok' : 'error ' + r.status;
       if (r.ok) { const d = await r.json(); checks.shop_name = d.shop && d.shop.name; }
+      // Report the scopes actually granted to THIS token — the only reliable way
+      // to confirm a re-auth expanded permissions (the token string can stay the
+      // same across re-consent). Flag whether write_inventory made it through.
+      const sr = await fetch(`https://${SHOPIFY_STORE}/admin/oauth/access_scopes.json`, {
+        headers: { 'X-Shopify-Access-Token': shopifyAccessToken }
+      });
+      if (sr.ok) {
+        const sd = await sr.json();
+        checks.granted_scopes = (sd.access_scopes || []).map(s => s.handle).sort();
+        checks.write_inventory_granted = checks.granted_scopes.includes('write_inventory');
+      }
     } catch(e) { checks.shopify = 'error: ' + e.message; }
   } else {
     checks.shopify = 'no token — complete OAuth first';
