@@ -932,12 +932,19 @@ app.post('/create-product', async (req, res) => {
         headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({ location_id: locationId, inventory_item_id: inventoryItemId })
       }).catch(() => {});
-      const invRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/inventory_levels/set.json`, {
-        method: 'POST',
-        headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ location_id: locationId, inventory_item_id: inventoryItemId, available: qty })
-      });
-      if (!invRes.ok) { const t = await invRes.text().catch(() => ''); console.warn(`Inventory set failed (${invRes.status}): ${t.slice(0, 200)}`); }
+      // Set available quantity via GraphQL — REST inventory_levels/set.json is
+      // deprecated in 2026-04 and silently no-ops, leaving products at 0. The
+      // connect above ensures the level exists at the location.
+      try {
+        const invMutation = `mutation invSet($input:InventorySetQuantitiesInput!){inventorySetQuantities(input:$input){userErrors{code field message}}}`;
+        const invInput = {
+          name: 'available', reason: 'correction', ignoreCompareQuantity: true,
+          quantities: [{ inventoryItemId: `gid://shopify/InventoryItem/${inventoryItemId}`, locationId: `gid://shopify/Location/${locationId}`, quantity: qty }]
+        };
+        const invData = await shopifyGraphql(invMutation, { input: invInput });
+        const invErrs = invData?.data?.inventorySetQuantities?.userErrors || [];
+        if (invErrs.length) console.warn('Inventory set failed:', invErrs.map(e => e.message).join(', '));
+      } catch (invErr) { console.warn('Inventory set error (non-fatal):', invErr.message); }
     }
     // Set the Shopify standard product category (taxonomy) AND the native
     // "Color" attribute (shopify.color-pattern) — REST can set neither, so use a
