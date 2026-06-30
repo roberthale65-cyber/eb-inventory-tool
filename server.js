@@ -70,7 +70,13 @@ const SHOPIFY_COLOR_METAOBJECTS = {
   'Rust':          'gid://shopify/Metaobject/248710332551',
   'Yellow-Orange': 'gid://shopify/Metaobject/248710365319',
   'Teal':          'gid://shopify/Metaobject/248710398087',
-  'Peach':         'gid://shopify/Metaobject/248710430855'
+  'Peach':         'gid://shopify/Metaobject/248710430855',
+  'Beige':         'gid://shopify/Metaobject/248784158855',
+  'Navy':          'gid://shopify/Metaobject/248784191623',
+  'Clear':         'gid://shopify/Metaobject/248784224391',
+  'Multicolor':    'gid://shopify/Metaobject/248784257159',
+  'Rose gold':     'gid://shopify/Metaobject/248784289927',
+  'Rainbow':       'gid://shopify/Metaobject/248784322695'
 };
 
 // Plant name / Suitable location / Pattern → existing metaobject GIDs. Hardcoded
@@ -86,7 +92,7 @@ const SHOPIFY_LOCATION_METAOBJECTS = {
   'Living room':'gid://shopify/Metaobject/214355869831','Kitchen':'gid://shopify/Metaobject/214356000903','Hallway':'gid://shopify/Metaobject/214356066439','Entrance':'gid://shopify/Metaobject/214356099207','Dining room':'gid://shopify/Metaobject/214356131975','Corridor':'gid://shopify/Metaobject/214356164743','Bedroom':'gid://shopify/Metaobject/214356197511','Bathroom':'gid://shopify/Metaobject/214356230279',"Children's room":'gid://shopify/Metaobject/246375055495','Porch':'gid://shopify/Metaobject/246380986503','Laundry room':'gid://shopify/Metaobject/246386458759'
 };
 const SHOPIFY_PATTERN_METAOBJECTS = {
-  'Floral':'gid://shopify/Metaobject/246380920967','Plaid':'gid://shopify/Metaobject/246382624903','Striped':'gid://shopify/Metaobject/246394126471'
+  'Floral':'gid://shopify/Metaobject/246380920967','Plaid':'gid://shopify/Metaobject/246382624903','Striped':'gid://shopify/Metaobject/246394126471','Abstract':'gid://shopify/Metaobject/248784420999','Animal':'gid://shopify/Metaobject/248784453767','Art':'gid://shopify/Metaobject/248784486535','Bead & reel':'gid://shopify/Metaobject/248784519303','Birds':'gid://shopify/Metaobject/248784552071','Brick':'gid://shopify/Metaobject/248784584839',"Bull's eye":'gid://shopify/Metaobject/248784617607','Camouflage':'gid://shopify/Metaobject/248784650375','Characters':'gid://shopify/Metaobject/248784683143','Checkered':'gid://shopify/Metaobject/248784715911','Chevron':'gid://shopify/Metaobject/248784748679','Chinoiserie':'gid://shopify/Metaobject/248784781447','Christmas':'gid://shopify/Metaobject/248784814215','Collage':'gid://shopify/Metaobject/248784846983','Coral':'gid://shopify/Metaobject/248784879751','Damask':'gid://shopify/Metaobject/248784912519','Diagonal':'gid://shopify/Metaobject/248784945287','Diamond':'gid://shopify/Metaobject/248784978055',"Dog's tooth":'gid://shopify/Metaobject/248785010823','Dots':'gid://shopify/Metaobject/248785043591','Egg & dart':'gid://shopify/Metaobject/248785076359','Ethnic':'gid://shopify/Metaobject/248785109127','Everlasting knot':'gid://shopify/Metaobject/248785141895','Fret':'gid://shopify/Metaobject/248785174663','Geometric':'gid://shopify/Metaobject/248785207431','Guilloche':'gid://shopify/Metaobject/248785240199','Hearts':'gid://shopify/Metaobject/248785272967','Illusion':'gid://shopify/Metaobject/248785305735','Lace':'gid://shopify/Metaobject/248785338503','Leaves':'gid://shopify/Metaobject/248785371271','Logo':'gid://shopify/Metaobject/248785404039','Mosaic':'gid://shopify/Metaobject/248785436807','Ogee':'gid://shopify/Metaobject/248785469575','Organic':'gid://shopify/Metaobject/248785502343','Other':'gid://shopify/Metaobject/248785535111','Paisley':'gid://shopify/Metaobject/248785567879','Rainbow':'gid://shopify/Metaobject/248785600647','Random':'gid://shopify/Metaobject/248785633415','Scale':'gid://shopify/Metaobject/248785666183','Scroll':'gid://shopify/Metaobject/248785698951','Solid':'gid://shopify/Metaobject/248785731719','Stars':'gid://shopify/Metaobject/248785764487','Swirl':'gid://shopify/Metaobject/248785797255','Text':'gid://shopify/Metaobject/248785830023','Texture':'gid://shopify/Metaobject/248785862791','Tie-dye':'gid://shopify/Metaobject/248785895559','Trellis':'gid://shopify/Metaobject/248785928327','Vehicle':'gid://shopify/Metaobject/248785961095'
 };
 // Additional shopify-namespace taxonomy attributes (same hardcoded-GID approach —
 // the Admin API can't query/create these reserved metaobjects, but the values
