@@ -125,7 +125,9 @@ const SHOPIFY_CELEBRATION_METAOBJECTS = {
   '4th of July':'gid://shopify/Metaobject/246394060935','Anniversary':'gid://shopify/Metaobject/248781766791','Baby gender reveal':'gid://shopify/Metaobject/248781799559','Baby shower':'gid://shopify/Metaobject/247775133831','Birthday':'gid://shopify/Metaobject/247775166599','Christmas':'gid://shopify/Metaobject/248781832327','Concert':'gid://shopify/Metaobject/248781865095','Conference':'gid://shopify/Metaobject/248781897863','Congratulations':'gid://shopify/Metaobject/248781930631','Easter':'gid://shopify/Metaobject/247775199367',"Father's Day":'gid://shopify/Metaobject/248781963399','Get well soon':'gid://shopify/Metaobject/246382657671','Graduation':'gid://shopify/Metaobject/248781996167','Halloween':'gid://shopify/Metaobject/248782028935',"Mother's Day":'gid://shopify/Metaobject/247775232135','New baby':'gid://shopify/Metaobject/247775264903','New home':'gid://shopify/Metaobject/246382755975','Other':'gid://shopify/Metaobject/248782061703','Retirement':'gid://shopify/Metaobject/248782094471','Summer':'gid://shopify/Metaobject/248782127239','Thank you':'gid://shopify/Metaobject/246382788743','Theater performance':'gid://shopify/Metaobject/248782160007','Travel':'gid://shopify/Metaobject/248782192775',"Valentine's day":'gid://shopify/Metaobject/248782225543','Wedding':'gid://shopify/Metaobject/247775101063'
 };
 const SHOPIFY_LIGHTING_METAOBJECTS = {
-  'Illuminated':'gid://shopify/Metaobject/246448423047','Non-illuminated':'gid://shopify/Metaobject/248750932103','Other':'gid://shopify/Metaobject/248782258311'
+  // Verified against the store 2026-06-30: 248750932103 = Illuminated, 246448423047 =
+  // Non-illuminated (these two were previously swapped, publishing the wrong value).
+  'Illuminated':'gid://shopify/Metaobject/248750932103','Non-illuminated':'gid://shopify/Metaobject/246448423047','Other':'gid://shopify/Metaobject/248782258311'
 };
 
 // Every categorised EB piece is artificial — set shopify.plant-material = Artificial
@@ -141,7 +143,14 @@ const SHOPIFY_MATERIAL_SYNTHETIC = 'gid://shopify/Metaobject/248782291079';
 // as universal (works on uncategorised Add-ons too, preserving prior behaviour).
 const CATEGORY_METAFIELD_KEYS = {
   'Artificial Flowering Plants': ['plant-name','suitable-location','arrangement','plant-container-type','stem-length','decoration-material','planter-material'],
-  'Wreaths': ['decoration-material','planter-material','celebration-type','lighting-options','shape']
+  // The Shopify Wreaths taxonomy category (hg-3-76-2) has NO decoration-material or
+  // planter-material attributes — only Celebration type, Lighting options, Shape (plus
+  // the universal Color/Pattern, and auto-set Material/Plant material). Including the
+  // two invalid keys here made every wreath productUpdate fail with userErrors, which
+  // (being atomic) also rolled back the category assignment → category stayed null and
+  // ALL metafields dropped. (Decoration/planter material for wreaths is still in
+  // Airtable; folding it into shopify.material is a separate enhancement.)
+  'Wreaths': ['celebration-type','lighting-options','shape']
 };
 
 // ── Shopify taxonomy value IDs for lazy metaobject creation ───────────────────
@@ -972,7 +981,7 @@ app.post('/mark-sold', async (req, res) => {
 });
  
 // ── Version / health (verify what's actually deployed) ────────
-app.get('/version', (req, res) => res.json({ version: '2026-06-30-resync1', features: ['resync-attributes(add-only+inventory)', 'inventory-set-fixed-2026-04', 'plant-material=Artificial', 'material=Synthetic(wreaths)', 'wreath-metafields:shape/lighting/celebration', 'category-gated-metafields', 'version-endpoint'] }));
+app.get('/version', (req, res) => res.json({ version: '2026-06-30-fixpack2', features: ['inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix: drop invalid decoration/planter keys', 'lighting GID swap fixed (Illuminated/Non-illuminated)', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'material=Synthetic(wreaths)', 'wreath-metafields:shape/lighting/celebration', 'category-gated-metafields'] }));
 
 // Resolve the tool-owned taxonomy metafield GIDs for a product, category-gated.
 // Shared by /create-product (replace) and /resync-attributes (merge) so the value→GID
@@ -1049,18 +1058,21 @@ app.post('/create-product', async (req, res) => {
       // Set available quantity via GraphQL — REST inventory_levels/set.json is
       // deprecated in 2026-04 and silently no-ops, leaving products at 0. The
       // connect above ensures the level exists at the location.
-      // NOTE: 2026-04 InventorySetQuantitiesInput has NO ignoreCompareQuantity field
-      // (that exists only in newer versions — passing it fails the whole mutation with
-      // INVALID_VARIABLE, which is why inventory kept landing at 0). The compare-and-swap
-      // field is now per-quantity `changeFromQuantity`; omitting it skips the CAS check,
-      // which is correct here since we're the source of truth for a brand-new product.
+      // 2026-04 made TWO breaking changes to inventorySetQuantities (both required,
+      // both were missing — which is why inventory kept landing at 0 even after #28
+      // removed ignoreCompareQuantity):
+      //   1. The @idempotent(key:…) directive is now MANDATORY (idempotency key).
+      //   2. Each quantity must carry `changeFromQuantity`; it isn't flagged required
+      //      in the schema but the mutation errors at RUNTIME without it. Pass null to
+      //      opt out of the compare-and-swap check (correct here — we're the source of
+      //      truth for a brand-new product).
       try {
-        const invMutation = `mutation invSet($input:InventorySetQuantitiesInput!){inventorySetQuantities(input:$input){userErrors{code field message}}}`;
+        const invMutation = `mutation invSet($input:InventorySetQuantitiesInput!,$idem:String!){inventorySetQuantities(input:$input)@idempotent(key:$idem){userErrors{code field message}}}`;
         const invInput = {
           name: 'available', reason: 'correction',
-          quantities: [{ inventoryItemId: `gid://shopify/InventoryItem/${inventoryItemId}`, locationId: `gid://shopify/Location/${locationId}`, quantity: qty }]
+          quantities: [{ inventoryItemId: `gid://shopify/InventoryItem/${inventoryItemId}`, locationId: `gid://shopify/Location/${locationId}`, quantity: qty, changeFromQuantity: null }]
         };
-        const invData = await shopifyGraphql(invMutation, { input: invInput });
+        const invData = await shopifyGraphql(invMutation, { input: invInput, idem: crypto.randomUUID() });
         if (invData?.errors) console.warn('Inventory set GraphQL error:', JSON.stringify(invData.errors));
         const invErrs = invData?.data?.inventorySetQuantities?.userErrors || [];
         if (invErrs.length) console.warn('Inventory set failed:', invErrs.map(e => e.message).join(', '));
@@ -1192,7 +1204,8 @@ app.post('/resync-attributes', async (req, res) => {
       const locData = await locRes.json();
       const locationId = locData.locations && locData.locations[0] && locData.locations[0].id;
       if (locationId) {
-        const invData = await shopifyGraphql(`mutation invSet($input:InventorySetQuantitiesInput!){inventorySetQuantities(input:$input){userErrors{message}}}`, { input: { name: 'available', reason: 'correction', quantities: [{ inventoryItemId, locationId: `gid://shopify/Location/${locationId}`, quantity: qty }] } });
+        // 2026-04: @idempotent directive + per-quantity changeFromQuantity both required (see /create-product note).
+        const invData = await shopifyGraphql(`mutation invSet($input:InventorySetQuantitiesInput!,$idem:String!){inventorySetQuantities(input:$input)@idempotent(key:$idem){userErrors{message}}}`, { input: { name: 'available', reason: 'correction', quantities: [{ inventoryItemId, locationId: `gid://shopify/Location/${locationId}`, quantity: qty, changeFromQuantity: null }] }, idem: crypto.randomUUID() });
         const invErrs = invData?.data?.inventorySetQuantities?.userErrors || [];
         inventory = invErrs.length ? ('error: ' + invErrs.map(e => e.message).join(', ')) : qty;
       }
