@@ -777,6 +777,8 @@ button:active{transform:scale(.97)}
         <div id="lp-publish-summary" style="font-size:13px;line-height:1.9;margin-bottom:14px"></div>
         <div id="lp-blocks" class="block-list" style="display:none"></div>
         <button class="btn-publish" id="lp-publish-btn" onclick="lpPublish()" disabled>↑ Publish listing to Shopify</button>
+        <button class="btn btn-full" id="lp-resync-btn" onclick="lpResync()" style="margin-top:8px">↻ Re-sync attributes &amp; inventory</button>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">For a piece that's already on Shopify: adds any new attributes &amp; resets inventory. Keeps everything you've edited in Shopify (title, description, photos, price) and never removes attributes.</div>
         <div id="lp-publish-result" style="display:none" class="publish-result"></div>
         <!-- ── Video panel — appears after successful publish ── -->
         <div id="lp-video-section" style="display:none;margin-top:14px">
@@ -2779,6 +2781,35 @@ function lpUpdatePublishSummary(){
   if(blocks.length>0){blocksEl.style.display='block';blocksEl.innerHTML='<strong>Fix before publishing:</strong><br>'+blocks.map(b=>'• '+b).join('<br>');}
   else blocksEl.style.display='none';
   document.getElementById('lp-publish-btn').disabled=blocks.length>0;
+}
+
+// Re-sync structured attributes + inventory to an already-published product (matched by
+// EB number). Add-only on the server: keeps anything edited in Shopify, never removes;
+// does NOT touch title/description/photos/price. Resets inventory to the tool Quantity.
+async function lpResync(){
+  if(!lpSelectedRecord)return;
+  const f=lpSelectedRecord.fields, sku=f['EB Number']||'';
+  if(!sku){alert('This piece has no EB number yet — assign one and publish first.');return;}
+  const asArr=v=>Array.isArray(v)?v:(v?[v]:[]);
+  const btn=document.getElementById('lp-resync-btn'), result=document.getElementById('lp-publish-result');
+  btn.disabled=true;btn.textContent='⏳ Re-syncing…';result.style.display='none';
+  try{
+    const payload={ sku,
+      product_category:f['Product Category']||npCategoryForType(f['Type'])||'',
+      quantity:(f['Quantity']!=null&&f['Quantity']!=='')?f['Quantity']:1,
+      colors:asArr(f['Color(s)']), pattern:asArr(f['Pattern']), plant_name:asArr(f['Plant name']),
+      locations:lpGetLocationArr().length?lpGetLocationArr():lpLocArr(f['Listing Display Location']),
+      arrangement:asArr(f['Arrangement']), plant_container_type:asArr(f['Plant container type']), stem_length:asArr(f['Stem length']),
+      decoration_material:asArr(f['Decoration material']), planter_material:asArr(f['Planter material']),
+      celebration_type:asArr(f['Celebration type']), lighting_options:asArr(f['Lighting options']), shape:asArr(f['Shape']) };
+    const r=await fetch(SERVER_URL+'/resync-attributes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const d=await r.json();
+    if(!r.ok||!d.success) throw new Error(d.error||'Re-sync failed');
+    const addedKeys=Object.keys(d.added||{});
+    result.className='publish-result success';result.style.display='block';
+    result.innerHTML='✓ <strong>Re-synced to Shopify.</strong> '+(addedKeys.length?('Added new values to: '+escHtml(addedKeys.join(', '))):'No new attributes to add')+'.<br>Inventory set to '+escHtml(String(d.inventory))+'. <span style="font-size:12px;color:var(--text-muted)">Title, description, photos &amp; price left untouched.</span>';
+  }catch(e){ result.className='publish-result error';result.style.display='block';result.innerHTML='✗ <strong>Re-sync failed:</strong> '+escHtml(e.message); }
+  finally{ btn.disabled=false;btn.textContent='↻ Re-sync attributes & inventory'; }
 }
 
 async function lpPublish(){
