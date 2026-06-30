@@ -562,7 +562,7 @@ button:active{transform:scale(.97)}
       <div class="np-sub" id="np-sub-4" style="display:none">
       <div id="np-thumbs-4" class="np-sub-thumbs" style="display:none"></div>
       <div class="section-label">Optional — not published to Shopify</div>
-      <div class="info-card amber" style="font-size:12px">These don't publish to Shopify for this piece's category, but they're still worth filling — they enrich the record and feed your Meta &amp; Etsy listings.</div>
+      <div class="info-card amber" style="font-size:12px">These don't publish to Shopify for this piece's category, but they're still worth filling if applicable — they enrich the record and feed your Meta &amp; Etsy listings.</div>
       <!-- AFP-exclusive fields live here by default; npApplyCategoryBuckets() swaps in wreath fields for wreaths. -->
       <div id="np-sub-4-fields">
         <div class="field" id="npf-arrangement"><label>Arrangement</label><div id="np-arrangement"></div></div>
@@ -1911,6 +1911,37 @@ function npInitFields(){
   msInit('np-shape',npAlpha(NP_OPTIONS.shape));
   npDefaultWreathShape();
   npApplyCategoryBuckets(); // place 1.3/1.4 fields for the default Type
+  // Cross-field inference: a USER change to Occasion/Decoration material (1.2) auto-adds
+  // related Celebration type / Lighting options (1.3/1.4). 'change' bubbles only on real
+  // user toggles — programmatic npSetChecks doesn't dispatch it — so edit-load/WIP restore
+  // never trigger this. See npPropagateInferences.
+  const occEl=document.getElementById('np-occasion'); if(occEl) occEl.addEventListener('change', npPropagateInferences);
+  const decEl=document.getElementById('np-decoration'); if(decEl) decEl.addEventListener('change', npPropagateInferences);
+}
+// Source(1.2) → target(1.3/1.4) auto-fill map. Additive + non-destructive: only ADDS the
+// mapped values; never removes the user's own picks (so deselecting a source leaves the
+// target as-is). Targets use the EXACT option strings from NP_OPTIONS.celebration/.lighting.
+// Reviewed with Niki 2026-06-30: Fourth of July→4th of July+Summer; Memorial Day→Summer;
+// Bridal Shower→Wedding; Lights/Candle→Illuminated. Thanksgiving/Sympathy/Funeral: no
+// celebration-type equivalent → intentionally unmapped.
+const NP_OCCASION_TO_CELEBRATION = {
+  'Christmas':['Christmas'], 'Easter':['Easter'], "Mother's Day":["Mother's Day"],
+  'Halloween':['Halloween'], "Valentine's Day":["Valentine's day"], 'Congratulations':['Congratulations'],
+  'Wedding':['Wedding'], 'Bridal Shower':['Wedding'], 'Baby Shower':['Baby shower'], 'Graduation':['Graduation'],
+  'Fourth of July':['4th of July','Summer'], 'Memorial Day':['Summer']
+};
+const NP_DECORATION_TO_LIGHTING = { 'Lights':['Illuminated'], 'Candle':['Illuminated'] };
+// Union-add values into a multi-select without removing existing selections.
+function npAddChecks(id, vals){
+  const cur=new Set(npGetChecks(id)); let changed=false;
+  (vals||[]).forEach(v=>{ if(!cur.has(v)){ cur.add(v); changed=true; } });
+  if(changed) npSetChecks(id, Array.from(cur));
+}
+function npPropagateInferences(){
+  const cel=[]; npGetChecks('np-occasion').forEach(o=>{ (NP_OCCASION_TO_CELEBRATION[o]||[]).forEach(v=>cel.push(v)); });
+  const lit=[]; npGetChecks('np-decoration').forEach(d=>{ (NP_DECORATION_TO_LIGHTING[d]||[]).forEach(v=>lit.push(v)); });
+  if(cel.length) npAddChecks('np-celebration', cel);
+  if(lit.length) npAddChecks('np-lighting', lit);
 }
 // Wreaths are most commonly round — pre-select Round when the piece is a Wreath and no
 // Shape is chosen yet. Non-destructive: only fills an empty selection; user can change it.
