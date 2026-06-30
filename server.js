@@ -137,6 +137,50 @@ const SHOPIFY_PLANT_MATERIAL_ARTIFICIAL = 'gid://shopify/Metaobject/245698396295
 // Wreaths are synthetic — auto-set shopify.material = Synthetic on every Wreath (own update).
 const SHOPIFY_MATERIAL_SYNTHETIC = 'gid://shopify/Metaobject/248782291079';
 
+// The Shopify Wreaths category exposes only "Material" (no Decoration/Planter material
+// attributes), so for wreaths we fold the chosen Decoration + Planter materials INTO
+// shopify.material, crosswalked to the nearest Material-taxonomy value. Each entry is
+// [Material taxonomy label, TaxonomyValue id]; the metaobject is reused-by-label or
+// lazily created (see resolveWreathMaterialGids). EB values with no good Material match
+// are omitted here and therefore ignored (Capiz, Feathers, Sequins, Wax, Candle,
+// Lights, Basket). 'Synthetic' is always added separately.
+const WREATH_MATERIAL_TAX = {
+  // direct matches (EB value === Material taxonomy value)
+  'Fabric':['Fabric',585],'Resin':['Resin',877],'Metal':['Metal',601],'Silk':['Silk',22531],'Ceramic':['Ceramic',643],
+  'Wool':['Wool',51],'Plastic':['Plastic',626],'Wood':['Wood',625],'Acrylic':['Acrylic',67],'Aluminum':['Aluminum',1637],
+  'Bamboo':['Bamboo',22509],'Brass':['Brass',656],'Bronze':['Bronze',16936],'Canvas':['Canvas',605],'Cardboard':['Cardboard',773],
+  'Chrome':['Chrome',665],'Concrete':['Concrete',929],'Copper':['Copper',666],'Cork':['Cork',596],'Cotton':['Cotton',40],
+  'Faux fur':['Faux fur',22513],'Faux leather':['Faux leather',52],'Felt':['Felt',22514],'Glass':['Glass',640],'Hemp':['Hemp',22518],
+  'Iron':['Iron',860],'Jute':['Jute',22519],'Latex':['Latex',830],'Leather':['Leather',558],'Marble':['Marble',941],
+  'Medium density fiberboard (MDF)':['Medium density fiberboard (MDF)',1853],'Nylon':['Nylon',44],'Other':['Other',372],
+  'Paper':['Paper',548],'Plush':['Plush',559],'Polyester':['Polyester',45],'Polypropylene (PP)':['Polypropylene (PP)',589],
+  'Polyvinyl chloride (PVC)':['Polyvinyl chloride (PVC)',617],'Porcelain':['Porcelain',814],'Rattan':['Rattan',22527],
+  'Rubber':['Rubber',764],'Satin':['Satin',22529],'Silicone':['Silicone',809],'Stainless steel':['Stainless steel',620],
+  'Stone':['Stone',876],'Suede':['Suede',22532],'Synthetic':['Synthetic',22533],'Velour':['Velour',22537],
+  'Velvet':['Velvet',22538],'Vinyl':['Vinyl',624],
+  // close-match crosswalks (no exact Material value)
+  'Cast iron':['Iron',860],'Crystal':['Glass',640],'Melamine':['Plastic',626],'Papier-mâché':['Paper',548],
+  'Steel':['Metal',601],'Terracotta':['Clay',879],'Veneer':['Wood',625],'Zinc':['Metal',601],
+  'Grapevine':['Wood',625],'Pine':['Wood',625],'Galvanized Steel':['Metal',601]
+};
+
+// Build a wreath's shopify.material GID list: always Synthetic, PLUS the chosen
+// Decoration + Planter materials crosswalked to Material-taxonomy metaobjects (reused
+// by label or lazily created). Wreaths only; AFP keeps its own decoration/planter keys.
+async function resolveWreathMaterialGids(body){
+  const arr = (v) => Array.isArray(v) ? v : (v ? [v] : []);
+  const picks = arr(body.decoration_material).concat(arr(body.planter_material));
+  const labelToTax = {};
+  picks.forEach(v => { const t = WREATH_MATERIAL_TAX[v]; if (t) labelToTax[t[0]] = t[1]; });
+  const labels = Object.keys(labelToTax);
+  let mapped = [];
+  if (labels.length) mapped = await resolveMetaobjects('shopify--material', labels,
+    (label) => [{ key: 'label', value: label }, { key: 'taxonomy_reference', value: `gid://shopify/TaxonomyValue/${labelToTax[label]}` }]);
+  const out = [SHOPIFY_MATERIAL_SYNTHETIC];
+  mapped.forEach(g => { if (!out.includes(g)) out.push(g); });
+  return out;
+}
+
 // Which shopify-namespace taxonomy metafields are valid for each product category.
 // Shopify REJECTS a productUpdate that sets a metafield outside the category's
 // attribute set, so we filter by category before sending. color-pattern is treated
@@ -981,7 +1025,7 @@ app.post('/mark-sold', async (req, res) => {
 });
  
 // ── Version / health (verify what's actually deployed) ────────
-app.get('/version', (req, res) => res.json({ version: '2026-06-30-fixpack2', features: ['inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix: drop invalid decoration/planter keys', 'lighting GID swap fixed (Illuminated/Non-illuminated)', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'material=Synthetic(wreaths)', 'wreath-metafields:shape/lighting/celebration', 'category-gated-metafields'] }));
+app.get('/version', (req, res) => res.json({ version: '2026-06-30-fixpack3', features: ['inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix: drop invalid decoration/planter keys', 'wreath material = Synthetic + mapped decoration/planter materials', 'lighting GID swap fixed (Illuminated/Non-illuminated)', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'wreath-metafields:shape/lighting/celebration', 'category-gated-metafields'] }));
 
 // Resolve the tool-owned taxonomy metafield GIDs for a product, category-gated.
 // Shared by /create-product (replace) and /resync-attributes (merge) so the value→GID
@@ -1115,15 +1159,17 @@ app.post('/create-product', async (req, res) => {
         else console.log('plant-material set: Artificial →', sku);
       } catch (pmErr) { console.warn('plant-material update failed (non-fatal):', pmErr.message); }
     }
-    // Wreaths are synthetic — auto-set shopify.material = Synthetic. Own update (Material
-    // is a Wreaths attribute; not valid for AFP, so gate on category and isolate it).
+    // Wreaths: set shopify.material = Synthetic + the chosen Decoration/Planter materials
+    // crosswalked to Material metaobjects (Wreaths has no decoration/planter attributes).
+    // Own update (Material is a Wreaths attribute; not valid for AFP, so gate + isolate it).
     if (product_category === 'Wreaths') {
       try {
+        const matGids = await resolveWreathMaterialGids(req.body);
         const matMutation = `mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){userErrors{field message}}}`;
-        const matData = await shopifyGraphql(matMutation, { product: { id: `gid://shopify/Product/${productId}`, metafields: [{ namespace: 'shopify', key: 'material', type: 'list.metaobject_reference', value: JSON.stringify([SHOPIFY_MATERIAL_SYNTHETIC]) }] } });
+        const matData = await shopifyGraphql(matMutation, { product: { id: `gid://shopify/Product/${productId}`, metafields: [{ namespace: 'shopify', key: 'material', type: 'list.metaobject_reference', value: JSON.stringify(matGids) }] } });
         const matErrs = matData?.data?.productUpdate?.userErrors || [];
-        if (matErrs.length) console.warn('material (Synthetic) not set:', matErrs.map(e => e.message).join(', '));
-        else console.log('material set: Synthetic →', sku);
+        if (matErrs.length) console.warn('material not set:', matErrs.map(e => e.message).join(', '));
+        else console.log('material set:', sku, '→', matGids.length, 'value(s)');
       } catch (matErr) { console.warn('material update failed (non-fatal):', matErr.message); }
     }
     const collectionHandles = Array.isArray(collections) ? collections : [];
@@ -1180,9 +1226,10 @@ app.post('/resync-attributes', async (req, res) => {
       if (n > 0) { mf.push({ namespace: 'shopify', key, type: 'list.metaobject_reference', value: JSON.stringify(union) }); added[key] = n; }
     };
     for (const key of Object.keys(perKey)) { if (allowed.has(key) && perKey[key].length) unionInto(key, perKey[key]); }
-    // Auto-rules (also add-only): plant-material=Artificial on any category, material=Synthetic on Wreaths
+    // Auto-rules (also add-only): plant-material=Artificial on any category; for Wreaths,
+    // material = Synthetic + the chosen Decoration/Planter materials (crosswalked).
     if (categoryGid) unionInto('plant-material', [SHOPIFY_PLANT_MATERIAL_ARTIFICIAL]);
-    if (product_category === 'Wreaths') unionInto('material', [SHOPIFY_MATERIAL_SYNTHETIC]);
+    if (product_category === 'Wreaths') unionInto('material', await resolveWreathMaterialGids(req.body));
 
     // 3. Apply category + merged metafields (one productUpdate; add-only so safe)
     let mfErrors = [];
