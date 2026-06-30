@@ -481,6 +481,8 @@ button:active{transform:scale(.97)}
       <div class="section-label" id="np-step1-label">Assign EB number</div>
       <div class="info-card sage" id="np-add-hint"><strong>Every piece starts here.</strong> Fill in the details below and the next available EB number is assigned automatically.</div>
       <div class="info-card teal" id="np-edit-hint" style="display:none"><strong>Editing an existing piece.</strong> Update any details and save — the EB number stays the same.</div>
+      <!-- ===== Screen 1 of 2 — basics ===== -->
+      <div id="np-screen-1">
       <!-- ── Optional: start from an existing Google Drive photo folder ── -->
       <div class="field" id="np-folder-field">
         <label>Already photographed? Start from a Drive folder (optional)</label>
@@ -499,8 +501,7 @@ button:active{transform:scale(.97)}
         <div class="field"><label>Year</label><select id="np-year"><option value="26">2026</option><option value="27">2027</option><option value="28">2028</option></select></div>
         <div class="field"><label>Type</label><select id="np-type"><option value="WR">Wreath</option><option value="HD">Home decor</option><option value="OP">Outdoor planter</option><option value="CP">Centerpiece</option><option value="WD">Wall decor</option><option value="HA">Hanging</option><option value="SW">Swag</option><option value="CU">Custom order</option><option value="AO">Add-on</option></select></div>
       </div>
-      <div class="field"><label>Season</label><div id="np-season" class="chip-checks"></div></div>
-      <div class="field"><label>Occasion (optional)</label><div id="np-occasion" class="chip-checks"></div></div>
+      <div id="np-outdoor-warning" style="display:none" class="info-card amber"><strong>⚠ Outdoor pot — local delivery only.</strong></div>
       <div class="field"><label>Date made</label><input type="date" id="np-date-made"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">When the piece was made. Defaults to today (the EB creation date) if left blank.</div></div>
       <div class="grid-2">
         <div class="field"><label>Price ($)</label><input type="text" id="np-price" placeholder="e.g. 85.00" oninput="npAutoFillCost()"></div>
@@ -510,20 +511,36 @@ button:active{transform:scale(.97)}
         <div class="field"><label>Cost ($)</label><input type="text" id="np-cost" placeholder="auto-filled from price"></div>
         <div class="field"><label>Cost % of price</label><input type="number" id="np-cost-pct" min="1" max="100" step="1" value="66" oninput="npAutoFillCost()"></div>
       </div>
+      <div class="btn-row"><button class="btn-primary btn-full" onclick="npGoScreen(2)">Continue to details →</button></div>
+      <button class="btn-save-exit" onclick="npSaveAndExitStep1()">💾 Save &amp; finish later</button>
+      </div>
+      <!-- ===== Screen 2 of 2 — piece details ===== -->
+      <div id="np-screen-2" style="display:none">
+      <div class="section-label">Piece details</div>
+      <div class="field"><label>Season</label><div id="np-season" class="chip-checks"></div></div>
+      <div class="field"><label>Occasion (optional)</label><div id="np-occasion" class="chip-checks"></div></div>
       <div class="grid-2">
         <div class="field"><label>Florals</label><select id="np-florals"></select></div>
         <div class="field"><label>Greenery</label><select id="np-greenery"></select></div>
       </div>
       <div class="field"><label>Style</label><div id="np-style" class="chip-checks"></div></div>
-      <div class="field"><label>Color(s)</label><div id="np-colors" class="chip-checks"></div></div>
-      <div class="field"><label>Key materials</label><div id="np-materials" class="chip-checks"></div></div>
+      <div class="field"><label>Color(s)</label><div id="np-colors"></div></div>
+      <div class="field"><label>Decoration material</label><div id="np-decoration"></div></div>
+      <div class="field"><label>Planter material</label><div id="np-planter"></div></div>
       <div class="field"><label>Pattern</label><div id="np-pattern"></div></div>
       <div class="field"><label>Plant name</label><div id="np-plantname"></div></div>
+      <div class="field"><label>Arrangement</label><div id="np-arrangement"></div></div>
+      <div class="field"><label>Plant container type</label><div id="np-container"></div></div>
+      <div class="field"><label>Stem length</label><div id="np-stem"></div></div>
+      <div class="field"><label>Celebration type</label><div id="np-celebration"></div></div>
+      <div class="field"><label>Lighting options</label><div id="np-lighting"></div></div>
+      <div class="field"><label>Shape</label><div id="np-shape"></div></div>
       <div class="field"><label>Product description <span style="color:var(--rose)">*</span></label><div style="display:flex;gap:6px;align-items:flex-start"><textarea id="np-description" required placeholder="Extra full, farmhouse style, great for gifting..." spellcheck="true" style="flex:1"></textarea><button type="button" class="btn" style="flex-shrink:0;font-size:11px;padding:6px 10px;margin-top:2px" onclick="lpCleanupField('np-description')">✓ Fix</button></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">What makes this piece special — feeds the AI listing title &amp; description.</div></div>
       <div class="field"><label>Internal notes (optional)</label><textarea id="np-notes" placeholder="Custom request, buyer name, materials reminder..."></textarea></div>
-      <div id="np-outdoor-warning" style="display:none" class="info-card amber"><strong>⚠ Outdoor pot — local delivery only.</strong></div>
       <div class="btn-row"><button class="btn-primary btn-full" id="np-primary-btn" onclick="npPrimaryAction()">✨ Assign EB number →</button></div>
+      <button class="btn btn-full" onclick="npGoScreen(1)" style="margin-top:8px">← Back to basics</button>
       <button class="btn-save-exit" onclick="npSaveAndExitStep1()">💾 Save &amp; finish later</button>
+      </div>
     </div>
     <div class="step-block" id="np-step-2">
       <div id="np-eb-display" class="eb-display"><div class="eb-label">EB Number assigned</div><div class="eb-number" id="np-eb-num">EB-26SP-WR-001</div><div class="eb-sub">Write this on the physical hang tag now</div><div class="qr-container"><img id="np-qr-img" src="" alt="QR code"></div></div>
@@ -592,7 +609,7 @@ button:active{transform:scale(.97)}
         <div class="shot-card" onclick="toggleShot(this)" data-shot="7"><div class="shot-num">SHOT 7 — PACKAGING</div><div class="shot-name">Packed for shipping</div><div class="shot-desc">Shows care and professionalism.</div></div>
         <div class="shot-card" onclick="toggleShot(this)" data-shot="8"><div class="shot-num">SHOT 8 — TAG</div><div class="shot-name">EB tag visible</div><div class="shot-desc">EB number and QR clearly visible.</div></div>
       </div>
-      <div class="info-card sage"><strong>📹 Video reminder</strong> 15–30 seconds, slow rotate. Upload directly to Shopify in Media section when listing.</div>
+      <div class="info-card sage"><strong>📹 Video reminder</strong> 15–30 seconds, slow rotate. Add it to this piece's Google Drive folder alongside the photos — you'll select it in Step 2 when listing, and it uploads to Shopify automatically on publish. No manual Shopify upload needed.</div>
       <div id="status-np-photo" class="status-bar" style="display:none"><div class="sb-dot"></div><span id="status-np-photo-msg"></span></div>
       <div class="btn-row"><button class="btn-amber btn-full" id="np-mark-photo-btn" onclick="npMarkPhotographed()">📷 Mark as Photographed in Airtable</button></div>
       <div class="btn-row"><button class="btn btn-full" onclick="npStep(4)">Skip — photos not done yet →</button></div>
@@ -685,7 +702,7 @@ button:active{transform:scale(.97)}
           </div>
         </div>
         <div id="lp-drive-grid-status" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;display:none"></div>
-        <div class="section-label" id="lp-drive-grid-label" style="display:none">Tap to select (in order)</div>
+        <div class="section-label" id="lp-drive-grid-label" style="display:none">Tap to select (in order) <button type="button" onclick="lpDriveRefresh()" title="Re-fetch this folder's photos from Google Drive" style="font-size:11px;color:var(--teal);background:none;border:1px solid var(--teal-light);border-radius:6px;padding:3px 8px;cursor:pointer;font-weight:700;margin-left:8px">↻ Refresh from Drive</button></div>
         <div class="photo-grid-opt" id="lp-drive-grid"></div>
         <div id="lp-photo-status" style="display:none;font-size:13px;color:var(--text-muted);margin:8px 0;align-items:center;justify-content:space-between"><span id="lp-photo-count-label">0 photos</span><span id="lp-photo-count-pill" style="background:var(--gold);color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:99px">0/15</span></div>
         <div class="section-label" id="lp-selected-label" style="display:none">Selected for listing — drag to reorder</div>
@@ -1214,8 +1231,15 @@ const NP_OPTIONS = {
   florals:  ['None','Real-Feel','Silk'],
   greenery: ['None','Premium','Standard'],
   style:    ['Farmhouse','Rustic','Vintage / Antique','Modern / Contemporary','Traditional / Classic','Boho','Cottage','Coastal'],
-  colors:   ['White','Cream','Gray','Black','Silver','Gold','Bronze','Copper','Brown','Burgundy','Red','Rust','Orange','Yellow-Orange','Yellow','Green','Teal','Light Blue','Blue','Purple','Lavender','Pink','Peach'],
-  materials:['Metal','Wood','Ceramic','Resin','Glass','Grapevine','Galvanized Steel','Pine','Plastic','Basket','Rattan','Candle','Lights','Velvet'],
+  colors:   ['White','Cream','Gray','Black','Silver','Gold','Bronze','Copper','Brown','Burgundy','Red','Rust','Orange','Yellow-Orange','Yellow','Green','Teal','Light Blue','Blue','Purple','Lavender','Pink','Peach','Beige','Navy','Clear','Multicolor','Rose gold','Rainbow'],
+  decoration:['Acrylic','Aluminum','Bamboo','Brass','Bronze','Canvas','Capiz','Cardboard','Cast iron','Ceramic','Chrome','Concrete','Copper','Cork','Cotton','Crystal','Fabric','Faux fur','Faux leather','Feathers','Felt','Glass','Hemp','Iron','Jute','Latex','Leather','Marble','Medium density fiberboard (MDF)','Melamine','Metal','Nylon','Other','Paper','Papier-mâché','Plastic','Plush','Polyester','Polypropylene (PP)','Polyvinyl chloride (PVC)','Porcelain','Rattan','Resin','Rubber','Satin','Sequins','Silicone','Silk','Stainless steel','Steel','Stone','Suede','Synthetic','Terracotta','Velour','Velvet','Veneer','Vinyl','Wax','Wood','Wool','Zinc','Grapevine','Pine','Candle','Lights'],
+  planter:  ['Bamboo','Ceramic','Concrete','Glass','Metal','Other','Plastic','Resin','Stone','Terracotta','Wood','Galvanized Steel','Basket'],
+  arrangement:['Basket','Bouquet','Box','Vase','Other','Centerpiece','Door Decor','Home Decor','Metal Planter','Planter','Pot','Wall Pocket','Wall-Door Pocket'],
+  container:['Barrel','Basket','Box','None','Other','Planter','Pot','Urn','Vase'],
+  stem:     ['Long','Medium','Other','Short'],
+  celebration:['4th of July','Anniversary','Baby gender reveal','Baby shower','Birthday','Christmas','Concert','Conference','Congratulations','Easter',"Father's Day",'Get well soon','Graduation','Halloween',"Mother's Day",'New baby','New home','Other','Retirement','Summer','Thank you','Theater performance','Travel',"Valentine's day",'Wedding'],
+  lighting: ['Illuminated','Non-illuminated','Other','Photoluminescent'],
+  shape:    ['Arrow','Conical','Custom','Cylindrical','Diamond','Flower','Free-form','Heart','Heptagonal','Hexagonal','Kidney-shaped','Octagonal','Other','Oval','Pentagonal','Rectangular','Round','Semicircular','Square','Star','Trapezoidal','Triangular'],
   pattern:  ['Abstract','Animal','Art','Bead & reel','Birds','Brick',"Bull's eye",'Camouflage','Characters','Checkered','Chevron','Chinoiserie','Christmas','Collage','Coral','Damask','Diagonal','Diamond',"Dog's tooth",'Dots','Egg & dart','Ethnic','Everlasting knot','Floral','Fret','Geometric','Guilloche','Hearts','Illusion','Lace','Leaves','Logo','Mosaic','Ogee','Organic','Other','Paisley','Plaid','Rainbow','Random','Scale','Scroll','Solid','Stars','Striped','Swirl','Text','Texture','Tie-dye','Trellis','Vehicle'],
   plantname:['Aeonium','Allium','Alocasia','Aloe vera','Amaryllis','Anthurium','Aralia','Aubergine','Bamboo','Basil','Bay leaves','Begonia','Bell pepper','Bird of paradise','Bonsai','Bougainvillea','Boxwood','Cactus','Calathea','Cherry','Cherry tomato','Chervil','Chives','Chrysanthemum','Cilantro','Coriander','Cotton','Courgette','Crocus','Cucumber','Curry leaves','Cyclamen','Daffodil','Dahlia','Daisy','Dandelion','Dill','Echeveria','Echinacea','Edelweiss','Eucalyptus','Fennel','Fern','Ficus','Fir','Forsythia','Galanthus','Gardenia','Geranium','Grape vine','Grass','Hibiscus','Honeysuckle','Hosta','Hyacinth','Hydrangea','Ivy','Jasmine','Lavender','Lily','Magnolia','Marigold','Marjoram','Mint','Miscanthus sinensis','Monstera','Olive','Orchid','Oregano','Other','Palm','Pampas grass','Pansy','Papyrus','Parsley','Peony','Petunia','Phalaenopsis','Philodendron','Pine','Poinsettia','Protea','Ranunculus','Rose','Rosemary','Rubber plant','Sage','Sansevieria','Spider plant','Sunflower','Sweet pea','Tarragon','Thyme','Tomato','Tulip','Venus flytrap','Violet','Water lily','Weeping fig','Wildflower','Willow','Yarrow','Yucca','Zamioculcas','Zinnia','Spider Mums','Wisteria','Decorative Berries Artificial','Freesia','Poppies','Peonies','Wax Flowers','Plum Blossom','Cherry Blossoms','Flower Buds','Ranunculus Roses']
 };
@@ -1665,7 +1689,19 @@ function npStep(n) {
   document.getElementById('np-step-pill').textContent = 'Step '+n+' of 4';
   document.getElementById('np-progress').style.width = (n*25)+'%';
   if(n===2){ const cb=document.getElementById('np-tag-printed'); if(cb){ const rec=(npCurrentRecordId&&allRecords.find(r=>r.id===npCurrentRecordId))||allRecords.find(r=>r.fields['EB Number']===npCurrentEB); cb.checked=!!(rec&&rec.fields['Tag printed']); } }
+  if(n===1) npGoScreen(1);
   wipSaveNP(); window.scrollTo({top:0,behavior:'smooth'});
+}
+// Step 1 is split into two screens: basics (np-screen-1) → details (np-screen-2).
+function npGoScreen(n){
+  const s1=document.getElementById('np-screen-1'), s2=document.getElementById('np-screen-2');
+  if(!s1||!s2) return;
+  s1.style.display = n===2 ? 'none' : 'block';
+  s2.style.display = n===2 ? 'block' : 'none';
+  const pill=document.getElementById('np-step-pill'); if(pill) pill.textContent = n===2 ? 'Step 1 of 4 · details' : 'Step 1 of 4';
+  stepBackFn = n===2 ? () => npGoScreen(1) : (currentNpStep>1 ? () => npStep(currentNpStep-1) : null);
+  updateHeaderBackBtn();
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 document.getElementById('np-type').addEventListener('change', function() { document.getElementById('np-outdoor-warning').style.display = this.value==='OP'?'block':'none'; });
 
@@ -1734,16 +1770,24 @@ function msSync(host){
   });
 }
 document.addEventListener('click', e=>{ document.querySelectorAll('.ms.ms-open').forEach(h=>{ if(!h.contains(e.target)) h.classList.remove('ms-open'); }); });
+const npAlpha = a => a.slice().sort((x,y)=>x.localeCompare(y));
 function npInitFields(){
-  msInit('np-season',NP_OPTIONS.season);
-  msInit('np-occasion',NP_OPTIONS.occasion.filter(o=>o!=='None'));
+  msInit('np-season',NP_OPTIONS.season); // seasonal order kept (not alphabetized)
+  msInit('np-occasion',npAlpha(NP_OPTIONS.occasion.filter(o=>o!=='None')));
   npRenderSelect('np-florals',NP_OPTIONS.florals);
   npRenderSelect('np-greenery',NP_OPTIONS.greenery);
-  msInit('np-style',NP_OPTIONS.style,{allowCustom:true});
-  msInit('np-colors',NP_OPTIONS.colors);
-  msInit('np-materials',NP_OPTIONS.materials,{allowCustom:true});
-  msInit('np-pattern',NP_OPTIONS.pattern);
-  msInit('np-plantname',NP_OPTIONS.plantname,{allowCustom:true});
+  msInit('np-style',npAlpha(NP_OPTIONS.style),{allowCustom:true});
+  msInit('np-colors',npAlpha(NP_OPTIONS.colors));
+  msInit('np-decoration',npAlpha(NP_OPTIONS.decoration),{allowCustom:true});
+  msInit('np-planter',npAlpha(NP_OPTIONS.planter),{allowCustom:true});
+  msInit('np-pattern',npAlpha(NP_OPTIONS.pattern));
+  msInit('np-plantname',npAlpha(NP_OPTIONS.plantname),{allowCustom:true});
+  msInit('np-arrangement',npAlpha(NP_OPTIONS.arrangement),{allowCustom:true});
+  msInit('np-container',npAlpha(NP_OPTIONS.container));
+  msInit('np-stem',npAlpha(NP_OPTIONS.stem));
+  msInit('np-celebration',npAlpha(NP_OPTIONS.celebration));
+  msInit('np-lighting',npAlpha(NP_OPTIONS.lighting));
+  msInit('np-shape',npAlpha(NP_OPTIONS.shape));
 }
 function npGetChecks(id){return Array.from(document.querySelectorAll('#'+id+' input[type=checkbox]:checked')).map(c=>c.value);}
 function npSetChecks(id,vals){const host=document.getElementById(id);const set=new Set(vals||[]);
@@ -1888,7 +1932,8 @@ function npClearForm(){
   npSetChecks('np-occasion',[]);
   document.getElementById('np-florals').value='None';
   document.getElementById('np-greenery').value='None';
-  npSetChecks('np-season',[]); npSetChecks('np-style',[]); npSetChecks('np-colors',[]); npSetChecks('np-materials',[]); npSetChecks('np-pattern',[]); npSetChecks('np-plantname',[]);
+  npSetChecks('np-season',[]); npSetChecks('np-style',[]); npSetChecks('np-colors',[]); npSetChecks('np-decoration',[]); npSetChecks('np-planter',[]); npSetChecks('np-pattern',[]); npSetChecks('np-plantname',[]); npSetChecks('np-arrangement',[]); npSetChecks('np-container',[]); npSetChecks('np-stem',[]); npSetChecks('np-celebration',[]); npSetChecks('np-lighting',[]); npSetChecks('np-shape',[]);
+  npGoScreen(1);
 }
 function npAutoFillCost(){
   var price=parseFloat(document.getElementById('np-price').value)||0;
@@ -1918,9 +1963,16 @@ function npLoadRecordForEdit(){
   document.getElementById('np-greenery').value=f['Greenery']||'None';
   npSetChecks('np-style',f['Style']||[]);
   npSetChecks('np-colors',f['Color(s)']||[]);
-  npSetChecks('np-materials',f['Key Materials']||[]);
+  npSetChecks('np-decoration',f['Decoration material']||[]);
+  npSetChecks('np-planter',f['Planter material']||[]);
   npSetChecks('np-pattern',f['Pattern']||[]);
   npSetChecks('np-plantname',f['Plant name']||[]);
+  npSetChecks('np-arrangement',f['Arrangement']||[]);
+  npSetChecks('np-container',f['Plant container type']||[]);
+  npSetChecks('np-stem',f['Stem length']||[]);
+  npSetChecks('np-celebration',f['Celebration type']||[]);
+  npSetChecks('np-lighting',f['Lighting options']||[]);
+  npSetChecks('np-shape',f['Shape']||[]);
   document.getElementById('np-notes').value=f['Internal notes']||'';
   document.getElementById('np-description').value=f['Product description']||'';
   npSelectedFolder = f['Drive Folder ID'] ? {id:f['Drive Folder ID'], name:f['Drive Folder Name']||f['Drive Folder ID']} : null;
@@ -1966,9 +2018,16 @@ function npBuildFieldsFromForm(){
     'Greenery':document.getElementById('np-greenery').value,
     'Style':npGetChecks('np-style'),
     'Color(s)':npGetChecks('np-colors'),
-    'Key Materials':npGetChecks('np-materials'),
+    'Decoration material':npGetChecks('np-decoration'),
+    'Planter material':npGetChecks('np-planter'),
     'Pattern':npGetChecks('np-pattern'),
     'Plant name':npGetChecks('np-plantname'),
+    'Arrangement':npGetChecks('np-arrangement'),
+    'Plant container type':npGetChecks('np-container'),
+    'Stem length':npGetChecks('np-stem'),
+    'Celebration type':npGetChecks('np-celebration'),
+    'Lighting options':npGetChecks('np-lighting'),
+    'Shape':npGetChecks('np-shape'),
     'Internal notes':document.getElementById('np-notes').value.trim(),
     'Product description':document.getElementById('np-description').value.trim()
   };
@@ -2562,6 +2621,8 @@ async function lpDriveInit(){
   }catch(e){ connect.style.display='block'; panel.style.display='none'; }
 }
 function lpDriveConnect(){ window.open(SERVER_URL+'/drive-auth','_blank'); setStatus('lp','After connecting in the new tab, come back and tap “Photos” again.','loading'); setTimeout(()=>{hideStatus('lp');lpDriveInit();},4000); }
+// Force a fresh fetch of the linked folder's images (user just dropped new photos in Drive).
+function lpDriveRefresh(){ if(lpLoadedFolderId){ const s=document.getElementById('lp-drive-grid-status'); if(s){s.style.display='block';s.textContent='Refreshing from Google Drive…';} lpDriveLoadImages(lpLoadedFolderId, true); } }
 async function lpDriveLoadImages(folderId, force){
   const status=document.getElementById('lp-drive-grid-status'), label=document.getElementById('lp-drive-grid-label');
   if(!folderId){ lpLoadedFolderId=null; lpDriveImages=[]; lpPhotoItems=[]; lpDriveLinked=false; lpRenderDriveGrid(); lpRenderPhotos(); lpLoadFolderVideos(null); if(status)status.style.display='none'; if(label)label.style.display='none'; return; }
@@ -4005,13 +4066,11 @@ const WIP = {
 function wipShowBanner(screenId) {
   const keyMap = {'screen-list':'lp','screen-new-piece':'np','screen-costs':'cost'};
   const key = keyMap[screenId]; if (!key) return;
-  const saved = WIP.load(key); const bannerId = key+'-wip-banner'; const banner = document.getElementById(bannerId);
-  if (!banner) return;
-  if (saved && saved.ts && (Date.now() - saved.ts) < 7 * 24 * 60 * 60 * 1000) {
-    const label = wipLabel(key, saved);
-    banner.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><div><strong style="font-size:13px">📋 Continue where you left off</strong><div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+label+'</div></div><div style="display:flex;gap:8px;flex-shrink:0"><button class="btn" style="font-size:12px;padding:6px 12px" onclick="wipDiscard(\''+key+'\')">Start fresh</button><button class="btn-primary" style="font-size:12px;padding:6px 12px" onclick="wipRestore(\''+key+'\')">Continue →</button></div></div>';
-    banner.style.display = 'block';
-  } else { banner.style.display = 'none'; WIP.clear(key); }
+  // Resume banner intentionally disabled (2026-06-30): the Add/Edit selector now
+  // covers resuming an existing or in-progress piece, so the "Continue where you
+  // left off" prompt added confusion. WIP still saves silently as a safety net.
+  const banner = document.getElementById(key+'-wip-banner');
+  if (banner) banner.style.display = 'none';
 }
 function wipLabel(key, saved) {
   if(key==='lp')return saved.ebNumber?'Listing for '+saved.ebNumber+(saved.step?' · Step '+saved.step+' of 4':''):'Listing in progress';
@@ -4066,9 +4125,16 @@ function wipRestoreNP(saved) {
   if(saved.greenery){const el=document.getElementById('np-greenery');if(el)el.value=saved.greenery;}
   if(saved.style)npSetChecks('np-style',saved.style);
   if(saved.colors)npSetChecks('np-colors',saved.colors);
-  if(saved.materials)npSetChecks('np-materials',saved.materials);
+  if(saved.decoration)npSetChecks('np-decoration',saved.decoration);
+  if(saved.planter)npSetChecks('np-planter',saved.planter);
   if(saved.pattern)npSetChecks('np-pattern',saved.pattern);
   if(saved.plantname)npSetChecks('np-plantname',saved.plantname);
+  if(saved.arrangement)npSetChecks('np-arrangement',saved.arrangement);
+  if(saved.container)npSetChecks('np-container',saved.container);
+  if(saved.stem)npSetChecks('np-stem',saved.stem);
+  if(saved.celebration)npSetChecks('np-celebration',saved.celebration);
+  if(saved.lighting)npSetChecks('np-lighting',saved.lighting);
+  if(saved.shape)npSetChecks('np-shape',saved.shape);
   if(saved.price){const el=document.getElementById('np-price');if(el)el.value=saved.price;}
   if(saved.quantity!==undefined&&saved.quantity!==''){const el=document.getElementById('np-quantity');if(el)el.value=saved.quantity;}
   if(saved.dateMade){const el=document.getElementById('np-date-made');if(el)el.value=saved.dateMade;}
@@ -4101,9 +4167,16 @@ function wipSaveNP() {
     greenery: (document.getElementById('np-greenery')||{}).value||'None',
     style:    npGetChecks('np-style'),
     colors:   npGetChecks('np-colors'),
-    materials:npGetChecks('np-materials'),
+    decoration:npGetChecks('np-decoration'),
+    planter:npGetChecks('np-planter'),
     pattern:npGetChecks('np-pattern'),
     plantname:npGetChecks('np-plantname'),
+    arrangement:npGetChecks('np-arrangement'),
+    container:npGetChecks('np-container'),
+    stem:npGetChecks('np-stem'),
+    celebration:npGetChecks('np-celebration'),
+    lighting:npGetChecks('np-lighting'),
+    shape:npGetChecks('np-shape'),
     price:    (document.getElementById('np-price')||{}).value||'',
     quantity: (document.getElementById('np-quantity')||{}).value||'',
     dateMade: (document.getElementById('np-date-made')||{}).value||'',
