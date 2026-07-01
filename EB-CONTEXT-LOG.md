@@ -91,7 +91,6 @@ Step 1 rebuilt into **sub-screens 1.1–1.5** (basics → shared details → "pu
 
 ## 9. Open backlog (not yet done)
 
-- **Manual:** delete the now-unused Arrangement option *definitions* in the Airtable field editor (record values already cleared).
 - Add more **Care instruction** options (Airtable field + `CARE_OPTIONS` currently has ~1).
 - **Skip-photo-checklist → Step 2 auto-select bug** (new piece not auto-selected without a refresh).
 - **Re-sync inventory behavior** — currently resets qty; revisit once Airtable is a bidirectional source of truth (sales syncing back from Shopify/Meta/Etsy).
