@@ -1087,7 +1087,7 @@ app.post('/mark-sold', async (req, res) => {
 });
  
 // ── Version / health (verify what's actually deployed) ────────
-app.get('/version', (req, res) => res.json({ version: '2026-06-30-fixpack6', features: ['custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions', 'indoor_outdoor->custom.indoor_outdoor (universal multi-select; wreaths also get native suitable-space)'] }));
+app.get('/version', (req, res) => res.json({ version: '2026-07-01-fixpack7', features: ['custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions', 'indoor_outdoor->custom.indoor_outdoor (universal multi-select; wreaths also get native suitable-space)', 'suggested_display->custom.suggested_display (multi-select surface/spot)'] }));
 
 // Resolve the tool-owned taxonomy metafield GIDs for a product, category-gated.
 // Shared by /create-product (replace) and /resync-attributes (merge) so the value→GID
@@ -1120,7 +1120,7 @@ function buildToolMetafieldGids(product_category, body){
 // ── Create product ────────────────────────────────────────────
 app.post('/create-product', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized. Visit ' + SERVER_URL + '/auth to complete Shopify OAuth first.' });
-  const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images, quantity, product_category, colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material, celebration_type, lighting_options, shape, care_instructions, indoor_outdoor } = req.body;
+  const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images, quantity, product_category, colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material, celebration_type, lighting_options, shape, care_instructions, indoor_outdoor, suggested_display } = req.body;
   if (!title || !sku) return res.status(400).json({ error: 'title and sku are required' });
   // Inventory quantity — default to 1 (one-of-a-kind) when unset; clamp to a non-negative integer.
   const qty = (quantity != null && quantity !== '' && Number.isFinite(Number(quantity))) ? Math.max(0, Math.round(Number(quantity))) : 1;
@@ -1262,6 +1262,19 @@ app.post('/create-product', async (req, res) => {
         } catch (ioErr) { console.warn('indoor_outdoor update failed (non-fatal):', ioErr.message); }
       }
     }
+    // Suggested display → custom.suggested_display (multi-select). Tool-owned list; own
+    // update + try/catch; non-fatal.
+    {
+      const sdList = (Array.isArray(suggested_display) ? suggested_display : (suggested_display ? [suggested_display] : [])).filter(Boolean);
+      if (sdList.length) {
+        try {
+          const sdData = await shopifyGraphql(`mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){userErrors{field message}}}`, { product: { id: `gid://shopify/Product/${productId}`, metafields: [{ namespace: 'custom', key: 'suggested_display', type: 'list.single_line_text_field', value: JSON.stringify(sdList) }] } });
+          const sdErrs = sdData?.data?.productUpdate?.userErrors || [];
+          if (sdErrs.length) console.warn('suggested_display not set:', sdErrs.map(e => e.message).join(', '));
+          else console.log('suggested_display set:', sku, '→', sdList.length, 'item(s)');
+        } catch (sdErr) { console.warn('suggested_display update failed (non-fatal):', sdErr.message); }
+      }
+    }
     const collectionHandles = Array.isArray(collections) ? collections : [];
     const collectionResults = [];
     for (const handle of collectionHandles) {
@@ -1292,7 +1305,7 @@ app.post('/create-product', async (req, res) => {
 // bidirectional source of truth). NEVER touches title/body/images/price/tags.
 app.post('/resync-attributes', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized — visit /auth' });
-  const { sku, quantity, product_category, care_instructions, indoor_outdoor } = req.body;
+  const { sku, quantity, product_category, care_instructions, indoor_outdoor, suggested_display } = req.body;
   if (!sku) return res.status(400).json({ error: 'sku required' });
   try {
     // 1. Find product + variant + current shopify-namespace metafields by SKU
@@ -1347,6 +1360,14 @@ app.post('/resync-attributes', async (req, res) => {
       try {
         await shopifyGraphql(`mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){userErrors{message}}}`, { product: { id: productId, metafields: [{ namespace: 'custom', key: 'indoor_outdoor', type: 'list.single_line_text_field', value: JSON.stringify(ioList) }] } });
       } catch (ioErr) { console.warn('Resync indoor_outdoor failed (non-fatal):', ioErr.message); }
+    }
+
+    // 3d. Suggested display → custom.suggested_display (tool-owned multi-select; whole-value replace).
+    const sdList = (Array.isArray(suggested_display) ? suggested_display : (suggested_display ? [suggested_display] : [])).filter(Boolean);
+    if (sdList.length) {
+      try {
+        await shopifyGraphql(`mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){userErrors{message}}}`, { product: { id: productId, metafields: [{ namespace: 'custom', key: 'suggested_display', type: 'list.single_line_text_field', value: JSON.stringify(sdList) }] } });
+      } catch (sdErr) { console.warn('Resync suggested_display failed (non-fatal):', sdErr.message); }
     }
 
     // 4. Reset inventory to the tool Quantity (default 1). Decided behaviour for now.

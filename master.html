@@ -707,6 +707,7 @@ button:active{transform:scale(.97)}
       <div class="field"><label>Best display location</label><div id="lp-location"></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Where the piece looks best — maps to Shopify "Suitable location".</div></div>
       <div class="field"><label>Indoor / Outdoor</label><select id="lp-indoor-outdoor"><option value="Indoor">Indoor</option><option value="Outdoor">Outdoor</option><option value="Both">Both</option></select><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Publishes to every piece (Shopify "Indoor / Outdoor"; wreaths also get native "Suitable space"). Defaults to Indoor.</div></div>
       <div class="field"><label>Care instructions</label><div id="lp-care"></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Select any that apply — publishes to Shopify "Care instructions" (custom.care_instructions).</div></div>
+      <div class="field"><label>Suggested display</label><div id="lp-suggested-display"></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Where the piece looks best displayed (surface/spot) — publishes to Shopify "Suggested display" (custom.suggested_display).</div></div>
       <div id="lp-s2-save-status" style="display:none;font-size:12px;padding:7px 10px;border-radius:6px;margin-bottom:8px;text-align:center"></div>
       <button class="btn btn-full" id="lp-s2-save-btn" onclick="lpSaveStepTwo()" style="font-size:12px;margin-bottom:8px">💾 Save details to Airtable</button>
       <div class="btn-row"><button class="btn-primary btn-full" onclick="lpStep(3)">Photos →</button><button class="btn btn-full" onclick="lpStep(1)">← Back</button></div>
@@ -1316,6 +1317,10 @@ const LP_LOCATION_OPTIONS = ['Balcony','Bathroom','Bedroom',"Children's room",'C
 // Curated care-instruction options (mirror the Airtable 'Care instructions' multi-select).
 // Add new options to BOTH this list and the Airtable field to keep them in sync.
 const CARE_OPTIONS = ['For outdoor wreaths, spray flowers and bows with Scotchgard to protect against sun fade, water, and dust.'];
+// Curated "Suggested display" options (surface/spot where the piece looks best).
+// Mirror the Airtable 'Suggested display' multi-select + Shopify custom.suggested_display
+// choices — add new options to ALL THREE to keep them in sync.
+const SUGGESTED_DISPLAY_OPTIONS = ['Fireplace mantle','Shelf','Door','Window','Nook','Wall','Table','Console table','Coffee table','Sideboard','Tiered tray','Staircase','Countertop','Floor','Mailbox'];
 let npMode = 'add';
 let npSelectedFolder = null;   // { id, name } chosen in the Step 1.1 Drive folder picker
 let npFolderList = [];         // cached subfolders of the product-media folder
@@ -1465,6 +1470,8 @@ function lpRenderDisplayLocation(productType) {
   else { host.querySelectorAll('.ms-opt input').forEach(c=>{c.checked=false;}); msSync(host); }
   const care = document.getElementById('lp-care');
   if(care){ if(!care.classList.contains('ms')) msInit('lp-care', CARE_OPTIONS); else { care.querySelectorAll('.ms-opt input').forEach(c=>{c.checked=false;}); msSync(care); } }
+  const sd = document.getElementById('lp-suggested-display');
+  if(sd){ if(!sd.classList.contains('ms')) msInit('lp-suggested-display', SUGGESTED_DISPLAY_OPTIONS); else { sd.querySelectorAll('.ms-opt input').forEach(c=>{c.checked=false;}); msSync(sd); } }
 }
 function lpGetCareArr(){ return npGetChecks('lp-care'); }
 function lpGetLocationArr(){ return npGetChecks('lp-location'); }
@@ -2562,6 +2569,7 @@ function lpStep(n) {
     if(_locCurrent) lpSetLocation(_locCurrent);
     // Load Care instructions + Indoor/Outdoor from the record (Airtable is source of truth)
     npSetChecks('lp-care', Array.isArray(lpSelectedRecord.fields['Care instructions'])?lpSelectedRecord.fields['Care instructions']:[]);
+    npSetChecks('lp-suggested-display', Array.isArray(lpSelectedRecord.fields['Suggested display'])?lpSelectedRecord.fields['Suggested display']:[]);
     const _ioEl=document.getElementById('lp-indoor-outdoor'); if(_ioEl) _ioEl.value=lpSelectedRecord.fields['Indoor/Outdoor']||'Indoor';
   }
   if(n===3){
@@ -2572,12 +2580,14 @@ function lpStep(n) {
       const _meta = (document.getElementById('lp-meta')||{value:''}).value || lpStepTwoCache.meta || '';
       const _spec = (document.getElementById('lp-special')||{value:''}).value || lpStepTwoCache.special || '';
       const _care = lpGetCareArr();
+      const _sd   = npGetChecks('lp-suggested-display');
       const _io   = (document.getElementById('lp-indoor-outdoor')||{value:''}).value || '';
       const _s2fields = {};
       if (_loc)  _s2fields['Listing Display Location'] = lpLocArr(_loc);
       if (_meta) _s2fields['Listing Meta Description']  = _meta;
       if (_spec) _s2fields['Product description']     = _spec;
       if (_care.length) _s2fields['Care instructions'] = _care;
+      if (_sd.length) _s2fields['Suggested display'] = _sd;
       if (_io) _s2fields['Indoor/Outdoor'] = _io;
       if (Object.keys(_s2fields).length) {
         airtableFetch('/'+lpSelectedRecord.id, {method:'PATCH', body:JSON.stringify({fields:_s2fields})})
@@ -3088,7 +3098,7 @@ async function rsResync(){
       arrangement:asArr(f['Arrangement']), plant_container_type:asArr(f['Plant container type']), stem_length:asArr(f['Stem length']),
       decoration_material:asArr(f['Decoration material']), planter_material:asArr(f['Planter material']),
       celebration_type:asArr(f['Celebration type']), lighting_options:asArr(f['Lighting options']), shape:asArr(f['Shape']),
-      season:asArr(f['Season']), suitable_space:f['Indoor/Outdoor']||((f['Product Category']||npCategoryForType(f['Type']))==='Wreaths'?'Indoor':''), indoor_outdoor:f['Indoor/Outdoor']||'', care_instructions:asArr(f['Care instructions']) };
+      season:asArr(f['Season']), suitable_space:f['Indoor/Outdoor']||((f['Product Category']||npCategoryForType(f['Type']))==='Wreaths'?'Indoor':''), indoor_outdoor:f['Indoor/Outdoor']||'', care_instructions:asArr(f['Care instructions']), suggested_display:asArr(f['Suggested display']) };
     const r=await fetch(SERVER_URL+'/resync-attributes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d=await r.json();
     if(!r.ok||!d.success) throw new Error(d.error||'Re-sync failed');
@@ -3155,7 +3165,7 @@ async function lpPublish(){
     const pubSuitableSpace=f['Indoor/Outdoor']||(pubCategory==='Wreaths'?'Indoor':'');
     // Indoor/Outdoor (universal custom metafield) — raw Airtable value, all categories.
     const pubIndoorOutdoor=f['Indoor/Outdoor']||'';
-    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial,celebration_type:pubCelebration,lighting_options:pubLighting,shape:pubShape,season:pubSeason,suitable_space:pubSuitableSpace,indoor_outdoor:pubIndoorOutdoor,care_instructions:asArr(f['Care instructions'])})});
+    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial,celebration_type:pubCelebration,lighting_options:pubLighting,shape:pubShape,season:pubSeason,suitable_space:pubSuitableSpace,indoor_outdoor:pubIndoorOutdoor,care_instructions:asArr(f['Care instructions']),suggested_display:asArr(f['Suggested display'])})});
     clearTimeout(timeout);const data=await res.json();
     if(!res.ok||!data.success) throw new Error(data.error||'Publish failed');
     try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;if(meta)photoFields['Listing Meta Description']=meta;await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:photoFields})});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;if(meta)rec.fields['Listing Meta Description']=meta;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
@@ -3413,8 +3423,9 @@ async function lpSaveStepTwo() {
   const meta   = (document.getElementById('lp-meta')||{value:''}).value || lpStepTwoCache.meta || '';
   const spec   = (document.getElementById('lp-special')||{value:''}).value || lpStepTwoCache.special || '';
   const care   = lpGetCareArr();
+  const sd     = npGetChecks('lp-suggested-display');
   const io     = (document.getElementById('lp-indoor-outdoor')||{value:''}).value || '';
-  if (!loc && !meta && !spec && !care.length && !io) {
+  if (!loc && !meta && !spec && !care.length && !sd.length && !io) {
     status.style.cssText = 'display:block;background:var(--amber-bg);color:var(--amber-text)';
     status.textContent = 'Fill in at least one field above to save.';
     setTimeout(()=>status.style.display='none', 3000); return;
@@ -3426,6 +3437,7 @@ async function lpSaveStepTwo() {
     if (meta) fields['Listing Meta Description']  = meta;
     if (spec) fields['Product description']     = spec;
     if (care.length) fields['Care instructions'] = care;
+    if (sd.length) fields['Suggested display'] = sd;
     if (io) fields['Indoor/Outdoor'] = io;
     await airtableFetch('/'+lpSelectedRecord.id, {method:'PATCH', body:JSON.stringify({fields})});
     Object.assign(lpSelectedRecord.fields, fields);
