@@ -496,8 +496,13 @@ button:active{transform:scale(.97)}
           <div class="btn-row"><button type="button" class="btn-primary btn-full" onclick="npFolderConnect()">Connect Google Drive →</button></div>
         </div>
         <div id="np-folder-picker">
-          <input type="text" id="np-folder-search" placeholder="🔍 Search folders…" oninput="npFolderFilter()" autocomplete="off" style="width:100%;margin-bottom:6px">
-          <div style="display:flex;gap:6px;align-items:center"><select id="np-folder-select" onchange="npFolderOnSelect()" style="flex:1"><option value="">— pick a folder —</option></select><button type="button" class="btn" style="flex-shrink:0;font-size:11px;padding:8px 10px" onclick="npFolderLoad()">↻</button></div>
+          <div style="display:flex;gap:6px;align-items:flex-start">
+            <div id="np-folder-combo" class="ms" style="flex:1" onclick="var s=document.getElementById('np-folder-search');if(s)s.focus();">
+              <div class="ms-control"><span class="ms-chips" id="np-folder-chips"></span><input class="ms-search" id="np-folder-search" type="text" autocomplete="off" placeholder="Search folders…" oninput="npFolderComboRender(this.value)" onfocus="npFolderComboOpen()" onblur="setTimeout(npFolderComboBlur,150)"></div>
+              <div class="ms-menu" id="np-folder-menu"></div>
+            </div>
+            <button type="button" class="btn" style="flex-shrink:0;font-size:11px;padding:8px 10px" onclick="npFolderLoad()" title="Refresh folder list">↻</button>
+          </div>
           <div id="np-folder-preview" style="display:none"></div>
         </div>
       </div>
@@ -2044,47 +2049,69 @@ async function npFolderInit(){
 }
 function npFolderConnect(){ window.open(SERVER_URL+'/drive-auth','_blank'); setStatus('np','After connecting in the new tab, come back to this screen.','loading'); setTimeout(()=>{hideStatus('np');npFolderInit();},4000); }
 async function npFolderLoad(){
-  const sel=document.getElementById('np-folder-select'); if(!sel)return;
-  sel.innerHTML='<option value="">— loading folders… —</option>';
+  const menu=document.getElementById('np-folder-menu');
+  if(menu) menu.innerHTML='<div class="ms-opt" style="cursor:default;color:var(--text-muted)">Loading folders…</div>';
   try{
     const r=await fetch(SERVER_URL+'/drive-list-subfolders?parentId='+encodeURIComponent(LISTING_PHOTOS_SORTED_FOLDER_ID));
     const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not list folders');
     npFolderList=d.folders||[];
-    npFolderFilter();            // build options (honouring any active search text)
+    npFolderComboRender((document.getElementById('np-folder-search')||{}).value||'');
     npFolderReflectSelected();
-  }catch(e){ sel.innerHTML='<option value="">— '+escHtml(e.message)+' —</option>'; }
+  }catch(e){ if(menu) menu.innerHTML='<div class="ms-opt" style="cursor:default;color:var(--rose)">⚠ '+escHtml(e.message)+'</div>'; }
 }
-// Filter the Drive folder dropdown by the search box, preserving the current selection.
-function npFolderFilter(){
-  const sel=document.getElementById('np-folder-select'); if(!sel)return;
-  const q=((document.getElementById('np-folder-search')||{}).value||'').trim().toLowerCase();
+// ── Single-select searchable folder combobox (built on the .ms styles; no checkboxes) ──
+// The selected folder shows as a chip; the search box filters a click-to-pick menu.
+function npFolderComboRender(query){
+  const menu=document.getElementById('np-folder-menu'); if(!menu) return;
+  const q=(query||'').trim().toLowerCase();
+  if(!npFolderList.length){ menu.innerHTML='<div class="ms-opt" style="cursor:default;color:var(--text-muted)">No folders loaded — tap ↻ to refresh</div>'; return; }
   const matches=q ? npFolderList.filter(f=>(f.name||'').toLowerCase().includes(q)) : npFolderList;
-  const selId=npSelectedFolder?npSelectedFolder.id:sel.value;
-  sel.innerHTML='<option value="">— pick a folder —</option>'+matches.map(f=>'<option value="'+escHtml(f.id)+'">'+escHtml(f.name)+'</option>').join('');
-  if(selId){
-    if(![...sel.options].some(o=>o.value===selId)){ const o=npFolderList.find(x=>x.id===selId)||npSelectedFolder; if(o){ const opt=document.createElement('option'); opt.value=o.id; opt.text=o.name||o.id; sel.appendChild(opt); } }
-    sel.value=selId;
-  }
+  if(!matches.length){ menu.innerHTML='<div class="ms-opt" style="cursor:default;color:var(--text-muted)">No matching folders</div>'; return; }
+  menu.innerHTML=matches.map(f=>'<div class="ms-opt" data-id="'+escHtml(f.id)+'">'+escHtml(f.name)+'</div>').join('');
+  // mousedown (not click) + preventDefault so picking doesn't blur the search first.
+  menu.querySelectorAll('.ms-opt[data-id]').forEach(el=>el.addEventListener('mousedown', e=>{
+    e.preventDefault();
+    const f=npFolderList.find(x=>x.id===el.getAttribute('data-id')); if(f) npFolderPick(f);
+  }));
 }
-function npFolderOnSelect(){
-  const sel=document.getElementById('np-folder-select'); if(!sel)return;
-  const id=sel.value;
-  if(!id){ npSelectedFolder=null; npFolderRenderPreview(''); wipSaveNP(); return; }
-  const name=sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:'';
-  npSelectedFolder={id,name};
-  // Autofill the reference name with the folder name (req: folder selected → name the piece after it)
-  const ref=document.getElementById('np-ref-name'); if(ref) ref.value=name;
-  npFolderRenderPreview(id);
+function npFolderComboOpen(){
+  const combo=document.getElementById('np-folder-combo'); if(combo) combo.classList.add('ms-open');
+  if(!npFolderList.length){ npFolderLoad(); return; }
+  npFolderComboRender((document.getElementById('np-folder-search')||{}).value||'');
+}
+// On blur (clicking away without picking), clear the stray search text and reset the menu.
+function npFolderComboBlur(){ const s=document.getElementById('np-folder-search'); if(s) s.value=''; npFolderComboRender(''); }
+// Reflect the current selection as a single chip in the control.
+function npFolderComboSync(){
+  const chips=document.getElementById('np-folder-chips'); if(!chips) return;
+  chips.innerHTML='';
+  if(npSelectedFolder){
+    const chip=document.createElement('span'); chip.className='ms-chip'; chip.textContent=npSelectedFolder.name||npSelectedFolder.id;
+    const x=document.createElement('button'); x.type='button'; x.textContent='×'; x.setAttribute('aria-label','Remove');
+    x.addEventListener('click', e=>{ e.stopPropagation(); npFolderClear(); });
+    chip.appendChild(x); chips.appendChild(chip);
+  }
+  const search=document.getElementById('np-folder-search'); if(search) search.placeholder = npSelectedFolder ? '' : 'Search folders…';
+}
+function npFolderPick(f){
+  npSelectedFolder={id:f.id, name:f.name};
+  const search=document.getElementById('np-folder-search'); if(search) search.value='';
+  const combo=document.getElementById('np-folder-combo'); if(combo) combo.classList.remove('ms-open');
+  npFolderComboSync();
+  // Autofill the reference name with the folder name (folder selected → name the piece after it).
+  const ref=document.getElementById('np-ref-name'); if(ref) ref.value=f.name;
+  npFolderRenderPreview(f.id);
   wipSaveNP();
 }
-// Ensure the dropdown reflects npSelectedFolder (used after async loads / edit prefill / WIP restore).
+function npFolderClear(){
+  npSelectedFolder=null;
+  const search=document.getElementById('np-folder-search'); if(search) search.value='';
+  npFolderComboSync(); npFolderRenderPreview(''); wipSaveNP();
+}
+// Ensure the combo reflects npSelectedFolder (used after async loads / edit prefill / WIP restore).
 function npFolderReflectSelected(){
-  const sel=document.getElementById('np-folder-select'); if(!sel)return;
-  if(!npSelectedFolder){ sel.value=''; npFolderRenderPreview(''); return; }
-  if(![...sel.options].some(o=>o.value===npSelectedFolder.id)){
-    const opt=document.createElement('option'); opt.value=npSelectedFolder.id; opt.text=npSelectedFolder.name||npSelectedFolder.id; sel.appendChild(opt);
-  }
-  sel.value=npSelectedFolder.id; npFolderRenderPreview(npSelectedFolder.id);
+  npFolderComboSync();
+  npFolderRenderPreview(npSelectedFolder ? npSelectedFolder.id : '');
 }
 // Thumbnail preview so the user can confirm they picked the right folder.
 async function npFolderRenderPreview(folderId){
