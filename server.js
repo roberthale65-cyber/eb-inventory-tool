@@ -99,9 +99,10 @@ const SHOPIFY_PATTERN_METAOBJECTS = {
 // below already exist in the store). Harvested via the Shopify MCP 2026-06-30.
 // Unlisted values are skipped on publish; add the metaobject in Shopify, then its GID here.
 // 'Wall-Door Pocket' metaobject (246336356487) was relabeled to 'Wall/door pocket' in Shopify.
-// Centerpiece/Home Decor/Wall Pocket/Planter/Pot were retired as Arrangement options (2026-06-30).
+// Retired as Arrangement options (2026-07-01): Centerpiece, Home Decor, Wall Pocket, Planter,
+// Pot, and (second pass) Door Decor + Metal Planter — their metaobjects were deleted.
 const SHOPIFY_ARRANGEMENT_METAOBJECTS = {
-  'Other':'gid://shopify/Metaobject/214355771527','Wall/door pocket':'gid://shopify/Metaobject/246336356487','Metal Planter':'gid://shopify/Metaobject/246373056647','Door Decor':'gid://shopify/Metaobject/246380593287','Vase':'gid://shopify/Metaobject/246395306119','Basket':'gid://shopify/Metaobject/248792055943','Bouquet':'gid://shopify/Metaobject/248792088711','Box':'gid://shopify/Metaobject/248792121479'
+  'Other':'gid://shopify/Metaobject/214355771527','Wall/door pocket':'gid://shopify/Metaobject/246336356487','Vase':'gid://shopify/Metaobject/246395306119','Basket':'gid://shopify/Metaobject/248792055943','Bouquet':'gid://shopify/Metaobject/248792088711','Box':'gid://shopify/Metaobject/248792121479'
 };
 const SHOPIFY_CONTAINER_METAOBJECTS = {
   'Planter':'gid://shopify/Metaobject/245698363527','Pot':'gid://shopify/Metaobject/246395437191','Vase':'gid://shopify/Metaobject/246395502727','Barrel':'gid://shopify/Metaobject/248792154247','Basket':'gid://shopify/Metaobject/248792187015','Box':'gid://shopify/Metaobject/248792219783','None':'gid://shopify/Metaobject/248792252551','Other':'gid://shopify/Metaobject/248792285319','Urn':'gid://shopify/Metaobject/248792318087'

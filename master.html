@@ -1302,7 +1302,7 @@ const NP_OPTIONS = {
   colors:   ['White','Cream','Gray','Black','Silver','Gold','Bronze','Copper','Brown','Burgundy','Red','Rust','Orange','Yellow-Orange','Yellow','Green','Teal','Light Blue','Blue','Purple','Lavender','Pink','Peach','Beige','Navy','Clear','Multicolor','Rose gold','Rainbow'],
   decoration:['Acrylic','Aluminum','Bamboo','Brass','Bronze','Canvas','Capiz','Cardboard','Cast iron','Ceramic','Chrome','Concrete','Copper','Cork','Cotton','Crystal','Fabric','Faux fur','Faux leather','Feathers','Felt','Glass','Hemp','Iron','Jute','Latex','Leather','Marble','Medium density fiberboard (MDF)','Melamine','Metal','Nylon','Other','Paper','Papier-mâché','Plastic','Plush','Polyester','Polypropylene (PP)','Polyvinyl chloride (PVC)','Porcelain','Rattan','Resin','Rubber','Satin','Sequins','Silicone','Silk','Stainless steel','Steel','Stone','Suede','Synthetic','Terracotta','Velour','Velvet','Veneer','Vinyl','Wax','Wood','Wool','Zinc','Grapevine','Pine','Candle','Lights'],
   planter:  ['Bamboo','Ceramic','Concrete','Glass','Metal','Other','Plastic','Resin','Stone','Terracotta','Wood','Galvanized Steel','Basket'],
-  arrangement:['Basket','Bouquet','Box','Vase','Other','Door Decor','Metal Planter','Wall/door pocket'],
+  arrangement:['Basket','Bouquet','Box','Vase','Other','Wall/door pocket'],
   container:['Barrel','Basket','Box','None','Other','Planter','Pot','Urn','Vase'],
   stem:     ['Long','Medium','Other','Short'],
   celebration:['4th of July','Anniversary','Baby gender reveal','Baby shower','Birthday','Christmas','Concert','Conference','Congratulations','Easter',"Father's Day",'Get well soon','Graduation','Halloween',"Mother's Day",'New baby','New home','Other','Retirement','Summer','Thank you','Theater performance','Travel',"Valentine's day",'Wedding'],
@@ -1964,11 +1964,10 @@ const NP_INFER = [
   // Season → Celebration type (only Summer exists as a celebration type → makes Summer
   // bidirectional with the Celebration→Season rule above).
   { from:'np-season', to:'np-celebration', map:{ 'Summer':['Summer'] } },
-  // Arrangement ↔ Plant container type — shared vessel values, bidirectional 1:1; plus the
-  // forward-only "Metal Planter" arrangement → Planter container. (Planter/Pot were removed
-  // as Arrangement options, so they're no longer bidirectional targets.)
+  // Arrangement ↔ Plant container type — shared vessel values, bidirectional 1:1.
+  // (Planter/Pot/Metal Planter were removed as Arrangement options, so they're gone here.)
   { from:'np-arrangement', to:'np-container', map:{
-      'Basket':['Basket'], 'Box':['Box'], 'Vase':['Vase'], 'Metal Planter':['Planter'] } },
+      'Basket':['Basket'], 'Box':['Box'], 'Vase':['Vase'] } },
   { from:'np-container', to:'np-arrangement', map:{
       'Basket':['Basket'], 'Box':['Box'], 'Vase':['Vase'] } }
 ];
