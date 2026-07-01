@@ -496,6 +496,7 @@ button:active{transform:scale(.97)}
           <div class="btn-row"><button type="button" class="btn-primary btn-full" onclick="npFolderConnect()">Connect Google Drive →</button></div>
         </div>
         <div id="np-folder-picker">
+          <input type="text" id="np-folder-search" placeholder="🔍 Search folders…" oninput="npFolderFilter()" autocomplete="off" style="width:100%;margin-bottom:6px">
           <div style="display:flex;gap:6px;align-items:center"><select id="np-folder-select" onchange="npFolderOnSelect()" style="flex:1"><option value="">— pick a folder —</option></select><button type="button" class="btn" style="flex-shrink:0;font-size:11px;padding:8px 10px" onclick="npFolderLoad()">↻</button></div>
           <div id="np-folder-preview" style="display:none"></div>
         </div>
@@ -1301,7 +1302,7 @@ const NP_OPTIONS = {
   colors:   ['White','Cream','Gray','Black','Silver','Gold','Bronze','Copper','Brown','Burgundy','Red','Rust','Orange','Yellow-Orange','Yellow','Green','Teal','Light Blue','Blue','Purple','Lavender','Pink','Peach','Beige','Navy','Clear','Multicolor','Rose gold','Rainbow'],
   decoration:['Acrylic','Aluminum','Bamboo','Brass','Bronze','Canvas','Capiz','Cardboard','Cast iron','Ceramic','Chrome','Concrete','Copper','Cork','Cotton','Crystal','Fabric','Faux fur','Faux leather','Feathers','Felt','Glass','Hemp','Iron','Jute','Latex','Leather','Marble','Medium density fiberboard (MDF)','Melamine','Metal','Nylon','Other','Paper','Papier-mâché','Plastic','Plush','Polyester','Polypropylene (PP)','Polyvinyl chloride (PVC)','Porcelain','Rattan','Resin','Rubber','Satin','Sequins','Silicone','Silk','Stainless steel','Steel','Stone','Suede','Synthetic','Terracotta','Velour','Velvet','Veneer','Vinyl','Wax','Wood','Wool','Zinc','Grapevine','Pine','Candle','Lights'],
   planter:  ['Bamboo','Ceramic','Concrete','Glass','Metal','Other','Plastic','Resin','Stone','Terracotta','Wood','Galvanized Steel','Basket'],
-  arrangement:['Basket','Bouquet','Box','Vase','Other','Centerpiece','Door Decor','Home Decor','Metal Planter','Planter','Pot','Wall Pocket','Wall-Door Pocket'],
+  arrangement:['Basket','Bouquet','Box','Vase','Other','Wall/door pocket'],
   container:['Barrel','Basket','Box','None','Other','Planter','Pot','Urn','Vase'],
   stem:     ['Long','Medium','Other','Short'],
   celebration:['4th of July','Anniversary','Baby gender reveal','Baby shower','Birthday','Christmas','Concert','Conference','Congratulations','Easter',"Father's Day",'Get well soon','Graduation','Halloween',"Mother's Day",'New baby','New home','Other','Retirement','Summer','Thank you','Theater performance','Travel',"Valentine's day",'Wedding'],
@@ -1821,7 +1822,7 @@ function npRenderSubThumbs(){
     box.innerHTML='<div class="thumb-row thumb-row-zoom">'+imgs.map(f=>'<img src="'+(f.thumbnailLink||'')+'" data-full="'+escHtml(driveUpsize(f.thumbnailLink||''))+'" alt="'+escHtml(f.name)+'" referrerpolicy="no-referrer" onclick="npFolderBigPreview(this)">').join('')+'</div><div class="np-bigpreview" style="display:none"></div>';
   });
 }
-document.getElementById('np-type').addEventListener('change', function() { document.getElementById('np-outdoor-warning').style.display = this.value==='OP'?'block':'none'; npDefaultWreathShape(); npApplyCategoryBuckets(); });
+document.getElementById('np-type').addEventListener('change', function() { document.getElementById('np-outdoor-warning').style.display = this.value==='OP'?'block':'none'; npApplyWreathDefaults(); npApplyCategoryBuckets(); });
 
 // Render the Step 1.1 dropdowns + multi-select chip groups from NP_OPTIONS.
 function npRenderSelect(id,opts){const el=document.getElementById(id);if(!el)return;el.innerHTML=opts.map(o=>'<option value="'+escHtml(o)+'">'+escHtml(o)+'</option>').join('');}
@@ -1909,7 +1910,7 @@ function npInitFields(){
   msInit('np-celebration',npAlpha(NP_OPTIONS.celebration));
   msInit('np-lighting',npAlpha(NP_OPTIONS.lighting));
   msInit('np-shape',npAlpha(NP_OPTIONS.shape));
-  npDefaultWreathShape();
+  npApplyWreathDefaults();
   npApplyCategoryBuckets(); // place 1.3/1.4 fields for the default Type
   // Cross-field inference (see NP_INFER). Attach a 'change' listener to each source field.
   // 'change' bubbles only on real user toggles — programmatic npSetChecks doesn't dispatch
@@ -1963,12 +1964,12 @@ const NP_INFER = [
   // Season → Celebration type (only Summer exists as a celebration type → makes Summer
   // bidirectional with the Celebration→Season rule above).
   { from:'np-season', to:'np-celebration', map:{ 'Summer':['Summer'] } },
-  // Arrangement ↔ Plant container type — shared vessel values, bidirectional 1:1; plus the
-  // forward-only "Metal Planter" arrangement → Planter container.
+  // Arrangement ↔ Plant container type — shared vessel values, bidirectional 1:1.
+  // (Planter/Pot/Metal Planter were removed as Arrangement options, so they're gone here.)
   { from:'np-arrangement', to:'np-container', map:{
-      'Basket':['Basket'], 'Box':['Box'], 'Vase':['Vase'], 'Planter':['Planter'], 'Pot':['Pot'], 'Metal Planter':['Planter'] } },
+      'Basket':['Basket'], 'Box':['Box'], 'Vase':['Vase'] } },
   { from:'np-container', to:'np-arrangement', map:{
-      'Basket':['Basket'], 'Box':['Box'], 'Vase':['Vase'], 'Planter':['Planter'], 'Pot':['Pot'] } }
+      'Basket':['Basket'], 'Box':['Box'], 'Vase':['Vase'] } }
 ];
 const _npInferPrev = {}; // sourceId → last-seen selections, for delta detection
 // Re-baseline after programmatic field loads (init/clear/edit/WIP) so only genuine user
@@ -1999,11 +2000,13 @@ function npInferOnChange(sourceId){
     }
   });
 }
-// Wreaths are most commonly round — pre-select Round when the piece is a Wreath and no
-// Shape is chosen yet. Non-destructive: only fills an empty selection; user can change it.
-function npDefaultWreathShape(){
-  const t=document.getElementById('np-type'); if(!t) return;
-  if(t.value==='WR' && npGetChecks('np-shape').length===0) npSetChecks('np-shape',['Round']);
+// Wreath defaults — most wreaths are Round and Non-illuminated. Pre-select those when the
+// piece is a Wreath and the field is still empty. Non-destructive: only fills an empty
+// selection; the user can change either.
+function npApplyWreathDefaults(){
+  const t=document.getElementById('np-type'); if(!t || t.value!=='WR') return;
+  if(npGetChecks('np-shape').length===0) npSetChecks('np-shape',['Round']);
+  if(npGetChecks('np-lighting').length===0) npSetChecks('np-lighting',['Non-illuminated']);
 }
 function npGetChecks(id){return Array.from(document.querySelectorAll('#'+id+' input[type=checkbox]:checked')).map(c=>c.value);}
 function npSetChecks(id,vals){const host=document.getElementById(id);const set=new Set(vals||[]);
@@ -2040,9 +2043,21 @@ async function npFolderLoad(){
     const r=await fetch(SERVER_URL+'/drive-list-subfolders?parentId='+encodeURIComponent(LISTING_PHOTOS_SORTED_FOLDER_ID));
     const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not list folders');
     npFolderList=d.folders||[];
-    sel.innerHTML='<option value="">— pick a folder —</option>'+npFolderList.map(f=>'<option value="'+escHtml(f.id)+'">'+escHtml(f.name)+'</option>').join('');
+    npFolderFilter();            // build options (honouring any active search text)
     npFolderReflectSelected();
   }catch(e){ sel.innerHTML='<option value="">— '+escHtml(e.message)+' —</option>'; }
+}
+// Filter the Drive folder dropdown by the search box, preserving the current selection.
+function npFolderFilter(){
+  const sel=document.getElementById('np-folder-select'); if(!sel)return;
+  const q=((document.getElementById('np-folder-search')||{}).value||'').trim().toLowerCase();
+  const matches=q ? npFolderList.filter(f=>(f.name||'').toLowerCase().includes(q)) : npFolderList;
+  const selId=npSelectedFolder?npSelectedFolder.id:sel.value;
+  sel.innerHTML='<option value="">— pick a folder —</option>'+matches.map(f=>'<option value="'+escHtml(f.id)+'">'+escHtml(f.name)+'</option>').join('');
+  if(selId){
+    if(![...sel.options].some(o=>o.value===selId)){ const o=npFolderList.find(x=>x.id===selId)||npSelectedFolder; if(o){ const opt=document.createElement('option'); opt.value=o.id; opt.text=o.name||o.id; sel.appendChild(opt); } }
+    sel.value=selId;
+  }
 }
 function npFolderOnSelect(){
   const sel=document.getElementById('np-folder-select'); if(!sel)return;
@@ -2155,7 +2170,7 @@ function npClearForm(){
   document.getElementById('np-florals').value='None';
   document.getElementById('np-greenery').value='None';
   npSetChecks('np-season',[]); npSetChecks('np-style',[]); npSetChecks('np-colors',[]); npSetChecks('np-decoration',[]); npSetChecks('np-planter',[]); npSetChecks('np-pattern',[]); npSetChecks('np-plantname',[]); npSetChecks('np-arrangement',[]); npSetChecks('np-container',[]); npSetChecks('np-stem',[]); npSetChecks('np-celebration',[]); npSetChecks('np-lighting',[]); npSetChecks('np-shape',[]);
-  npDefaultWreathShape(); // Type defaults to Wreath → pre-select Round.
+  npApplyWreathDefaults(); // Type defaults to Wreath → pre-select Round.
   npResetInferenceState(); // cleared fields → empty delta baseline
   npGoSub(1);
 }
@@ -2654,7 +2669,9 @@ async function lpOnSelectRecord() {
 
 // ── Record-sourced listing data (colors, materials, weight now come from Step 1's Airtable record) ──
 function lpColorsFromRecord(f){const c=f['Color(s)'];return Array.isArray(c)?c.join(', '):(c||'');}
-function lpMaterialsFromRecord(f){const parts=[];const km=f['Key Materials'];if(Array.isArray(km))parts.push(...km);else if(km)parts.push(km);if(f['Florals']&&f['Florals']!=='None')parts.push(f['Florals']);if(f['Greenery']&&f['Greenery']!=='None')parts.push(f['Greenery']);return parts.join(', ');}
+// Florals/Greenery are intentionally NOT included here — they aren't structured materials;
+// they're passed separately to /generate-description and only influence the copy when premium.
+function lpMaterialsFromRecord(f){const parts=[];const km=f['Key Materials'];if(Array.isArray(km))parts.push(...km);else if(km)parts.push(km);return parts.join(', ');}
 function lpWeightOzFromRecord(f){const o=f['Item weight (oz)'];return (o===''||o==null)?null:Number(o);}
 function ozToLbOzStr(oz){oz=Number(oz);const lb=Math.floor(oz/16),r=oz%16;return (lb?lb+' lb':'')+(lb&&r?' ':'')+(r||!lb?r+' oz':'');}
 
@@ -2763,7 +2780,7 @@ async function lpGenerateListing(){
     const photoImages=[];
     for(const item of lpPhotoItems.slice(0,3)){try{await lpEnsureDriveBytes(item);const smallBlob=await lpCropToSquare(item.dataUrl,item.crop,800,150);const smallDataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(smallBlob);});photoImages.push({data:smallDataUrl.split(',')[1],mime:'image/jpeg'});}catch(e){console.warn('Skipping photo:',e.message);}}
     const seasonVal=Array.isArray(f['Season'])?f['Season'].join(', '):(f['Season']||'');
-    const res=await fetch(SERVER_URL+'/generate-description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:f['EB Number'],reference_name:f['Reference name'],type:f['Type'],season:seasonVal,holiday:f['Occasion'],colors:lpColorsFromRecord(f),dimensions:dims,materials:lpMaterialsFromRecord(f),location:lpGetLocation()||lpStepTwoCache.location||'',special:(f['Product description']||lpStepTwoCache.special||''),notes:f['Internal notes'],images:photoImages})});
+    const res=await fetch(SERVER_URL+'/generate-description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:f['EB Number'],reference_name:f['Reference name'],type:f['Type'],season:seasonVal,holiday:f['Occasion'],colors:lpColorsFromRecord(f),dimensions:dims,materials:lpMaterialsFromRecord(f),florals:f['Florals']||'',greenery:f['Greenery']||'',location:lpGetLocation()||lpStepTwoCache.location||'',special:(f['Product description']||lpStepTwoCache.special||''),notes:f['Internal notes'],images:photoImages})});
     const data=await res.json(); if(!res.ok||!data.success) throw new Error(data.error||'Server returned error');
     lpCurrentTitle=((data.title||'').trim())||lpFallbackTitle(f);
     lpCurrentDesc=(data.description||'').trim();
