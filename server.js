@@ -98,8 +98,10 @@ const SHOPIFY_PATTERN_METAOBJECTS = {
 // the Admin API can't query/create these reserved metaobjects, but the values
 // below already exist in the store). Harvested via the Shopify MCP 2026-06-30.
 // Unlisted values are skipped on publish; add the metaobject in Shopify, then its GID here.
+// 'Wall-Door Pocket' metaobject (246336356487) was relabeled to 'Wall/door pocket' in Shopify.
+// Centerpiece/Home Decor/Wall Pocket/Planter/Pot were retired as Arrangement options (2026-06-30).
 const SHOPIFY_ARRANGEMENT_METAOBJECTS = {
-  'Other':'gid://shopify/Metaobject/214355771527','Wall-Door Pocket':'gid://shopify/Metaobject/246336356487','Centerpiece':'gid://shopify/Metaobject/246351331463','Metal Planter':'gid://shopify/Metaobject/246373056647','Home Decor':'gid://shopify/Metaobject/246375415943','Wall Pocket':'gid://shopify/Metaobject/246375940231','Door Decor':'gid://shopify/Metaobject/246380593287','Vase':'gid://shopify/Metaobject/246395306119','Pot':'gid://shopify/Metaobject/247336304775','Planter':'gid://shopify/Metaobject/247339843719','Basket':'gid://shopify/Metaobject/248792055943','Bouquet':'gid://shopify/Metaobject/248792088711','Box':'gid://shopify/Metaobject/248792121479'
+  'Other':'gid://shopify/Metaobject/214355771527','Wall/door pocket':'gid://shopify/Metaobject/246336356487','Metal Planter':'gid://shopify/Metaobject/246373056647','Door Decor':'gid://shopify/Metaobject/246380593287','Vase':'gid://shopify/Metaobject/246395306119','Basket':'gid://shopify/Metaobject/248792055943','Bouquet':'gid://shopify/Metaobject/248792088711','Box':'gid://shopify/Metaobject/248792121479'
 };
 const SHOPIFY_CONTAINER_METAOBJECTS = {
   'Planter':'gid://shopify/Metaobject/245698363527','Pot':'gid://shopify/Metaobject/246395437191','Vase':'gid://shopify/Metaobject/246395502727','Barrel':'gid://shopify/Metaobject/248792154247','Basket':'gid://shopify/Metaobject/248792187015','Box':'gid://shopify/Metaobject/248792219783','None':'gid://shopify/Metaobject/248792252551','Other':'gid://shopify/Metaobject/248792285319','Urn':'gid://shopify/Metaobject/248792318087'
@@ -856,8 +858,14 @@ async function getCollectionId(handle) {
 // ── Generate description ──────────────────────────────────────
 app.post('/generate-description', async (req, res) => {
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server.' });
-  const { eb_number, reference_name, type, season, holiday, colors, dimensions, materials, location, special, notes, images } = req.body;
-  const textPrompt = `You write product listings for Eternal Blooms Designs, a handmade artificial flower arrangement business in Omaha, Nebraska. Each piece is handmade and one of a kind.
+  const { eb_number, reference_name, type, season, holiday, colors, dimensions, materials, location, special, notes, images, florals, greenery } = req.body;
+  // Florals/Greenery are NOT structured data — they only inform the copy. Real-feel florals
+  // and premium greenery are upgrades worth touting; silk florals and standard greenery are
+  // baseline and must NOT be called out.
+  const premiumBits = [];
+  if ((florals || '').toLowerCase() === 'real-feel') premiumBits.push('real-feel, lifelike flowers');
+  if ((greenery || '').toLowerCase() === 'premium') premiumBits.push('premium greenery');
+  const textPrompt = `You write product listings for Eternal Blooms Designs, a handmade artificial flower arrangement business. Each piece is handmade and one of a kind.
 
 Write a Shopify product listing for this piece: a TITLE, a DESCRIPTION, and an SEO_META.
 
@@ -876,6 +884,8 @@ DESCRIPTION — return as clean, minimal HTML; it is published directly as the S
 - Naturally weave in keyword synonyms throughout for SEO, without keyword-stuffing.
 - Allowed HTML tags ONLY, and with NO attributes: <p>, <strong>, <ul>, <li>, <br>. Use <p><strong>Sub-header</strong></p> for a bold header. Do NOT use markdown, heading tags, inline styles, classes, or any tag attributes.
 - You may describe the piece as handmade and one-of-a-kind, but do NOT claim or imply it cannot be reproduced, recreated, or replicated. Never use phrasing such as "can never be exactly duplicated," "no two are ever the same," "impossible to recreate," or any similar wording suggesting the item is unrepeatable.
+- Do NOT mention any business location, city, or state (e.g. Omaha, or Nebraska/NE), or where the piece is made or ships from.
+- ${premiumBits.length ? 'Material quality to highlight as a genuine selling benefit: ' + premiumBits.join(' and ') + '. Weave it in naturally as an upgrade shoppers will value.' : 'Do NOT tout flower or greenery material grade — this piece uses baseline materials (standard silk flowers / standard greenery), which are not selling points.'}
 - Return the HTML as a SINGLE LINE with no literal line breaks inside the JSON string.${images && images.length > 0 ? '\n\nPhoto(s) of the actual piece are attached — use what you can see in the photos to write the most accurate, keyword-rich title and description possible.' : ''}
 
 Piece details:
@@ -945,7 +955,7 @@ app.post('/cleanup-text', async (req, res) => {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 200, messages: [{ role: 'user', content: `Fix any spelling and grammar errors in the text below. Keep the same meaning, tone, and style. Return ONLY the corrected text with no explanation, no quotes, no preamble.\n\n${text}` }] })
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 200, messages: [{ role: 'user', content: `Fix any spelling and grammar errors in the text below. Keep the same meaning, tone, and style. Use sentence case: capitalize only the first word of each sentence and proper nouns (names, places, brands). Do NOT use Title Case — do not capitalize every word. Return ONLY the corrected text with no explanation, no quotes, no preamble.\n\n${text}` }] })
     });
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json({ error: data.error?.message || 'Anthropic API error' });
