@@ -640,6 +640,36 @@ app.post('/drive-assign-eb', async (req, res) => {
   }
 });
 
+// ── Drive: move a piece's photo folder between buckets (Sorted → Published / Sold) ──
+// Keeps the "Listing media sorted" folder picker lean: published pieces move to Published,
+// sold pieces (from ANY channel — the trigger is Airtable Status) move to Sold.
+// Idempotent: if the folder already lives under the destination it's a no-op. Removes the
+// folder from ALL current parents and adds the destination, so it works from wherever the
+// folder currently sits. The Drive folder ID is stable across moves, so Airtable's stored
+// "Drive Folder ID" (and photo loading by that ID) keeps working.
+const DRIVE_BUCKETS = {
+  sorted:    '1eBdFF0uzt6zsBYCG344xSyochu6ApL0s', // Listing media sorted
+  published: '19f9Sb47CN64eaqBpz7iWrjiNjtgcREnu', // Published
+  sold:      '1RT7hCfO2PJcNnSRiC2Y6pUDaIHWcPhUu'  // Sold
+};
+app.post('/drive-move-folder', async (req, res) => {
+  const { folderId, destination } = req.body || {};
+  if (!folderId) return res.status(400).json({ error: 'folderId required' });
+  const destId = DRIVE_BUCKETS[destination] || (/^[\w-]{20,}$/.test(destination || '') ? destination : null);
+  if (!destId) return res.status(400).json({ error: 'destination must be one of: ' + Object.keys(DRIVE_BUCKETS).join(', ') + ' (or a folder id)' });
+  try {
+    const meta = await driveRequest(`/files/${folderId}?fields=id,name,parents&supportsAllDrives=true`);
+    const current = meta.parents || [];
+    if (current.includes(destId)) {
+      return res.json({ success: true, moved: false, name: meta.name, note: 'already in destination' });
+    }
+    let url = `/files/${folderId}?addParents=${encodeURIComponent(destId)}&fields=id,name,parents&supportsAllDrives=true`;
+    if (current.length) url += `&removeParents=${encodeURIComponent(current.join(','))}`;
+    const updated = await driveRequest(url, { method: 'PATCH', body: JSON.stringify({}) });
+    res.json({ success: true, moved: true, name: updated.name, parents: updated.parents });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Drive: list subfolders under a parent (for the stepped-workflow folder picker) ──
 app.get('/drive-list-subfolders', async (req, res) => {
   const { parentId } = req.query;
@@ -1087,7 +1117,7 @@ app.post('/mark-sold', async (req, res) => {
 });
  
 // ── Version / health (verify what's actually deployed) ────────
-app.get('/version', (req, res) => res.json({ version: '2026-07-01-fixpack7', features: ['custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions', 'indoor_outdoor->custom.indoor_outdoor (universal multi-select; wreaths also get native suitable-space)', 'suggested_display->custom.suggested_display (multi-select surface/spot)'] }));
+app.get('/version', (req, res) => res.json({ version: '2026-07-03-fixpack8', features: ['drive-move-folder: publish→Published, sold→Sold (idempotent bucket move)','custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions', 'indoor_outdoor->custom.indoor_outdoor (universal multi-select; wreaths also get native suitable-space)', 'suggested_display->custom.suggested_display (multi-select surface/spot)'] }));
 
 // Resolve the tool-owned taxonomy metafield GIDs for a product, category-gated.
 // Shared by /create-product (replace) and /resync-attributes (merge) so the value→GID
