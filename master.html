@@ -1389,6 +1389,7 @@ async function connectAirtable() {
     await loadAllRecords();
     setServerStatus('ok', allRecords.length + ' pieces loaded');
     populateHomeStats(); populateLPSelect(); populateMSSelect(); populateCFInventory();
+    reconcileDriveFolders(); // background: tidy published/sold folders out of "Listing media sorted"
   } catch(e) {
     setServerStatus('error','Connection failed — tap to retry');
     document.getElementById('server-status').onclick = connectAirtable;
@@ -1429,6 +1430,54 @@ async function loadAllRecords() {
     offset = data.offset||null;
   } while(offset);
   allRecords = records; cfCachedRecords = records;
+}
+
+// ── Drive folder housekeeping — move published/sold pieces out of "Listing media sorted" ──
+// Keeps the folder picker lean. The server move is idempotent; we also memoize moves in
+// localStorage (keyed folderId:destination) so we don't re-hit Drive for folders we've
+// already moved. A later status change (Listed → Sold) uses a different key, so it re-moves.
+const DRIVE_MOVE_MEMO_KEY = 'eb_drive_folder_moves';
+function _driveMoveMemo(){ try{ return JSON.parse(localStorage.getItem(DRIVE_MOVE_MEMO_KEY))||{}; }catch(e){ return {}; } }
+function _driveMoveMemoHas(folderId,dest){ return !!_driveMoveMemo()[folderId+':'+dest]; }
+function _driveMoveMemoSet(folderId,dest){ try{ const m=_driveMoveMemo(); m[folderId+':'+dest]=1; localStorage.setItem(DRIVE_MOVE_MEMO_KEY,JSON.stringify(m)); }catch(e){} }
+
+// Move one piece's folder to 'published' or 'sold'. Non-fatal — logs and returns on failure.
+async function driveMoveFolder(folderId, destination){
+  if(!folderId) return { skipped:'no folder' };
+  if(_driveMoveMemoHas(folderId,destination)) return { skipped:'memoized' };
+  try{
+    const r=await fetch(SERVER_URL+'/drive-move-folder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folderId,destination})});
+    const d=await r.json().catch(()=>({}));
+    if(r.ok && d.success){ _driveMoveMemoSet(folderId,destination); return d; }
+    console.warn('Drive folder move → '+destination+' failed ('+folderId+'):', d.error||('HTTP '+r.status));
+    return { error:d.error||('HTTP '+r.status) };
+  }catch(e){ console.warn('Drive folder move → '+destination+' error ('+folderId+'):', e.message); return { error:e.message }; }
+}
+
+// Reconcile folders with Airtable status after inventory loads: Sold → Sold folder,
+// Listed (or has a Shopify URL) → Published folder. Catches publishes/sales that happened
+// outside this tool (Shopify, Meta, Etsy, or a manual Airtable edit) and clears the backlog.
+// Runs quietly in the background; bounded per session (memo lets it resume next load).
+let _driveSweepRan = false;
+const DRIVE_SWEEP_MAX_PER_LOAD = 30;
+async function reconcileDriveFolders(){
+  if(_driveSweepRan) return; _driveSweepRan=true;
+  // Only sweep when Drive is actually connected (otherwise every move would just fail).
+  try{ const s=await (await fetch(SERVER_URL+'/drive-status')).json(); if(!s.connected){ _driveSweepRan=false; return; } }
+  catch(e){ _driveSweepRan=false; return; }
+  const jobs=[];
+  for(const r of allRecords){
+    const f=r.fields, folderId=f['Drive Folder ID']; if(!folderId) continue;
+    const status=f['Status']||'';
+    if(status==='Sold'){ if(!_driveMoveMemoHas(folderId,'sold')) jobs.push([folderId,'sold']); }
+    else if(status==='Listed' || f['Shopify URL']){ if(!_driveMoveMemoHas(folderId,'published')) jobs.push([folderId,'published']); }
+  }
+  if(!jobs.length) return;
+  const batch=jobs.slice(0,DRIVE_SWEEP_MAX_PER_LOAD);
+  let moved=0;
+  for(const [fid,dest] of batch){ const res=await driveMoveFolder(fid,dest); if(res&&res.moved)moved++; }
+  const remaining=jobs.length-batch.length;
+  console.log('Drive reconcile: moved '+moved+' folder(s)'+(remaining>0?'; '+remaining+' remaining — will continue next load':'')+'.');
 }
 
 // ── STATUS & NAV ──
@@ -3251,6 +3300,9 @@ async function lpPublish(){
     if(!res.ok||!data.success) throw new Error(data.error||'Publish failed');
     try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;if(meta)photoFields['Listing Meta Description']=meta;await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:photoFields})});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;if(meta)rec.fields['Listing Meta Description']=meta;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
     lpLastProductId = data.product_id || null;
+    // Published → move this piece's Drive folder out of "Listing media sorted" into "Published"
+    // so the folder picker stays lean (non-fatal, runs in the background).
+    driveMoveFolder(lpLoadedFolderId || (lpSelectedRecord && lpSelectedRecord.fields['Drive Folder ID']), 'published');
     // KEEP Draft Title/Description in Airtable after publish — they ARE the generated
     // listing copy (the record of what went live, and the source for Meta/Etsy later).
     // Previously they were cleared here, silently wiping the title/description from every
@@ -3763,7 +3815,9 @@ function msStep(n){stepBackFn=n>1?()=>msStep(n-1):null;updateHeaderBackBtn();doc
 function populateMSSelect(){const listed=sortPiecesByEB(allRecords.filter(r=>r.fields['Status']==='Listed'||r.fields['Status']==='In stock'));msAllOpts=listed.map(r=>({value:r.id,label:pieceLabel(r.fields)||r.id}));const sel=document.getElementById('ms-eb-select');if(listed.length===0){sel.innerHTML='<option value="">— no listed pieces —</option>';return;}sel.innerHTML='<option value="">— pick a piece —</option>'+msAllOpts.map(o=>'<option value="'+escHtml(o.value)+'">'+escHtml(o.label)+'</option>').join('');_clearEbSearch('ms-eb-search','ms-eb-results');sel.onchange=()=>{const recId=sel.value;document.getElementById('ms-next-btn').disabled=!recId;if(!recId){msSelectedRecord=null;document.getElementById('ms-piece-preview').style.display='none';return;}msSelectedRecord=allRecords.find(r=>r.id===recId);if(!msSelectedRecord)return;const f=msSelectedRecord.fields;document.getElementById('ms-piece-preview').style.display='block';document.getElementById('ms-piece-preview').innerHTML='<div class="at-preview"><div class="at-preview-title">Selected piece</div><div class="at-grid"><div class="at-field"><div class="at-label">EB Number</div><div class="at-value">'+escHtml(f['EB Number'])+'</div></div><div class="at-field"><div class="at-label">Type</div><div class="at-value">'+escHtml(f['Type']||'—')+'</div></div><div class="at-field"><div class="at-label">Price</div><div class="at-value">'+(f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—')+'</div></div></div></div>';};}
 function msSelectChannel(el,channel){document.querySelectorAll('#screen-sold .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');msSelectedChannel=channel;}
 async function msConfirmSale(){if(!msSelectedRecord||!msSelectedChannel){alert('Select a piece and sale channel.');return;}const salePrice=document.getElementById('ms-sale-price').value.trim();const saleDate=document.getElementById('ms-sale-date').value;const btn=document.getElementById('ms-confirm-btn');btn.disabled=true;btn.textContent='⏳ Recording...';setStatus('ms','Marking as sold...','loading');try{await markSold(msSelectedRecord,msSelectedChannel,salePrice,saleDate);const result=document.getElementById('ms-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(msSelectedRecord.fields['EB Number'])+'</strong> marked as sold via '+msSelectedChannel+'.';btn.textContent='✓ Done!';setStatus('ms','Sale recorded ✓','success');populateHomeStats();populateMSSelect();populateLPSelect();populateCFInventory();setTimeout(()=>hideStatus('ms'),4000);}catch(e){setStatus('ms','Error: '+e.message,'error');btn.disabled=false;btn.textContent='✓ Mark as sold';}}
-async function markSold(record,channel,salePrice,saleDate){const f=record.fields;const atFields={'Status':'Sold','Sales channel':channel};if(salePrice)atFields['Price ($)']=parseFloat(salePrice);if(saleDate)atFields['Date sold']=saleDate;await airtableFetch('/'+record.id,{method:'PATCH',body:JSON.stringify({fields:atFields})});Object.assign(f,atFields);try{await fetch(SERVER_URL+'/mark-sold',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shopify_url:f['Shopify URL'],eb_number:f['EB Number']})});}catch(e){console.warn('Shopify mark sold failed:',e.message);}}
+async function markSold(record,channel,salePrice,saleDate){const f=record.fields;const atFields={'Status':'Sold','Sales channel':channel};if(salePrice)atFields['Price ($)']=parseFloat(salePrice);if(saleDate)atFields['Date sold']=saleDate;await airtableFetch('/'+record.id,{method:'PATCH',body:JSON.stringify({fields:atFields})});Object.assign(f,atFields);try{await fetch(SERVER_URL+'/mark-sold',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shopify_url:f['Shopify URL'],eb_number:f['EB Number']})});}catch(e){console.warn('Shopify mark sold failed:',e.message);}
+  // Sold → move this piece's Drive folder into "Sold" (non-fatal, background).
+  driveMoveFolder(f['Drive Folder ID'],'sold');}
 
 // ── CRAFT FAIR ──
 function populateCFInventory(filter=''){const container=document.getElementById('cf-inventory');const records=cfCachedRecords.filter(r=>{const f=r.fields,status=f['Status']||'';if(status==='Archived')return false;if(!filter)return true;const q=filter.toLowerCase();return(f['EB Number']||'').toLowerCase().includes(q)||(f['Type']||'').toLowerCase().includes(q)||(f['Season']||'').toLowerCase().includes(q)||(f['Occasion']||'').toLowerCase().includes(q);});if(records.length===0){container.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:12px">🔍</div><div style="font-size:14px">No pieces found</div></div>';return;}const order={'In stock':0,'Photographed':0,'Ready to list':0,'Listed':1,'Craft fair':1,'Hair Salon':1,'Sold':2};records.sort((a,b)=>(order[a.fields['Status']]||3)-(order[b.fields['Status']]||3));container.innerHTML=records.map(r=>{const f=r.fields,isSold=f['Status']==='Sold'||f['Status']==='Archived';const price=f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—';const seasonDisplay=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||'');const tags=[seasonDisplay,f['Occasion']&&f['Occasion']!=='None'?f['Occasion']:null,f['Status']].filter(Boolean).join(' · ');return'<div class="cf-piece-card'+(isSold?' sold-out':'')+'" onclick="cfTapPiece(\''+r.id+'\')">'+'<div class="cf-piece-thumb-placeholder">'+cfTypeIcon(f['Type'])+'</div>'+'<div class="cf-piece-info"><div class="cf-piece-eb">'+escHtml(f['EB Number']||'—')+'</div>'+'<div class="cf-piece-type">'+escHtml(f['Type']||'Arrangement')+'</div>'+'<div class="cf-piece-tags">'+escHtml(tags)+'</div></div>'+(isSold?'<div class="cf-sold-badge">SOLD</div>':'<div class="cf-piece-price">'+price+'</div>')+'</div>';}).join('');}
@@ -4669,6 +4723,8 @@ const BL_LISTING_FOLDER_ID = '1vK41Wo0j5l5V2YfQtDTg1e_7quq0ajrE';
 // Listing Media — the stepped-workflow photo root (per-piece subfolders live here). Backlog sorter still uses Listing Photos above.
 const LISTING_MEDIA_FOLDER_ID = '1iOq19Z76Kw5cpm4w6nCZiwj15p5F0U-f';
 const LISTING_PHOTOS_SORTED_FOLDER_ID = '1eBdFF0uzt6zsBYCG344xSyochu6ApL0s'; // 'Listing media sorted' — each subfolder = one piece's photos
+const PUBLISHED_FOLDER_ID = '19f9Sb47CN64eaqBpz7iWrjiNjtgcREnu'; // 'Published' — folders move here once a piece is listed on Shopify
+const SOLD_FOLDER_ID      = '1RT7hCfO2PJcNnSRiC2Y6pUDaIHWcPhUu'; // 'Sold' — folders move here once a piece's Airtable status is Sold
 let lpDriveImages = [];   // images in the currently-picked Drive folder
 let lpDriveLinked = false; // whether the current selection has been renamed in Drive
 
