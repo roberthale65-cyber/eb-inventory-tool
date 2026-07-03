@@ -612,17 +612,19 @@ button:active{transform:scale(.97)}
         <div class="field"><label>Ounces (oz)</label><input type="number" min="0" max="15" step="1" id="np-weight-oz" placeholder="e.g. 8"></div>
       </div>
       <div class="section-label" style="margin-top:12px">Normal shipping size <span style="font-weight:400;font-size:11px;color:var(--text-muted)">&mdash; packed box, not display</span></div>
+      <!-- Labels follow the product-dimension order (Width · Height · Depth); ids stay -l/-w/-h for storage compatibility -->
       <div class="grid-3">
-        <div class="field"><label>L (in)</label><input type="number" id="np-ship-l" placeholder="17" oninput="npDimHint('ship','np-ship-hint')"></div>
-        <div class="field"><label>W (in)</label><input type="number" id="np-ship-w" placeholder="17" oninput="npDimHint('ship','np-ship-hint')"></div>
-        <div class="field"><label>H (in)</label><input type="number" id="np-ship-h" placeholder="21" oninput="npDimHint('ship','np-ship-hint')"></div>
+        <div class="field"><label>Width (in)</label><input type="number" id="np-ship-l" placeholder="17" oninput="npDimHint('ship','np-ship-hint')"></div>
+        <div class="field"><label>Height (in)</label><input type="number" id="np-ship-w" placeholder="17" oninput="npDimHint('ship','np-ship-hint')"></div>
+        <div class="field"><label>Depth (in)</label><input type="number" id="np-ship-h" placeholder="21" oninput="npDimHint('ship','np-ship-hint')"></div>
       </div>
       <div class="dim-hint" id="np-ship-hint"></div>
       <div class="section-label" style="margin-top:4px">Aggressive compression <span style="font-weight:400;font-size:11px;color:var(--text-muted)">&mdash; tightest safe box</span></div>
+      <!-- Labels follow the product-dimension order (Width · Height · Depth); ids stay -l/-w/-h for storage compatibility -->
       <div class="grid-3">
-        <div class="field"><label>L (in)</label><input type="number" id="np-comp-l" placeholder="15" oninput="npDimHint('comp','np-comp-hint')"></div>
-        <div class="field"><label>W (in)</label><input type="number" id="np-comp-w" placeholder="15" oninput="npDimHint('comp','np-comp-hint')"></div>
-        <div class="field"><label>H (in)</label><input type="number" id="np-comp-h" placeholder="19" oninput="npDimHint('comp','np-comp-hint')"></div>
+        <div class="field"><label>Width (in)</label><input type="number" id="np-comp-l" placeholder="15" oninput="npDimHint('comp','np-comp-hint')"></div>
+        <div class="field"><label>Height (in)</label><input type="number" id="np-comp-w" placeholder="15" oninput="npDimHint('comp','np-comp-hint')"></div>
+        <div class="field"><label>Depth (in)</label><input type="number" id="np-comp-h" placeholder="19" oninput="npDimHint('comp','np-comp-hint')"></div>
       </div>
       <div class="dim-hint" id="np-comp-hint"></div>
       <div id="np-photos-done-hint" style="display:none" class="info-card teal"><strong>✅ Skipping photo checklist.</strong> After saving dimensions you'll go straight to List &amp; Publish.</div>
