@@ -704,7 +704,7 @@ button:active{transform:scale(.97)}
         <div id="lp-dims-save-status" style="display:none;font-size:12px;margin-bottom:8px"></div>
         <div class="btn-row"><button class="btn-primary btn-full" onclick="lpSaveDimsInline()">💾 Save to Airtable</button></div>
       </div>
-      <div class="btn-row"><button class="btn-primary btn-full" id="lp-next-1-btn" onclick="lpStep(2)" disabled>Continue →</button></div>
+      <div class="btn-row"><button class="btn-primary btn-full" id="lp-next-1-btn" onclick="lpContinueFromStep1()" disabled>Continue →</button></div>
     </div>
     <div class="step-block" id="lp-step-2">
       <div class="section-label">Listing details</div>
@@ -736,18 +736,16 @@ button:active{transform:scale(.97)}
             </div>
             <button onclick="lpShowFolderPicker()" style="font-size:11px;color:var(--teal);background:none;border:none;cursor:pointer;font-weight:800;flex-shrink:0;padding:4px 6px">Change</button>
           </div>
-          <!-- Picker state -->
+          <!-- Picker state — searchable combobox (matches the Step 1 folder picker) -->
           <div id="lp-folder-picker-panel" style="display:none">
             <div class="section-label" style="margin-top:6px">Link photo folder</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Matched to this piece — preview to check, then tap to link and load its photos.</div>
-            <div id="lp-folder-loading" style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px;display:none">Loading folders…</div>
-            <div id="lp-folder-list"></div>
-            <div id="lp-folder-sold-section" style="display:none">
-              <div class="lp-folder-div"><div class="lp-folder-div-line"></div><span class="lp-folder-div-label">Sold — for examples</span><div class="lp-folder-div-line"></div></div>
-              <div id="lp-folder-sold-list"></div>
-            </div>
-            <div id="lp-folder-browse-wrap" style="display:none;text-align:center;margin-top:8px">
-              <button onclick="lpLoadAllFolders(true)" style="background:transparent;border:1.5px dashed var(--border);color:var(--text-muted);border-radius:var(--radius-sm);padding:9px 16px;font-size:12px;cursor:pointer;font-family:inherit;width:100%">Browse all folders</button>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Best matches for this piece are listed first — search to narrow the list, then tap a folder to link it and load its photos.</div>
+            <div style="display:flex;gap:8px;align-items:flex-start">
+              <div id="lp-folder-combo" class="ms" style="flex:1" onclick="var s=document.getElementById('lp-folder-search');if(s)s.focus();">
+                <div class="ms-control"><span class="ms-chips" id="lp-folder-chips"></span><input class="ms-search" id="lp-folder-search" type="text" autocomplete="off" placeholder="Search folders…" oninput="lpFolderComboRender(this.value)" onfocus="lpFolderComboOpen()" onblur="setTimeout(lpFolderComboBlur,150)"></div>
+                <div class="ms-menu" id="lp-folder-menu"></div>
+              </div>
+              <button type="button" class="btn" style="flex-shrink:0;font-size:11px;padding:8px 10px" onclick="lpFolderReload()" title="Refresh folder list">↻</button>
             </div>
           </div>
         </div>
@@ -771,7 +769,7 @@ button:active{transform:scale(.97)}
           <div id="lp-video-pick-empty" style="display:none;font-size:12px;color:var(--text-muted);background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 14px">No videos in this folder yet — drop one into the Drive folder, then tap ↻ above. You can also add a video any time after listing.</div>
         </div>
       </div>
-      <div class="btn-row" style="margin-top:14px"><button class="btn-primary btn-full" onclick="lpStep(4)">Title &amp; description →</button><button class="btn btn-full" onclick="lpStep(2)">← Back</button></div>
+      <div class="btn-row" style="margin-top:14px"><button class="btn-primary btn-full" onclick="lpContinueFromPhotos()">Title &amp; description →</button><button class="btn btn-full" onclick="lpStep(2)">← Back</button></div>
     </div>
     <div class="step-block" id="lp-step-4">
       <div class="info-card amber" id="lp-photos-for-ai-note" style="display:none"><strong>📸 No photos added yet.</strong> Add photos in the previous step for the best AI title &amp; description.</div>
@@ -1577,9 +1575,12 @@ function rdRenderList(cards) {
       } else {
         detail += `<div class="rd-why">Status: ${escHtml(c.status)}</div>`;
       }
-      const _rdStep = rdGetTargetStep(c);
-      const _rdEB = _rdStep
-        ? `<span class="rd-eb rd-eb-link" onclick="rdLaunchLP('${c.r.id}',${_rdStep})" title="Open in List &amp; Publish">${escHtml(c.eb)} ↗</span>`
+      const _rdTarget = rdGetTarget(c);
+      const _rdClick = _rdTarget
+        ? (_rdTarget.mode === 'edit' ? `rdEditPiece('${c.r.id}')` : `rdLaunchLP('${c.r.id}',${_rdTarget.step})`)
+        : '';
+      const _rdEB = _rdTarget
+        ? `<span class="rd-eb rd-eb-link" onclick="${_rdClick}" title="${escHtml(_rdTarget.title)}">${escHtml(c.eb)} ↗</span>`
         : `<span class="rd-eb">${escHtml(c.eb)}</span>`;
       html += `<div class="rd-card ${c.group}"><div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">${_rdEB}${statusBadge}</div><div class="rd-name">${escHtml(c.name)}</div>${detail}</div>`;
     });
@@ -1587,15 +1588,32 @@ function rdRenderList(cards) {
   document.getElementById('rd-list').innerHTML = html || '<div style="text-align:center;padding:32px;color:var(--text-muted)">No pieces found</div>';
 }
 
-// ── Readiness → LP deep-link helpers ─────────────────────────────────────────
-function rdGetTargetStep(card) {
-  // Not selectable in LP or doesn't need LP navigation
-  if (!card.inDropdown || card.isListed || card.isSoldOrOther) return null;
-  // Only photos missing → jump straight to Step 3
-  const nonPhotoMissing = card.allMissing.filter(l => l !== 'Photos');
-  if (nonPhotoMissing.length === 0 && card.allMissing.includes('Photos')) return 3;
-  // Any detail field missing, or ready → Step 2
-  return 2;
+// ── Readiness → deep-link helpers ────────────────────────────────────────────
+// Where should clicking a readiness card take the operator? Return the FIRST step in the
+// workflow sequence that can resolve an outstanding gap (or null when there's nothing to do):
+//   • Missing publish-blocking basics (Price / Type / Season / Reference name) or an
+//     unlistable Status → those are Step 1 fields → open the piece in New Piece / edit.
+//   • Missing physical details (Dimensions / Weight) → List & Publish Step 2.1 backfill editor.
+//   • Only photos left → List & Publish Photos step (2.3).
+//   • Everything present → List & Publish details (2.2).
+function rdGetTarget(card) {
+  if (card.isListed || card.isSoldOrOther) return null;
+  if (card.missingBlocking.length > 0 || !card.inDropdown)
+    return { mode:'edit', title:'Edit piece details (Step 1)' };
+  const inc = card.missingIncomplete;
+  if (inc.includes('Dimensions') || inc.includes('Weight'))
+    return { mode:'lp', step:1, title:'Add weight & dimensions (Step 2.1)' };
+  if (inc.includes('Photos'))
+    return { mode:'lp', step:3, title:'Add photos (Step 2.3)' };
+  return { mode:'lp', step:2, title:'Open in List & Publish' };
+}
+// Open a piece in the New Piece screen's edit mode (for fixing Step 1 fields).
+function rdEditPiece(recordId) {
+  goTo('screen-new-piece');
+  if (typeof npSetMode === 'function') npSetMode('edit');
+  const sel = document.getElementById('np-edit-select');
+  if (sel) sel.value = recordId;
+  if (typeof npLoadRecordForEdit === 'function') npLoadRecordForEdit();
 }
 function rdLaunchLP(recordId, targetStep) {
   goTo('screen-list');
@@ -2758,6 +2776,21 @@ async function lpSaveDimsInline(){
   }
   lpRenderLPPreview(lpSelectedRecord.fields);
   if(ok&&ss){ss.style.display='block';ss.style.color='var(--green-text)';ss.textContent='✓ Saved to Airtable';setTimeout(()=>{ss.style.display='none';},2500);}
+  return ok;
+}
+
+// Continue → from Step 1. If the dims/weight backfill editor is open with typed-but-unsaved
+// values, flush them to Airtable first so they aren't silently lost when the user proceeds
+// without tapping the 💾 Save button (previously the values never reached the record and
+// publish still reported weight/dimensions missing).
+async function lpContinueFromStep1(){
+  const editor=document.getElementById('lp-dims-editor');
+  if(editor && editor.style.display!=='none'){
+    const hasInput=['lp-edit-width','lp-edit-height','lp-edit-depth','lp-edit-weight-lb','lp-edit-weight-oz']
+      .some(id=>{const el=document.getElementById(id);return el && el.value.trim()!=='';});
+    if(hasInput){ try{ await lpSaveDimsInline(); }catch(e){ console.warn('Dimension flush on Continue failed:',e.message); } }
+  }
+  lpStep(2);
 }
 
 // Step 2.5 review — renders the final Shopify listing fields. Title comes from the AI
@@ -3041,6 +3074,23 @@ function lpCropCancel(){lpCropCloseModal();}
 function lpCropCloseModal(){const m=document.getElementById('lp-crop-modal');if(m)m.classList.remove('open');lpCropIdx=-1;lpCropImg=null;lpCropPointers.clear();lpCropPanStart=null;lpCropPinchStart=null;}
 function lpCropBackdrop(e){if(e.target===document.getElementById('lp-crop-modal'))lpCropCancel();}
 
+// Number of selected photos still missing a square crop. Photos may be selected without
+// cropping (crops are optional to *continue*), but every one must be cropped to *publish*.
+function lpUncroppedCount(){ return lpPhotoItems.filter(it=>!it.cropped).length; }
+
+// Continue → from the Photos step. Crops are not required to move on (work is saved), but
+// warn the user if any selected photo still needs a square crop so they know they can't
+// publish until it's done.
+function lpContinueFromPhotos(){
+  const n=lpUncroppedCount();
+  if(n>0){
+    const total=lpPhotoItems.length;
+    const ok=confirm(n+' of your '+total+' selected photo'+(total!==1?'s':'')+' still need'+(n===1?'s':'')+' a square crop.\n\nYou can continue now — your photo selection and any crops you\'ve set are saved — but you won\'t be able to publish until every selected photo has a square crop (set them with the ◻ Crop button in the Photos step).\n\nContinue anyway?');
+    if(!ok) return;
+  }
+  lpStep(4);
+}
+
 function lpUpdatePublishSummary(){
   if(!lpSelectedRecord)return;
   const f=lpSelectedRecord.fields, sku=f['EB Number']||'', price=f['Price ($)'];
@@ -3050,6 +3100,7 @@ function lpUpdatePublishSummary(){
   const oz=lpWeightOzFromRecord(f), hasWeight=oz!=null;
   const dimW=f['Width (in)'],dimH=f['Height (in)'],dimD=f['Depth (in)'],hasDims=dimW&&dimH&&dimD;
   const photoCount=lpPhotoItems.length;
+  const uncropped=lpUncroppedCount();
   const checkRow=(label,value,ok)=>'<div class="publish-check-row"><span style="font-size:13px;flex-shrink:0">'+(ok?'✅':'⚠️')+'</span><span><strong>'+label+'</strong> '+escHtml(value)+'</span></div>';
   const blocks=[];
   if(!sku) blocks.push('EB number not selected');
@@ -3059,9 +3110,12 @@ function lpUpdatePublishSummary(){
   if(!title) blocks.push('Product title is empty');
   if(!desc) blocks.push('Description is empty');
   if(photoCount===0) blocks.push('No photos added');
+  if(photoCount>0 && uncropped>0) blocks.push(uncropped+' photo'+(uncropped!==1?'s':'')+' still need a square crop — set '+(uncropped!==1?'them':'it')+' in Step 2.3 (Photos)');
   const priceDisplay=price!=null?'$'+Number(price).toFixed(2):'not set';
   const dimsDisplay=hasDims?`${dimW}" W × ${dimH}" H × ${dimD}" D`:'missing';
-  document.getElementById('lp-publish-summary').innerHTML=checkRow('Title',title||'empty',!!title)+checkRow('SKU',sku,!!sku)+checkRow('Price',priceDisplay,!!(price&&Number(price)>0))+checkRow('Weight',hasWeight?ozToLbOzStr(oz):'missing',hasWeight)+checkRow('Dimensions',dimsDisplay,!!hasDims)+checkRow('Description',desc?'ready':'empty',!!desc)+checkRow('Photos',photoCount>0?photoCount+' added'+(photoCount<8?' (aim for 8)':' ✓'):'none added',photoCount>0);
+  const cropsOk=photoCount>0&&uncropped===0;
+  const cropsDisplay=photoCount===0?'no photos yet':(uncropped===0?'all '+photoCount+' cropped ✓':uncropped+' of '+photoCount+' not cropped');
+  document.getElementById('lp-publish-summary').innerHTML=checkRow('Title',title||'empty',!!title)+checkRow('SKU',sku,!!sku)+checkRow('Price',priceDisplay,!!(price&&Number(price)>0))+checkRow('Weight',hasWeight?ozToLbOzStr(oz):'missing',hasWeight)+checkRow('Dimensions',dimsDisplay,!!hasDims)+checkRow('Description',desc?'ready':'empty',!!desc)+checkRow('Photos',photoCount>0?photoCount+' added'+(photoCount<8?' (aim for 8)':' ✓'):'none added',photoCount>0)+checkRow('Square crops',cropsDisplay,cropsOk);
   const blocksEl=document.getElementById('lp-blocks');
   if(blocks.length>0){blocksEl.style.display='block';blocksEl.innerHTML='<strong>Fix before publishing:</strong><br>'+blocks.map(b=>'• '+b).join('<br>');}
   else blocksEl.style.display='none';
@@ -3204,7 +3258,7 @@ async function lpPublish(){
     WIP.clear('lp');
     lastPublishedProduct={eb:f['EB Number']||'',detail:(f['Type']||'')+(f['Season']?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Occasion']&&f['Occasion']!=='None'?' · '+f['Occasion']:''),adminUrl:data.admin_url,price:f['Price ($)']!=null?String(f['Price ($)']):''}; 
     result.className='publish-result success';result.style.display='block';
-    result.innerHTML='<div style="font-size:15px;font-weight:700;color:var(--sage);margin-bottom:14px">✓ Published successfully!</div><div style="display:grid;gap:8px;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 1 — Airtable</strong><div style="font-size:11px;color:var(--text-muted)">Status set to Listed · Shopify URL saved</div></div></div><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 2 — Shopify</strong><div style="font-size:11px;color:var(--text-muted)">Listing live · inventory set to '+(data.quantity!=null?data.quantity:1)+(data.category?' · category: '+escHtml(data.category):'')+(data.colors_set?' · '+data.colors_set+' color'+(data.colors_set!==1?'s':''):'')+' · collections assigned</div></div></div>'+(squaresSaved>0?'<div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">📐</span><div><strong style="font-size:13px">Drive — square crops</strong><div style="font-size:11px;color:var(--text-muted)">'+squaresSaved+' square photo'+(squaresSaved!==1?'s':'')+' saved · originals untouched</div></div></div>':'')+'<div id="lp-pub-video" style="display:flex;align-items:center;gap:10px;background:var(--teal-bg);border:1px solid var(--teal-light);border-radius:8px;padding:12px"><span style="font-size:18px">📹</span><div id="lp-pub-video-msg" style="font-size:12px;color:var(--teal)">Checking video…</div></div></div><a href="'+data.shopify_url+'" target="_blank" style="font-size:12px;color:var(--text-muted)">🔗 View live listing</a>';
+    result.innerHTML='<div style="font-size:15px;font-weight:700;color:var(--sage);margin-bottom:14px">✓ Published successfully!</div><div style="display:grid;gap:8px;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 1 — Airtable</strong><div style="font-size:11px;color:var(--text-muted)">Status set to Listed · Shopify URL saved</div></div></div><div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">✅</span><div><strong style="font-size:13px">Step 2 — Shopify</strong><div style="font-size:11px;color:var(--text-muted)">Listing live · inventory set to '+(data.quantity!=null?data.quantity:1)+(data.category?' · category: '+escHtml(data.category):'')+(data.colors_set?' · '+data.colors_set+' color'+(data.colors_set!==1?'s':''):'')+' · collections assigned</div></div></div>'+(squaresSaved>0?'<div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.5);border-radius:8px;padding:10px 12px"><span style="font-size:18px">📐</span><div><strong style="font-size:13px">Drive — square crops</strong><div style="font-size:11px;color:var(--text-muted)">'+squaresSaved+' square photo'+(squaresSaved!==1?'s':'')+' saved · originals untouched</div></div></div>':'')+'<div id="lp-pub-video" style="display:flex;align-items:center;gap:10px;background:var(--teal-bg);border:1px solid var(--teal-light);border-radius:8px;padding:12px"><span style="font-size:18px">📹</span><div id="lp-pub-video-msg" style="font-size:12px;color:var(--teal)">Checking video…</div></div></div><div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">'+(data.admin_url?'<a href="'+data.admin_url+'" target="_blank" style="font-size:12px;color:var(--teal);font-weight:700">⚙ Open in Shopify admin</a>':'')+'<a href="'+data.shopify_url+'" target="_blank" style="font-size:12px;color:var(--text-muted)">🔗 View live listing</a></div>';
     btn.textContent='✓ Published!';btn.style.background='var(--sage)';btn.style.borderColor='var(--sage)';
     // Video (the result panel — incl. #lp-pub-video — now exists in the DOM): if one
     // was picked in Step 2.3 upload it now; otherwise fall back to the manual panel.
@@ -3256,95 +3310,84 @@ function lpScoreFolder(folderName, rec) {
   return { score, isSold };
 }
 
-async function lpLoadAllFolders(showAll) {
-  const list = document.getElementById('lp-folder-list');
-  const soldList = document.getElementById('lp-folder-sold-list');
-  const soldSection = document.getElementById('lp-folder-sold-section');
-  const browseWrap = document.getElementById('lp-folder-browse-wrap');
-  const loading = document.getElementById('lp-folder-loading');
-
-  if (!lpAllFolders.length) {
-    loading.style.display = 'block'; list.innerHTML = ''; soldList.innerHTML = '';
-    try {
-      const r = await fetch(SERVER_URL+'/drive-list-subfolders-ranked?parentId='+encodeURIComponent(LISTING_PHOTOS_SORTED_FOLDER_ID));
-      const d = await r.json();
-      lpAllFolders = d.folders || [];
-    } catch(e) {
-      loading.style.display = 'none';
-      list.innerHTML = '<div style="color:var(--rose);font-size:13px;padding:10px 0">⚠ Could not load folders: '+escHtml(e.message)+'</div>';
-      return;
-    }
-    loading.style.display = 'none';
+// ── Searchable folder combobox (built on the .ms styles — matches the Step 1 picker) ──
+// Fetch the folder list once (ranked endpoint), cached in lpAllFolders.
+async function lpFolderEnsureLoaded(force){
+  if(force) lpAllFolders=[];
+  if(!lpAllFolders.length){
+    const r = await fetch(SERVER_URL+'/drive-list-subfolders-ranked?parentId='+encodeURIComponent(LISTING_PHOTOS_SORTED_FOLDER_ID));
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.error||'Could not list folders');
+    lpAllFolders = d.folders || [];
   }
+  return lpAllFolders;
+}
 
-  // Get claimed folder IDs (already linked to OTHER records)
+// Auto-suggest ranking retained: best name matches for this piece float to the top, then
+// alphabetical; sold folders sink to the bottom; folders already linked to OTHER pieces
+// are hidden. Optional query filters by name.
+function lpFolderRankedOptions(query){
   const claimedIds = new Set(allRecords
     .filter(r => r.id !== (lpSelectedRecord && lpSelectedRecord.id) && r.fields['Drive Folder ID'])
     .map(r => r.fields['Drive Folder ID']));
-
-  // Score (for confidence indicators) then sort alphabetically
-  const scored = lpAllFolders
+  const q=(query||'').trim().toLowerCase();
+  let scored = lpAllFolders
     .filter(f => !claimedIds.has(f.id))
-    .map(f => ({ ...f, ...lpScoreFolder(f.name, lpSelectedRecord) }))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-
-  const live = scored.filter(f => !f.isSold);
-  const sold = scored.filter(f => f.isSold);
-
-  const TOP_N = showAll ? 999 : 3;
-
-  list.innerHTML = live.slice(0, TOP_N).map(f => lpFolderCardHtml(f)).join('');
-  soldList.innerHTML = sold.slice(0, showAll ? 999 : 2).map(f => lpFolderCardHtml(f, true)).join('');
-  soldSection.style.display = sold.length ? 'block' : 'none';
-  browseWrap.style.display = (!showAll && live.length > TOP_N) ? 'block' : 'none';
-
-  // Restore selection if any
-  if (lpFolderSelected) lpHighlightFolder(lpFolderSelected.id);
+    .map(f => ({ ...f, ...lpScoreFolder(f.name, lpSelectedRecord) }));
+  if(q) scored = scored.filter(f => (f.name||'').toLowerCase().includes(q));
+  scored.sort((a,b) =>
+    (a.isSold - b.isSold) ||
+    (b.score - a.score) ||
+    a.name.localeCompare(b.name, undefined, { sensitivity:'base' }));
+  return scored;
 }
 
-function lpFolderCardHtml(f, isSold) {
-  const confClass = f.score >= 30 ? 'strong' : f.score >= 10 ? 'good' : 'maybe';
-  const confLabel = f.score >= 30 ? '<span style="color:#445c39;font-weight:700">Strong match</span>' :
-                    f.score >= 10 ? '<span style="color:#7a5500;font-weight:700">Good match</span>' :
-                                    '<span style="color:var(--text-muted)">Possible</span>';
-  const soldClass = isSold ? ' sold' : '';
-  return `<div class="lp-folder-card${soldClass}" id="lp-fc-${f.id}" onclick="lpSelectFolder('${f.id}','${f.name.replace(/'/g,"\'")}')">
-    <span class="lp-folder-conf ${confClass}"></span>
-    <div style="flex:1;min-width:0">
-      <div class="lp-folder-name">${escHtml(f.name)}</div>
-      <div class="lp-folder-meta">${confLabel}${isSold ? ' &nbsp;·&nbsp; <em>sold</em>' : ''} &nbsp;·&nbsp; <a href="#" onclick="event.stopPropagation();lpFolderPreview('${f.id}',event);return false;" style="color:var(--teal);font-weight:700">👁 Preview</a></div>
-      <div id="lp-fcp-${f.id}" class="lp-folder-preview" style="display:none;margin-top:6px" onclick="event.stopPropagation()"></div>
-    </div>
-    <div class="lp-folder-radio" id="lp-fr-${f.id}"></div>
-  </div>`;
+function lpFolderMatchBadge(f){
+  if(f.isSold)     return '<span style="color:var(--text-muted);font-size:10px;font-weight:700;margin-left:auto">sold</span>';
+  if(f.score>=30)  return '<span style="color:#445c39;font-size:10px;font-weight:800;margin-left:auto">Strong match</span>';
+  if(f.score>=10)  return '<span style="color:#7a5500;font-size:10px;font-weight:800;margin-left:auto">Good match</span>';
+  return '';
 }
 
-// Inline thumbnail preview for a folder card — confirm the right folder before linking.
-async function lpFolderPreview(folderId, ev){
-  if(ev && ev.stopPropagation) ev.stopPropagation();
-  const box=document.getElementById('lp-fcp-'+folderId); if(!box)return;
-  if(box.dataset.loaded){ box.style.display = box.style.display==='none' ? 'block' : 'none'; return; }
-  box.style.display='block'; box.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:4px 0">Loading thumbnails…</div>';
-  try{
-    const r=await fetch(SERVER_URL+'/drive-folder-images?folderId='+encodeURIComponent(folderId));
-    const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not load photos');
-    const imgs=(d.files||[]).slice(0,6), total=d.total!=null?d.total:(d.files||[]).length;
-    box.innerHTML = imgs.length
-      ? ('<div class="thumb-row">'+imgs.map(f=>'<img src="'+(f.thumbnailLink||'')+'" alt="'+escHtml(f.name)+'" referrerpolicy="no-referrer">').join('')+'</div>'+(total>imgs.length?'<div style="font-size:11px;color:var(--text-muted);margin-top:3px">+'+(total-imgs.length)+' more</div>':''))
-      : '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">No photos in this folder yet.</div>';
-    box.dataset.loaded='1';
-  }catch(e){ box.innerHTML='<div style="font-size:11px;color:var(--rose);padding:4px 0">⚠ '+escHtml(e.message)+'</div>'; }
+function lpFolderComboRender(query){
+  const menu=document.getElementById('lp-folder-menu'); if(!menu) return;
+  if(!lpAllFolders.length){ menu.innerHTML='<div class="ms-opt" style="cursor:default;color:var(--text-muted)">No folders loaded — tap ↻ to refresh</div>'; return; }
+  const opts=lpFolderRankedOptions(query);
+  if(!opts.length){ menu.innerHTML='<div class="ms-opt" style="cursor:default;color:var(--text-muted)">No matching folders</div>'; return; }
+  menu.innerHTML=opts.map(f=>'<div class="ms-opt" data-id="'+escHtml(f.id)+'" data-name="'+escHtml(f.name)+'"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(f.name)+'</span>'+lpFolderMatchBadge(f)+'</div>').join('');
+  // mousedown (not click) + preventDefault so picking doesn't blur the search first.
+  menu.querySelectorAll('.ms-opt[data-id]').forEach(el=>el.addEventListener('mousedown', e=>{
+    e.preventDefault();
+    lpSelectFolder(el.getAttribute('data-id'), el.getAttribute('data-name'));
+  }));
 }
 
-function lpHighlightFolder(id) {
-  document.querySelectorAll('.lp-folder-card').forEach(c => c.classList.remove('selected'));
-  const card = document.getElementById('lp-fc-'+id);
-  if (card) card.classList.add('selected');
+async function lpFolderComboOpen(){
+  const combo=document.getElementById('lp-folder-combo'); if(combo) combo.classList.add('ms-open');
+  const menu=document.getElementById('lp-folder-menu');
+  if(!lpAllFolders.length){
+    if(menu) menu.innerHTML='<div class="ms-opt" style="cursor:default;color:var(--text-muted)">Loading folders…</div>';
+    try{ await lpFolderEnsureLoaded(); }
+    catch(e){ if(menu) menu.innerHTML='<div class="ms-opt" style="cursor:default;color:var(--rose)">⚠ '+escHtml(e.message)+'</div>'; return; }
+  }
+  lpFolderComboRender((document.getElementById('lp-folder-search')||{}).value||'');
+}
+
+// On blur (clicking away without picking), clear the stray search text and reset the menu.
+function lpFolderComboBlur(){ const s=document.getElementById('lp-folder-search'); if(s) s.value=''; lpFolderComboRender(''); const combo=document.getElementById('lp-folder-combo'); if(combo) combo.classList.remove('ms-open'); }
+
+// ↻ refresh — re-fetch the folder list (picks up any newly-created folders).
+async function lpFolderReload(){
+  const menu=document.getElementById('lp-folder-menu'); if(menu) menu.innerHTML='<div class="ms-opt" style="cursor:default;color:var(--text-muted)">Refreshing…</div>';
+  try{ await lpFolderEnsureLoaded(true); }
+  catch(e){ if(menu) menu.innerHTML='<div class="ms-opt" style="cursor:default;color:var(--rose)">⚠ '+escHtml(e.message)+'</div>'; return; }
+  lpFolderComboRender((document.getElementById('lp-folder-search')||{}).value||'');
 }
 
 async function lpSelectFolder(folderId, folderName) {
   lpFolderSelected = { id: folderId, name: folderName };
-  lpHighlightFolder(folderId);
+  const combo=document.getElementById('lp-folder-combo'); if(combo) combo.classList.remove('ms-open');
+  const search=document.getElementById('lp-folder-search'); if(search) search.value='';
 
   // Save to Airtable immediately
   if (!lpSelectedRecord) return;
@@ -3367,8 +3410,9 @@ function lpShowFolderPicker() {
   lpFolderSelected = null;
   document.getElementById('lp-folder-linked-panel').style.display = 'none';
   document.getElementById('lp-folder-picker-panel').style.display = 'block';
+  const s=document.getElementById('lp-folder-search'); if(s) s.value='';
   lpAllFolders = []; // force reload to pick up any new folders
-  lpLoadAllFolders(false);
+  lpFolderReload();  // populate the combobox menu with fresh, ranked options
 }
 
 function lpRenderFolderLinkedUI(id, name) {
@@ -3387,8 +3431,9 @@ function lpRenderFolderSection() {
   } else {
     document.getElementById('lp-folder-linked-panel').style.display = 'none';
     document.getElementById('lp-folder-picker-panel').style.display = 'block';
+    const s=document.getElementById('lp-folder-search'); if(s) s.value='';
     lpDriveLoadImages(''); // clear any previously loaded grid until a folder is linked
-    lpLoadAllFolders(false);
+    lpFolderReload();      // populate the searchable folder combobox with ranked options
   }
 }
 
