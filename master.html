@@ -3244,6 +3244,10 @@ async function rsResync(){
 async function lpPublish(){
   if(!lpSelectedRecord)return;
   const f=lpSelectedRecord.fields;
+  // Belt-and-suspenders against double-publishing: if this piece is already linked to a
+  // Shopify listing, re-publishing is almost never intended. The server is now idempotent
+  // (won't create a duplicate), but confirm anyway.
+  if(f['Shopify URL'] && !confirm('⚠ This piece already has a Shopify listing:\n'+f['Shopify URL']+'\n\nRe-publishing won’t create a duplicate, but it’s usually unnecessary. Publish anyway?')) return;
   const titleEl=document.getElementById('lp-title');
   const title=(titleEl&&titleEl.value.trim())||lpCurrentTitle||lpFallbackTitle(f), tags=lpBuildTags(f), sku=f['EB Number']||'';
   const price=f['Price ($)']!=null?Number(f['Price ($)']).toFixed(2):'0.00';
@@ -3274,7 +3278,7 @@ async function lpPublish(){
   for(let i=0;i<lpPhotoItems.length;i++){try{btn.textContent='⏳ Photo '+(i+1)+' of '+lpPhotoItems.length+'…';await lpEnsureDriveBytes(lpPhotoItems[i]);const squareBlob=await lpCropToSquare(lpPhotoItems[i].dataUrl,lpPhotoItems[i].crop,2048,300);const squareDataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(squareBlob);});const b64=squareDataUrl.split(',')[1];const squareName=sku+'_square_'+String(i+1).padStart(2,'0')+'.jpg';if(lpLoadedFolderId){try{const ur=await fetch(SERVER_URL+'/drive-upload-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folderId:lpLoadedFolderId,name:squareName,dataBase64:b64,mimeType:'image/jpeg',ebNumber:sku,sourceFileId:lpPhotoItems[i].driveFileId})});if(ur.ok)squaresSaved++;else console.warn('Square not saved to Drive ('+squareName+'):',await ur.text().catch(()=>''));}catch(ue){console.warn('Square upload failed ('+squareName+'):',ue.message);}}images.push({data:b64,filename:squareName});}catch(imgErr){console.warn('Skipping photo '+i+':',imgErr.message);}}
   btn.textContent='⏳ Publishing...';setStatus('lp','Publishing to Shopify...','loading');
   try {
-    const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),90000);
+    const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),180000);
     const pubQty=(f['Quantity']!=null&&f['Quantity']!=='')?f['Quantity']:1;
     const pubCategory=f['Product Category']||npCategoryForType(f['Type'])||'';
     const pubColors=Array.isArray(f['Color(s)'])?f['Color(s)']:(f['Color(s)']?[f['Color(s)']]:[]);
@@ -3319,7 +3323,16 @@ async function lpPublish(){
     if (lpVideoFileId) { lpAutoUploadVideo(lpLastProductId); }
     else { const pv=document.getElementById('lp-pub-video'); if(pv)pv.style.display='none'; setTimeout(lpCheckVideo, 800); }
     setStatus('lp','Published to Shopify ✓','success');setTimeout(()=>hideStatus('lp'),6000);populateLPSelect();
-  } catch(e){result.className='publish-result error';result.style.display='block';result.innerHTML='✗ <strong>Publish failed:</strong> '+escHtml(e.message)+'<br><span style="font-size:12px">Check server: <a href="'+SERVER_URL+'/health" target="_blank">health check</a></span>';btn.disabled=false;btn.textContent='↑ Publish listing to Shopify';btn.style.background='';btn.style.borderColor='';setStatus('lp','Publish failed — see error below','error');}
+  } catch(e){
+    const aborted = e && e.name==='AbortError';
+    const body = aborted
+      ? 'It’s taking longer than expected and timed out on this device — but it may still have completed on Shopify. Check your Shopify admin first. Retrying is safe: the server won’t create a duplicate listing for this SKU.'
+      : escHtml(e.message);
+    result.className='publish-result error';result.style.display='block';
+    result.innerHTML='✗ <strong>Publish '+(aborted?'timed out':'failed')+':</strong> '+body+'<br><span style="font-size:12px">Check server: <a href="'+SERVER_URL+'/health" target="_blank">health check</a></span>';
+    btn.disabled=false;btn.textContent='↑ Publish listing to Shopify';btn.style.background='';btn.style.borderColor='';
+    setStatus('lp','Publish '+(aborted?'timed out':'failed')+' — see note below','error');
+  }
 }
 
 // ── Folder picker — scoring, rendering, linking ───────────────

@@ -1117,7 +1117,7 @@ app.post('/mark-sold', async (req, res) => {
 });
  
 // ── Version / health (verify what's actually deployed) ────────
-app.get('/version', (req, res) => res.json({ version: '2026-07-03-fixpack8', features: ['drive-move-folder: publish→Published, sold→Sold (idempotent bucket move)','custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions', 'indoor_outdoor->custom.indoor_outdoor (universal multi-select; wreaths also get native suitable-space)', 'suggested_display->custom.suggested_display (multi-select surface/spot)'] }));
+app.get('/version', (req, res) => res.json({ version: '2026-07-03-fixpack9', features: ['create-product idempotent by SKU (returns existing product instead of duplicating on retry/timeout)','drive-move-folder: publish→Published, sold→Sold (idempotent bucket move)','custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions', 'indoor_outdoor->custom.indoor_outdoor (universal multi-select; wreaths also get native suitable-space)', 'suggested_display->custom.suggested_display (multi-select surface/spot)'] }));
 
 // Resolve the tool-owned taxonomy metafield GIDs for a product, category-gated.
 // Shared by /create-product (replace) and /resync-attributes (merge) so the value→GID
@@ -1152,6 +1152,44 @@ app.post('/create-product', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized. Visit ' + SERVER_URL + '/auth to complete Shopify OAuth first.' });
   const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images, quantity, product_category, colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material, celebration_type, lighting_options, shape, care_instructions, indoor_outdoor, suggested_display } = req.body;
   if (!title || !sku) return res.status(400).json({ error: 'title and sku are required' });
+
+  // ── Idempotency guard: never create a second product for a SKU that already exists ──
+  // Publishing isn't atomic and the client aborts slow requests, so a retry (or a
+  // slow-but-successful publish the client treated as a failure) previously created a
+  // DUPLICATE product with the same SKU — triggering Shopify's "SKU used by another item"
+  // warning. If the SKU is already live, return that product instead of creating another.
+  // A lookup failure is non-fatal: we log and fall through to normal creation.
+  try {
+    const lookupRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/graphql.json`, {
+      method: 'POST',
+      headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query($q:String!){ productVariants(first:10, query:$q){ edges { node { sku product { legacyResourceId handle featuredImage { url } } } } } }`,
+        variables: { q: `sku:${JSON.stringify(String(sku))}` }
+      })
+    });
+    const lookupData = await lookupRes.json();
+    const edges = (lookupData && lookupData.data && lookupData.data.productVariants && lookupData.data.productVariants.edges) || [];
+    // Require an EXACT sku match (variant search tokenizes on hyphens, so trust equality only).
+    const hit = edges.map(e => e.node).find(n => n && n.sku === sku && n.product);
+    if (hit) {
+      const p = hit.product;
+      console.log(`create-product: SKU ${sku} already exists (product ${p.legacyResourceId}) — returning existing, not duplicating.`);
+      return res.json({
+        success: true,
+        already_existed: true,
+        product_id: Number(p.legacyResourceId),
+        handle: p.handle,
+        shopify_url: `https://eternalbloomsbypatti.com/products/${p.handle}`,
+        admin_url: `https://admin.shopify.com/store/zdzva0-tj/products/${p.legacyResourceId}`,
+        hero_image_url: p.featuredImage ? p.featuredImage.url : null,
+        note: 'A product with this SKU already exists — returned it instead of creating a duplicate. Use Re-sync to update its attributes.'
+      });
+    }
+  } catch (e) {
+    console.warn('create-product SKU idempotency lookup failed (proceeding to create):', e.message);
+  }
+
   // Inventory quantity — default to 1 (one-of-a-kind) when unset; clamp to a non-negative integer.
   const qty = (quantity != null && quantity !== '' && Number.isFinite(Number(quantity))) ? Math.max(0, Math.round(Number(quantity))) : 1;
   const variant = { sku, price: price || '0.00', inventory_management: 'shopify', inventory_policy: 'deny', fulfillment_service: 'manual', requires_shipping: requires_shipping !== false };
