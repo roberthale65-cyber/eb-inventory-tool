@@ -890,11 +890,11 @@ async function getCollectionId(handle) {
 app.post('/generate-description', async (req, res) => {
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server.' });
   const { eb_number, reference_name, type, season, holiday, colors, dimensions, materials, location, special, notes, images, florals, greenery } = req.body;
-  // Florals/Greenery are NOT structured data — they only inform the copy. Real-feel florals
+  // Florals/Greenery are NOT structured data — they only inform the copy. Real-touch florals
   // and premium greenery are upgrades worth touting; silk florals and standard greenery are
   // baseline and must NOT be called out.
   const premiumBits = [];
-  if ((florals || '').toLowerCase() === 'real-feel') premiumBits.push('real-feel, lifelike flowers');
+  if ((florals || '').toLowerCase() === 'real-touch') premiumBits.push('real-touch, lifelike flowers');
   if ((greenery || '').toLowerCase() === 'premium') premiumBits.push('premium greenery');
   const textPrompt = `You write product listings for Eternal Blooms Designs, a handmade artificial flower arrangement business. Each piece is handmade and one of a kind.
 

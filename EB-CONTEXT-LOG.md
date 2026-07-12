@@ -67,7 +67,7 @@ Step 1 rebuilt into **sub-screens 1.1–1.5** (basics → shared details → "pu
 ## 6. Meta / Etsy decisions recorded this phase
 
 - **Care instructions:** structured on Shopify (`custom.care_instructions`); **Meta & Etsy have no care field → fold into the description** there.
-- **Florals (Real-Feel/Silk) & Greenery (Premium/Standard):** **NOT structured data anywhere.** Real-Feel florals and Premium greenery are **touted as benefits in the AI description**; Silk/Standard are baseline and never mentioned (#44).
+- **Florals (Real-Touch/Silk) & Greenery (Premium/Standard):** **NOT structured data anywhere.** Real-Touch florals and Premium greenery are **touted as benefits in the AI description**; Silk/Standard are baseline and never mentioned (#44).
 - **Colors:** exact shade kept in title/tags (and Meta/Etsy free text); nearest standard taxonomy color used for the structured attribute.
 - **Occasion:** universal via tags + holiday-and-seasonal collection on all types; native celebration_type only on Wreaths; Thanksgiving/Sympathy/Funeral have no celebration value (tag/collection only). Etsy *does* have Thanksgiving / July-4th holiday values (noted for the Etsy build).
 - **Category → Meta:** product.category drives `google_product_category` / `fb_product_category`.
