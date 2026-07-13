@@ -1326,6 +1326,38 @@ const CARE_OPTIONS = ['For outdoor wreaths, spray flowers and bows with Scotchga
 // Mirror the Airtable 'Suggested display' multi-select + Shopify custom.suggested_display
 // choices — add new options to ALL THREE to keep them in sync.
 const SUGGESTED_DISPLAY_OPTIONS = ['Fireplace mantle','Shelf','Door','Window','Nook','Wall','Table','Console table','Coffee table','Sideboard','Tiered tray','Staircase','Countertop','Floor','Mailbox','Ceiling'];
+// Standard shipping-box catalog → estimated cost. Snap a piece's Normal Shipping
+// dims UP to the smallest/cheapest box it fits in; that box's cost is the estimate.
+// Costs = cheapest full-service rate (USPS Ground Advantage or UPS Ground) rate-shopped
+// in Pirate Ship from Omaha 68142 to a conservative far/Zone-6 lane, ~2-3 lb, validated
+// 2026-07-13. To refresh: re-quote at ship.pirateship.com/rates and edit `cost` below.
+const SHIP_BOXES = [
+  // Wreath flat boxes
+  {dims:[16,16,6], cost:9.52},  {dims:[16,16,8], cost:20.81},
+  {dims:[18,18,6], cost:19.98}, {dims:[18,18,8], cost:23.61},
+  {dims:[20,20,6], cost:22.93}, {dims:[20,20,8], cost:33.69},
+  // Tier 1 — small cuboid (<=1 cu ft, cheap USPS weight-based)
+  {dims:[12,10,8], cost:8}, {dims:[14,12,9], cost:8},
+  {dims:[15,14,8], cost:8}, {dims:[20,10,8], cost:8},
+  // Tier 2 — large cuboid (UPS Ground beats USPS on dimensional weight)
+  {dims:[16,16,12], cost:31.27}, {dims:[20,16,14], cost:39.11},
+  {dims:[22,18,16], cost:49.94}, {dims:[24,20,16], cost:58.77},
+];
+// Returns {box:'L×W×H', cost} for the cheapest catalog box the packed dims fit in,
+// or null if larger than every box (oversize / custom shipping).
+function estimateShipping(l, w, h){
+  l=parseFloat(l); w=parseFloat(w); h=parseFloat(h);
+  if(!(l>0 && w>0 && h>0)) return null;
+  const p=[l,w,h].sort((a,b)=>b-a);
+  let best=null;
+  for(const b of SHIP_BOXES){
+    const d=b.dims.slice().sort((a,b)=>b-a);
+    if(p[0]<=d[0] && p[1]<=d[1] && p[2]<=d[2] && (!best || b.cost<best.cost)){
+      best={box:b.dims.join('×'), cost:b.cost};
+    }
+  }
+  return best;
+}
 let npMode = 'add';
 let npSelectedFolder = null;   // { id, name } chosen in the Step 1.1 Drive folder picker
 let npFolderList = [];         // cached subfolders of the product-media folder
@@ -2408,6 +2440,7 @@ async function npSaveAndExitStep1() {
   const ebNumber = prefix + String(nextNum).padStart(3,'0');
   npCurrentEB = ebNumber; npAssignedEB = ebNumber;
   fields['EB Number'] = ebNumber; fields['Status'] = 'In stock';
+  fields['Shipping discount (%)'] = 0.5;  // default; editable per piece (blank also = 50% via formula)
   try {
     const result = await airtableFetch('', {method:'POST', body:JSON.stringify({fields})});
     allRecords.push(result); cfCachedRecords = allRecords;
@@ -2474,6 +2507,15 @@ function npDimHint(prefix,hintId){
   var w=parseFloat(document.getElementById('np-'+prefix+'-w').value)||0;
   var h=parseFloat(document.getElementById('np-'+prefix+'-h').value)||0;
   if(!l||!w||!h){el.style.display='none';return;}
+  // Normal shipping box → standard-box cost estimate (drives Shipping estimate ($)).
+  if(prefix==='ship'){
+    var est=estimateShipping(l,w,h);
+    el.style.display='block';el.className='dim-hint '+(est?'dh-ok':'dh-warn');
+    el.innerHTML = est
+      ? '&#128230; Ships in '+est.box+' box &middot; ~$'+est.cost.toFixed(2)+' est. &middot; net ~$'+(est.cost/2).toFixed(2)+' @50%'
+      : '&#128230; Larger than standard boxes &mdash; oversize / custom shipping';
+    return;
+  }
   var cuIn=l*w*h;var cuFt=cuIn/1728;var maxD=Math.max(l,w,h);
   var sorted=[l,w,h].sort(function(a,b){return b-a;});
   var upsLG=sorted[0]+2*(sorted[1]+sorted[2]);
@@ -2526,6 +2568,7 @@ async function npSaveDimensions() {
     if(h) fields['Height (in)']=parseInt(h);
     if(d) fields['Depth (in)']=parseInt(d);
     if(sl||sw||sh) fields['Normal Shipping']=sl+'×'+sw+'×'+sh;
+    if(sl&&sw&&sh){ const est=estimateShipping(sl,sw,sh); if(est) fields['Shipping estimate ($)']=est.cost; }
     if(cl||cw||ch) fields['Aggressive Compression']=cl+'×'+cw+'×'+ch;
     setStatus('np','Saving dimensions to Airtable...','loading');
     try {
