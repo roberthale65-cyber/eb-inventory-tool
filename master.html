@@ -483,7 +483,7 @@ button:active{transform:scale(.97)}
         <button type="button" id="np-mode-add-btn" class="np-mode-btn active" onclick="npSetMode('add')">➕ Add new</button>
         <button type="button" id="np-mode-edit-btn" class="np-mode-btn" onclick="npSetMode('edit')">✏️ Edit existing</button>
       </div>
-      <div class="field" id="np-edit-picker-wrap" style="display:none"><label>Choose a piece to edit</label><select id="np-edit-select"><option value="">— pick a piece —</option></select></div>
+      <div class="field" id="np-edit-picker-wrap" style="display:none"><label>Choose a piece to edit</label><div style="position:relative"><input type="text" id="np-edit-search" placeholder="🔍 Type EB number or name…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding:11px 14px;font-size:14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);outline:none;color:var(--text);box-sizing:border-box" oninput="npEditSearchInput(this.value)" onfocus="npEditSearchInput(this.value)" onblur="setTimeout(()=>{const r=document.getElementById('np-edit-results');if(r)r.style.display='none';},220)"><div id="np-edit-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);max-height:260px;overflow-y:auto;z-index:500"></div></div><select id="np-edit-select" style="display:none"><option value="">— pick a piece —</option></select></div>
       <div class="section-label" id="np-step1-label">Assign EB number</div>
       <div class="info-card sage" id="np-add-hint"><strong>Every piece starts here.</strong> Fill in the details below and the next available EB number is assigned automatically.</div>
       <div class="info-card teal" id="np-edit-hint" style="display:none"><strong>Editing an existing piece.</strong> Update any details and save — the EB number stays the same.</div>
@@ -1696,6 +1696,9 @@ function rdEditPiece(recordId) {
   if (typeof npSetMode === 'function') npSetMode('edit');
   const sel = document.getElementById('np-edit-select');
   if (sel) sel.value = recordId;
+  const _srch = document.getElementById('np-edit-search');
+  const _rec = allRecords.find(r => r.id === recordId);
+  if (_srch && _rec) _srch.value = pieceLabel(_rec.fields) || (_rec.fields['EB Number'] || '');
   if (typeof npLoadRecordForEdit === 'function') npLoadRecordForEdit();
 }
 function rdLaunchLP(recordId, targetStep) {
@@ -2258,7 +2261,7 @@ function npSetMode(mode){
   const sub5hint=document.getElementById('np-sub5-hint'); if(sub5hint) sub5hint.textContent=mode==='edit'?"Save your changes — this piece's EB number stays the same.":"Everything's captured. Assign the next EB number to this piece — it stays with the piece for good.";
   const btn=document.getElementById('np-primary-btn');
   if(mode==='edit'){ btn.textContent='💾 Save changes →'; btn.disabled=true; npPopulateEditSelect(); }
-  else { btn.textContent='✨ Assign EB number →'; btn.disabled=false; npClearForm(); npCurrentRecordId=null; npCurrentEB=''; npAssignedEB=''; const es=document.getElementById('np-edit-select'); if(es)es.value=''; }
+  else { btn.textContent='✨ Assign EB number →'; btn.disabled=false; npClearForm(); npCurrentRecordId=null; npCurrentEB=''; npAssignedEB=''; const es=document.getElementById('np-edit-select'); if(es)es.value=''; _clearEbSearch('np-edit-search','np-edit-results'); }
 }
 // Shared label for all "pick a piece" dropdowns: EB number · Reference name.
 function pieceLabel(f){const eb=f['EB Number']||'';const ref=(f['Reference name']||'').trim();return eb+(ref?' · '+ref:'');}
@@ -2285,11 +2288,25 @@ function ebSortCompare(fa,fb){
 }
 // Sort an array of Airtable records (objects with a .fields) for dropdown display.
 function sortPiecesByEB(records){ return records.slice().sort((x,y)=>ebSortCompare(x.fields||{}, y.fields||{})); }
+let npAllEditOpts=[];
 function npPopulateEditSelect(){
   const sel=document.getElementById('np-edit-select'); if(!sel)return;
   const recs=sortPiecesByEB(allRecords.filter(r=>r.fields['Status']!=='Archived'));
-  sel.innerHTML='<option value="">— pick a piece —</option>'+recs.map(r=>'<option value="'+r.id+'">'+escHtml(pieceLabel(r.fields)||r.id)+'</option>').join('');
+  npAllEditOpts=recs.map(r=>({value:r.id,label:pieceLabel(r.fields)||r.id}));
+  sel.innerHTML='<option value="">— pick a piece —</option>'+npAllEditOpts.map(o=>'<option value="'+escHtml(o.value)+'">'+escHtml(o.label)+'</option>').join('');
   sel.onchange=npLoadRecordForEdit;
+  _clearEbSearch('np-edit-search','np-edit-results');
+}
+// Type-to-search for the edit picker — mirrors the List & Publish / Mark Sold typeahead.
+function npEditSearchInput(q){
+  const lower=q.trim().toLowerCase();
+  const opts=lower?npAllEditOpts.filter(o=>o.label.toLowerCase().includes(lower)):npAllEditOpts;
+  _showEbResults('np-edit-results',opts,(recId,label)=>{
+    document.getElementById('np-edit-search').value=label;
+    document.getElementById('np-edit-results').style.display='none';
+    document.getElementById('np-edit-select').value=recId;
+    npLoadRecordForEdit();
+  }, lower?('No pieces match "'+q+'"'):'No pieces found');
 }
 function npClearForm(){
   document.getElementById('np-ref-name').value='';
@@ -4136,7 +4153,7 @@ function ptInit() { document.getElementById('pt-search').value = ''; ptRender(''
 function ptFilter() { ptRender(document.getElementById('pt-search').value.trim()); }
 function ptRender(filter) {
   const container = document.getElementById('pt-list');
-  const sorted = allRecords.filter(r => r.fields['Status'] !== 'Archived').filter(r => { if(!filter)return true; const q=filter.toLowerCase(); return(r.fields['EB Number']||'').toLowerCase().includes(q)||(r.fields['Type']||'').toLowerCase().includes(q)||(r.fields['Season']||'').toLowerCase().includes(q)||(r.fields['Occasion']||'').toLowerCase().includes(q)||(r.fields['Reference name']||'').toLowerCase().includes(q); }).sort((a,b)=>{ const da=a.fields['Date made']||'',db=b.fields['Date made']||''; return db.localeCompare(da); });
+  const sorted = allRecords.filter(r => r.fields['Status'] !== 'Archived').filter(r => { if(!filter)return true; const q=filter.toLowerCase(); const seasonStr=Array.isArray(r.fields['Season'])?r.fields['Season'].join(' '):(r.fields['Season']||''); return(r.fields['EB Number']||'').toLowerCase().includes(q)||(r.fields['Type']||'').toLowerCase().includes(q)||seasonStr.toLowerCase().includes(q)||(r.fields['Occasion']||'').toLowerCase().includes(q)||(r.fields['Reference name']||'').toLowerCase().includes(q); }).sort((a,b)=>{ const da=a.fields['Date made']||'',db=b.fields['Date made']||''; return db.localeCompare(da); });
   document.getElementById('print-tag-pill').textContent = filter ? sorted.length+' result'+(sorted.length!==1?'s':'') : sorted.length+' pieces';
   if(!sorted.length){container.innerHTML='<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">'+(filter?'No pieces match "'+escHtml(filter)+'"':'No pieces found')+'</div>';return;}
   const statusColor={'In stock':'var(--text-muted)','Photographed':'var(--teal)','Ready to list':'var(--gold)','Listed':'var(--sage)','Sold':'var(--rose)','Craft fair':'var(--gold)'};
