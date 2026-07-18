@@ -2588,7 +2588,11 @@ async function npSaveDimensions() {
   document.getElementById('np-complete-eb').textContent=npCurrentEB;
   document.getElementById('np-complete-status-msg').textContent=npMode==='edit'?'Changes saved.':'Status: In stock.';
   if (npPhotoStatus === 'done') {
-    setTimeout(() => { goTo('screen-list'); const sel=document.getElementById('lp-eb-select'); if(sel&&npCurrentRecordId){sel.value=npCurrentRecordId;if(typeof lpOnSelectRecord==='function')lpOnSelectRecord();const btn=document.getElementById('lp-next-1-btn');if(btn)btn.disabled=false;} }, 800);
+    // Reuse npListNow() — it rebuilds the picker options (populateLPSelect),
+    // fills the VISIBLE search box, and draws the "Pulled from Airtable" card.
+    // The old inline version skipped those, so the just-created piece wasn't in
+    // the hidden <select> yet and the EB number showed blank until a refresh.
+    setTimeout(() => { npListNow(); }, 800);
   } else {
     npStep(3);
   }
