@@ -1928,7 +1928,22 @@ function npGoSub(n){
   npRenderSubThumbs();
   window.scrollTo({top:0,behavior:'smooth'});
 }
-function npSubNext(){ const subs=npActiveSubs(), i=subs.indexOf(npCurrentSub); if(i>=0&&i<subs.length-1) npGoSub(subs[i+1]); }
+function npSubNext(){
+  const subs=npActiveSubs(), i=subs.indexOf(npCurrentSub);
+  // Guard: the "details" sub-step (2) carries the required Product description.
+  // Don't let the dropdowns' overlay hide it — close any open menu, then block
+  // advancing while it's empty so the field can't be silently skipped.
+  if(npCurrentSub===2){
+    const d=document.getElementById('np-description');
+    if(d && !d.value.trim()){
+      document.querySelectorAll('.ms.ms-open').forEach(h=>h.classList.remove('ms-open'));
+      alert('Please enter a Product description before continuing.');
+      d.focus(); d.scrollIntoView({block:'center'});
+      return;
+    }
+  }
+  if(i>=0&&i<subs.length-1) npGoSub(subs[i+1]);
+}
 function npSubPrev(){ const subs=npActiveSubs(), i=subs.indexOf(npCurrentSub); if(i>0) npGoSub(subs[i-1]); }
 // Carry the selected Drive folder's photo thumbnails across 1.2–1.4 for reference.
 function npRenderSubThumbs(){
@@ -1980,7 +1995,15 @@ function msAddOption(host, val, checked){
   const menu = host.querySelector('.ms-menu');
   const label = document.createElement('label'); label.className='ms-opt';
   const cb = document.createElement('input'); cb.type='checkbox'; cb.value=val; cb.checked=!!checked;
-  cb.addEventListener('change', ()=> msSync(host));
+  cb.addEventListener('change', ()=>{
+    msSync(host);
+    // Close the dropdown after a pick so its tall option list can't stay open on
+    // top of the fields below it (e.g. Product description). Reset the search so
+    // the next open shows the full list again.
+    const s=host.querySelector('.ms-search'); if(s) s.value='';
+    msFilter(host);
+    host.classList.remove('ms-open');
+  });
   const span = document.createElement('span'); span.textContent=val;
   label.appendChild(cb); label.appendChild(span);
   const add = menu.querySelector('.ms-add'); menu.insertBefore(label, add||null);
