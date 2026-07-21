@@ -911,22 +911,23 @@ button:active{transform:scale(.97)}
 
     <!-- OVERVIEW -->
     <div class="step-block active" id="bm-step-overview">
-      <div class="info-card teal"><strong>📦 Storage bins</strong> Assign pieces to numbered bins so anyone can find anything — fast at fairs, fast in the studio.</div>
-      <button class="btn-primary btn-full" onclick="bmStartNewLabel()" style="margin-bottom:20px">+ Print new bin label</button>
+      <div class="info-card teal"><strong>📦 Storage bins</strong> Assign pieces to bins, bars &amp; the main collective so anyone can find anything — fast at fairs, fast in the studio.</div>
+      <button class="btn-primary btn-full" onclick="bmStartNewLabel()" style="margin-bottom:20px">+ Print new label</button>
       <div class="section-label">All bins</div>
       <div id="bm-bin-list"><div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">Loading…</div></div>
     </div>
 
     <!-- PRINT LABEL -->
     <div class="step-block" id="bm-step-print">
-      <div class="section-label">New bin label</div>
+      <div class="section-label">New label</div>
+      <div style="display:flex;gap:8px;margin-bottom:16px" id="bm-type-choice"></div>
       <div style="background:var(--teal-bg);border:1.5px solid var(--teal-light);border-radius:var(--radius);padding:28px 20px;text-align:center;margin-bottom:16px">
-        <div style="font-size:11px;font-weight:800;color:var(--teal);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Bin number</div>
+        <div style="font-size:11px;font-weight:800;color:var(--teal);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px" id="bm-new-lbl">Bin number</div>
         <div style="font-family:var(--font-display);font-size:96px;font-weight:700;color:var(--teal);line-height:.9;margin-bottom:20px" id="bm-new-num">—</div>
         <div id="bm-label-qr-wrap" style="background:#fff;border-radius:12px;padding:14px;display:inline-block;box-shadow:var(--shadow-sm)">
           <img id="bm-label-qr-img" src="" style="width:150px;height:150px;display:block" alt="QR code">
         </div>
-        <div style="font-size:11px;color:var(--teal);margin-top:12px;font-weight:600">Scan this QR to assign pieces to this bin</div>
+        <div style="font-size:11px;color:var(--teal);margin-top:12px;font-weight:600">Scan this QR to assign pieces here</div>
       </div>
       <div class="btn-row"><button class="btn-primary btn-full" onclick="bmPrintLabel()" id="bm-print-btn">🖨 Print 4×6 bin label</button></div>
       <div id="bm-print-success" style="display:none;background:var(--teal-bg);border:1.5px solid var(--teal-light);border-radius:var(--radius-sm);padding:12px 16px;text-align:center;margin-top:10px">
@@ -942,7 +943,7 @@ button:active{transform:scale(.97)}
     <!-- ASSIGN / MANAGE -->
     <div class="step-block" id="bm-step-assign">
       <div style="background:linear-gradient(135deg,var(--teal) 0%,#2f5653 100%);border-radius:var(--radius);padding:20px;text-align:center;color:#fff;margin-bottom:16px;box-shadow:var(--shadow-md)">
-        <div style="font-size:11px;font-weight:700;opacity:.7;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">Assigning to bin</div>
+        <div style="font-size:11px;font-weight:700;opacity:.7;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px" id="bm-assign-type-lbl">Assigning to bin</div>
         <div style="font-family:var(--font-display);font-size:72px;font-weight:700;line-height:.95" id="bm-assign-bin-display">—</div>
         <div style="font-size:11px;opacity:.6;margin-top:8px">Scan or type an EB number to add — tap Remove to take a piece out</div>
         <button onclick="bmReprintLabel()" style="margin-top:14px;background:transparent;border:1.5px solid rgba(255,255,255,0.45);color:#fff;border-radius:99px;padding:7px 18px;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.02em">🖨 Reprint label</button>
@@ -1404,8 +1405,9 @@ async function init() {
   // Handle bin QR scan — master.html?mode=binassign&bin=5
   const urlP = new URLSearchParams(window.location.search);
   if (urlP.get('mode') === 'binassign') {
-    const binNum = parseInt(urlP.get('bin'));
-    if (binNum > 0) { goTo('screen-bin-mgmt'); bmOpenAssign(binNum); }
+    const bmType = urlP.get('type') || 'Bin';
+    if (bmType === 'Main Collective') { goTo('screen-bin-mgmt'); bmOpenAssign('Main Collective'); }
+    else { const binNum = parseInt(urlP.get('bin')); if (binNum > 0) { goTo('screen-bin-mgmt'); bmOpenAssign(bmLocKey(bmType, binNum)); } }
   }
 }
 
@@ -2866,7 +2868,7 @@ function lpRenderLPPreview(f) {
   const dims=(dimW||dimH||dimD)?`${dimW||'?'}" W × ${dimH||'?'}" H × ${dimD||'?'}" D`:null;
   const seasonDisplay=Array.isArray(f['Season'])?f['Season'].join(', '):(f['Season']||null);
   const oz=lpWeightOzFromRecord(f), weightDisplay=oz!=null?ozToLbOzStr(oz):null;
-  const previewFields=[{l:'EB Number',v:f['EB Number']},{l:'Status',v:f['Status']},{l:'Season',v:seasonDisplay},{l:'Type',v:f['Type']},{l:'Occasion',v:f['Occasion']&&f['Occasion']!=='None'?f['Occasion']:null},{l:'Price',v:f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):null},{l:'Dimensions',v:dims},{l:'Weight',v:weightDisplay},{l:'Bin',v:f['Bin location']}];
+  const previewFields=[{l:'EB Number',v:f['EB Number']},{l:'Status',v:f['Status']},{l:'Season',v:seasonDisplay},{l:'Type',v:f['Type']},{l:'Occasion',v:f['Occasion']&&f['Occasion']!=='None'?f['Occasion']:null},{l:'Price',v:f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):null},{l:'Dimensions',v:dims},{l:'Weight',v:weightDisplay},{l:'Location',v:f['Bin location']}];
   document.getElementById('lp-at-preview').style.display='block';
   document.getElementById('lp-at-preview').innerHTML='<div class="at-preview"><div class="at-preview-title">Pulled from Airtable</div><div class="at-grid">'+previewFields.map(fld=>'<div class="at-field"><div class="at-label">'+fld.l+'</div><div class="at-value'+(fld.v?'':' empty')+'">'+escHtml(fld.v||'not set')+'</div></div>').join('')+'</div></div>';
   document.getElementById('lp-outdoor-warning').style.display=f['Type']==='Outdoor planter'?'block':'none';
@@ -4224,10 +4226,87 @@ function npDismissSpelling() {
 // BIN MANAGEMENT
 // ══════════════════════════════════════════
 const BM_TOOL_URL = 'https://roberthale65-cyber.github.io/eb-inventory-tool/master.html';
-let bmCurrentBin = null;   // bin number currently being managed (integer)
-let bmNewBinNum  = null;   // bin number staged for the new label
+// A "location" is one storage area. It has a TYPE (Bin / Bar / Main Collective)
+// and, for Bin & Bar, a number counted independently per type. It's stored on a
+// piece's 'Bin location' field as a KEY:
+//   Bin             -> bare number      ('5')   — unchanged, backward compatible
+//   Bar             -> 'Bar <n>'        ('Bar 3')
+//   Main Collective -> 'Main Collective'         — single area, no number
+const BM_TYPES = ['Bin', 'Bar', 'Main Collective'];
+let bmNewType    = 'Bin';   // type staged for the new label
+let bmNewNum     = null;    // number staged for the new label (null for Main Collective)
+let bmCurrentLoc = null;    // 'Bin location' KEY currently being managed
 let bmCameraStream = null;
 let bmScanActive   = false;
+
+function bmLocKey(type, num) {
+  if (type === 'Main Collective') return 'Main Collective';
+  if (type === 'Bar') return 'Bar ' + num;
+  return String(num);                        // Bin
+}
+function bmLocLabel(type, num) {
+  if (type === 'Main Collective') return 'Main Collective';
+  return type + ' ' + num;                   // 'Bin 5' / 'Bar 3'
+}
+function bmParseLoc(raw) {
+  const s = String(raw == null ? '' : raw).trim();
+  if (!s) return null;
+  if (/^main collective$/i.test(s)) return { type:'Main Collective', num:null, key:'Main Collective', label:'Main Collective' };
+  const bar = s.match(/^bar\s+(\d+)$/i);
+  if (bar) { const n = parseInt(bar[1]); return { type:'Bar', num:n, key:'Bar ' + n, label:'Bar ' + n }; }
+  const n = parseInt(s);
+  if (!isNaN(n) && n > 0 && String(n) === s) return { type:'Bin', num:n, key:String(n), label:'Bin ' + n };
+  return { type:'Other', num:null, key:s, label:s };   // legacy / freeform value
+}
+function bmRegType(r) { return r.fields['Type'] || 'Bin'; }   // blank registry rows = Bin
+
+// QR payload. Plain bins keep the original ?bin=N form so labels already printed
+// (and in the wild) keep working; Bar adds &type=Bar; Main Collective has no number.
+function bmQRData(type, num) {
+  if (type === 'Main Collective') return BM_TOOL_URL + '?mode=binassign&type=' + encodeURIComponent('Main Collective');
+  if (type === 'Bar') return BM_TOOL_URL + '?mode=binassign&bin=' + num + '&type=Bar';
+  return BM_TOOL_URL + '?mode=binassign&bin=' + num;         // Bin
+}
+
+// Single source for the 4x6 label markup (used by both print and reprint).
+function bmBuildLabelHTML(type, num) {
+  const isMC = type === 'Main Collective';
+  const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=480x480&data=' + encodeURIComponent(bmQRData(type, num));
+  const hero = isMC
+    ? '<div style="font-size:38pt;font-weight:900;color:#46867f;line-height:1.02;margin-bottom:0.12in;text-align:center">Main<br>Collective</div>'
+    : '<div class="bin-lbl">' + type + '</div><div class="bin-num">' + num + '</div>';
+  const scanLbl = isMC
+    ? 'Scan to assign a piece to the Main Collective'
+    : 'Scan to assign a piece to this ' + type.toLowerCase();
+  return [
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>',
+    '<style>',
+    '@page { size: 4in 6in; margin: 0mm; }','@media print { @page { margin: 0mm !important; } }',
+    '* { box-sizing: border-box; margin: 0; padding: 0; }',
+    'body { width: 4in; height: 6in; font-family: Arial, sans-serif; background: #fff;',
+    '  display: flex; flex-direction: column; align-items: center; padding: 0.18in 0.22in; }',
+    '.header { background: #bb8588; color: #fff; width: 100%; padding: 0.1in 0.15in;',
+    '  text-align: center; border-radius: 7px; margin-bottom: 0.14in; }',
+    '.brand { font-size: 11pt; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }',
+    '.domain { font-size: 7.5pt; opacity: .82; margin-top: 2px; }',
+    '.bin-lbl { font-size: 9pt; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;',
+    '  color: #5b5248; margin-bottom: 0.02in; }',
+    '.bin-num { font-size: 130pt; font-weight: 900; color: #46867f; line-height: .88;',
+    '  margin-bottom: 0.1in; text-align: center; }',
+    '.rule { width: 78%; border: none; border-top: 1.5px solid #e9e6e2; margin: 0.08in 0 0.1in; }',
+    '.scan-lbl { font-size: 8.5pt; color: #817365; font-weight: 700; text-align: center;',
+    '  margin-bottom: 0.1in; letter-spacing: .02em; }',
+    'img { width: 2in; height: 2in; display: block; }',
+    '</style></head><body>',
+    '<div class="header"><div class="brand">Eternal Blooms Designs</div><div class="domain">eternalbloomsbypatti.com</div></div>',
+    hero,
+    '<hr class="rule">',
+    '<div class="scan-lbl">' + scanLbl + '</div>',
+    '<img src="' + qrUrl + '" alt="QR">',
+    '<script>window.onload=function(){setTimeout(function(){window.print();},900);};<\/script>',
+    '</body></html>'
+  ].join('\n');
+}
 
 function bmStep(stepName) {
   const bmBack={overview:null,print:'overview',assign:'overview'};
@@ -4262,155 +4341,179 @@ async function bmLoadBins() {
 
 function bmRenderOverview() {
   const container = document.getElementById('bm-bin-list');
+  // Group pieces by their location key.
   const pieceMap = {};
   allRecords.forEach(r => {
-    const bin = r.fields['Bin location'];
-    if (bin !== undefined && bin !== null && bin !== '') {
-      const key = String(bin).trim();
-      if (key) { if (!pieceMap[key]) pieceMap[key] = []; pieceMap[key].push(r); }
-    }
+    const loc = bmParseLoc(r.fields['Bin location']);
+    if (loc) { (pieceMap[loc.key] = pieceMap[loc.key] || []).push(r); }
   });
-  const allNums = new Set([
-    ...bmPrintedBins
-      .map(r => parseInt(r.fields['Bin Number']))
-      .filter(n => !isNaN(n) && n > 0)
-      .map(n => String(n)),
-    ...Object.keys(pieceMap)
-  ]);
-  if (allNums.size === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:32px 20px;color:var(--text-muted)"><div style="font-size:40px;margin-bottom:12px">📦</div><div style="font-size:14px;font-weight:700;margin-bottom:6px">No bins yet</div><div style="font-size:12px">Tap &ldquo;Print new bin label&rdquo; to create your first bin.</div></div>';
+  // All locations = registered labels + any location a piece currently sits in.
+  const locByKey = {};
+  bmPrintedBins.forEach(r => {
+    const type = bmRegType(r);
+    const num  = type === 'Main Collective' ? null : (parseInt(r.fields['Bin Number']) || null);
+    if (type !== 'Main Collective' && num == null) return;
+    const key = bmLocKey(type, num);
+    locByKey[key] = { type, num, key, label: bmLocLabel(type, num) };
+  });
+  Object.keys(pieceMap).forEach(key => {
+    if (!locByKey[key]) { const l = bmParseLoc(key); locByKey[key] = { type:l.type, num:l.num, key, label:l.label }; }
+  });
+  const locs = Object.values(locByKey);
+  if (locs.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:32px 20px;color:var(--text-muted)"><div style="font-size:40px;margin-bottom:12px">📦</div><div style="font-size:14px;font-weight:700;margin-bottom:6px">No labels yet</div><div style="font-size:12px">Tap &ldquo;Print new label&rdquo; to add your first bin, bar or the main collective.</div></div>';
     return;
   }
-  const bins = [...allNums]
-    .map(k => ({ num: k, records: pieceMap[k] || [] }))
-    .sort((a,b) => (parseInt(a.num)||0) - (parseInt(b.num)||0));
-  container.innerHTML = bins.map(b => {
-    const empty = b.records.length === 0;
-    const pieceNames = empty ? '' : b.records.map(r => {
+  const typeOrder = { 'Bin':0, 'Bar':1, 'Main Collective':2, 'Other':3 };
+  locs.sort((a,b) => (typeOrder[a.type] - typeOrder[b.type]) || ((a.num||0) - (b.num||0)) || a.key.localeCompare(b.key));
+  container.innerHTML = locs.map(loc => {
+    const records = pieceMap[loc.key] || [];
+    const empty = records.length === 0;
+    const pieceNames = empty ? '' : records.map(r => {
       const eb = (r.fields['EB Number'] || '\u2014');
       const m = eb.match(/^(EB-\d{2}[A-Z]{2}-[A-Z]{2,3}-\d{3})/i);
       return m ? m[1] : eb;
     }).join(', ');
     const countLabel = empty
       ? '<span style="color:var(--text-muted);font-style:italic">Empty &mdash; ready to fill</span>'
-      : b.records.length + ' piece' + (b.records.length !== 1 ? 's' : '');
+      : records.length + ' piece' + (records.length !== 1 ? 's' : '');
+    const bigCell = loc.num != null ? escHtml(String(loc.num)) : '<span style="font-size:15px;font-weight:800">MC</span>';
+    const keyJs = loc.key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     return '<div class="bm-bin-card" style="' + (empty ? 'opacity:.7;' : '') + '">'
-      + '<div class="bm-bin-num">' + escHtml(b.num) + '</div>'
+      + '<div class="bm-bin-num">' + bigCell + '</div>'
       + '<div class="bm-bin-info">'
+      + '<div style="font-size:12px;font-weight:800;color:var(--teal);letter-spacing:.02em;margin-bottom:2px">' + escHtml(loc.label) + '</div>'
       + '<div class="bm-bin-count">' + countLabel + '</div>'
       + (pieceNames ? '<div class="bm-bin-pieces">' + escHtml(pieceNames) + '</div>' : '')
       + '</div>'
-      + '<button onclick="bmOpenAssign(' + parseInt(b.num) + ')" class="btn-teal" style="font-size:12px;padding:8px 14px;border-radius:8px;flex-shrink:0">Manage</button>'
+      + '<button onclick="bmOpenAssign(\'' + keyJs + '\')" class="btn-teal" style="font-size:12px;padding:8px 14px;border-radius:8px;flex-shrink:0">Manage</button>'
       + '</div>';
   }).join('');
 }
 
-function bmGetNextBinNum() {
-  let maxFromRegistry = bmPrintedBins.length > 0
-    ? Math.max(...bmPrintedBins.map(r => parseInt(r.fields['Bin Number']) || 0))
-    : 0;
-  let maxFromRecords = 0;
-  allRecords.forEach(r => {
-    const n = parseInt(r.fields['Bin location']);
-    if (!isNaN(n) && n > maxFromRecords) maxFromRecords = n;
+// Next number for a given type, counted independently per type
+// (Bin and Bar each have their own sequence). Main Collective is un-numbered.
+function bmGetNextNum(type) {
+  if (type === 'Main Collective') return null;
+  let maxN = 0;
+  bmPrintedBins.forEach(r => {
+    if (bmRegType(r) === type) {
+      const n = parseInt(r.fields['Bin Number']) || 0;
+      if (n > maxN) maxN = n;
+    }
   });
-  return Math.max(maxFromRegistry, maxFromRecords) + 1;
+  allRecords.forEach(r => {
+    const loc = bmParseLoc(r.fields['Bin location']);
+    if (loc && loc.type === type && loc.num && loc.num > maxN) maxN = loc.num;
+  });
+  return maxN + 1;
+}
+function bmHasMainCollective() {
+  if (bmPrintedBins.some(r => bmRegType(r) === 'Main Collective')) return true;
+  return allRecords.some(r => { const l = bmParseLoc(r.fields['Bin location']); return l && l.type === 'Main Collective'; });
 }
 
 async function bmStartNewLabel() {
   await bmLoadBins();
-  bmNewBinNum = bmGetNextBinNum();
-  document.getElementById('bm-new-num').textContent = bmNewBinNum;
-  const qrData = BM_TOOL_URL + '?mode=binassign&bin=' + bmNewBinNum;
-  const qrUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(qrData);
-  document.getElementById('bm-label-qr-img').src = qrUrl;
-  document.getElementById('bm-print-success').style.display = 'none';
-  document.getElementById('bm-print-next-btn').style.display = 'none';
+  bmNewType = 'Bin';
+  bmStageLabel('Bin');
   bmStep('print');
 }
 
+// Render the Bin / Bar / Main Collective selector on the print step.
+function bmRenderTypeChoice() {
+  const wrap = document.getElementById('bm-type-choice');
+  if (!wrap) return;
+  wrap.innerHTML = BM_TYPES.map(t => {
+    const on = (t === bmNewType);
+    return '<button type="button" onclick="bmStageLabel(\'' + t + '\')" '
+      + 'style="flex:1;padding:10px 6px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;line-height:1.15;'
+      + 'border:1.5px solid ' + (on ? 'var(--teal)' : 'var(--border)') + ';'
+      + 'background:' + (on ? 'var(--teal)' : 'var(--card)') + ';'
+      + 'color:' + (on ? '#fff' : 'var(--text)') + '">' + t + '</button>';
+  }).join('');
+}
+
+// Stage a label of the given type: recompute the number (none for Main
+// Collective), refresh the on-screen preview + QR + print button.
+function bmStageLabel(type) {
+  bmNewType = type;
+  bmRenderTypeChoice();
+  const isMC = (type === 'Main Collective');
+  bmNewNum = isMC ? null : bmGetNextNum(type);
+  const numEl = document.getElementById('bm-new-num');
+  document.getElementById('bm-new-lbl').textContent = isMC ? 'Single shared area' : (type + ' number');
+  numEl.textContent = isMC ? 'Main Collective' : bmNewNum;
+  numEl.style.fontSize = isMC ? '34px' : '96px';
+  const qrData = bmQRData(type, bmNewNum);
+  document.getElementById('bm-label-qr-img').src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(qrData);
+  document.getElementById('bm-print-success').style.display = 'none';
+  document.getElementById('bm-print-next-btn').style.display = 'none';
+  const btn = document.getElementById('bm-print-btn');
+  if (btn) btn.textContent = isMC ? '🖨 Print 4×6 Main Collective label' : '🖨 Print 4×6 ' + type.toLowerCase() + ' label';
+}
+
 async function bmPrintLabel() {
-  const binNum = bmNewBinNum;
-  if (!binNum) return;
-  const qrData = BM_TOOL_URL + '?mode=binassign&bin=' + binNum;
-  const qrUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=480x480&data=' + encodeURIComponent(qrData);
+  const type = bmNewType;
+  const num  = bmNewNum;
+  const isMC = (type === 'Main Collective');
   const win = window.open('', '_blank');
-  const html = [
-    '<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>',
-    '<style>',
-    '@page { size: 4in 6in; margin: 0mm; }','@media print { @page { margin: 0mm !important; } }',
-    '* { box-sizing: border-box; margin: 0; padding: 0; }',
-    'body { width: 4in; height: 6in; font-family: Arial, sans-serif; background: #fff;',
-    '  display: flex; flex-direction: column; align-items: center; padding: 0.18in 0.22in; }',
-    '.header { background: #bb8588; color: #fff; width: 100%; padding: 0.1in 0.15in;',
-    '  text-align: center; border-radius: 7px; margin-bottom: 0.14in; }',
-    '.brand { font-size: 11pt; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }',
-    '.domain { font-size: 7.5pt; opacity: .82; margin-top: 2px; }',
-    '.bin-lbl { font-size: 9pt; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;',
-    '  color: #5b5248; margin-bottom: 0.02in; }',
-    '.bin-num { font-size: 130pt; font-weight: 900; color: #46867f; line-height: .88;',
-    '  margin-bottom: 0.1in; text-align: center; }',
-    '.rule { width: 78%; border: none; border-top: 1.5px solid #e9e6e2; margin: 0.08in 0 0.1in; }',
-    '.scan-lbl { font-size: 8.5pt; color: #817365; font-weight: 700; text-align: center;',
-    '  margin-bottom: 0.1in; letter-spacing: .02em; }',
-    'img { width: 2in; height: 2in; display: block; }',
-    '</style></head><body>',
-    '<div class="header"><div class="brand">Eternal Blooms Designs</div><div class="domain">eternalbloomsbypatti.com</div></div>',
-    '<div class="bin-lbl">Bin</div>',
-    '<div class="bin-num">' + binNum + '</div>',
-    '<hr class="rule">',
-    '<div class="scan-lbl">Scan to assign a piece to this bin</div>',
-    '<img src="' + qrUrl + '" alt="QR">',
-    '<script>window.onload=function(){setTimeout(function(){window.print();},900);};<\/script>',
-    '</body></html>'
-  ].join('\n');
-  win.document.write(html);
+  win.document.write(bmBuildLabelHTML(type, num));
   win.document.close();
 
-  // Register this bin in Airtable immediately — no pieces required
+  // Register the label so an empty (not-yet-filled) area still shows up and still
+  // advances the per-type counter. Main Collective is registered only once.
   try {
-    const rec = await fetch(SERVER_URL + '/airtable/bins', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fields: {
-        'Bin Number': binNum,
-        'Date Printed': new Date().toISOString().split('T')[0]
-      }})
-    }).then(r => r.json());
-    if (rec && rec.id) bmPrintedBins.push(rec);
+    if (!(isMC && bmHasMainCollective())) {
+      const fields = { 'Type': type, 'Date Printed': new Date().toISOString().split('T')[0] };
+      if (!isMC) fields['Bin Number'] = num;
+      const rec = await fetch(SERVER_URL + '/airtable/bins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields })
+      }).then(r => r.json());
+      if (rec && rec.id) bmPrintedBins.push(rec);
+    }
   } catch(e) {
-    console.warn('Could not register bin in Airtable:', e.message);
+    console.warn('Could not register label in Airtable:', e.message);
   }
 
-  // Show success state and "print next" button
-  const nextNum = bmGetNextBinNum();
+  // Show success state and, for numbered types, a "print next" button.
   const successEl = document.getElementById('bm-print-success');
   const successMsg = document.getElementById('bm-print-success-msg');
   successEl.style.display = 'block';
-  successMsg.textContent = '\u2713 Bin ' + binNum + ' registered \u2014 label sent to printer';
+  successMsg.textContent = isMC
+    ? '\u2713 Main Collective label sent to printer'
+    : '\u2713 ' + bmLocLabel(type, num) + ' registered \u2014 label sent to printer';
   const nextBtn = document.getElementById('bm-print-next-btn');
-  nextBtn.style.display = '';
-  nextBtn.textContent = '+ Print bin ' + nextNum + ' \u2192';
+  if (isMC) {
+    nextBtn.style.display = 'none';
+  } else {
+    nextBtn.style.display = '';
+    nextBtn.textContent = '+ Print ' + type.toLowerCase() + ' ' + bmGetNextNum(type) + ' \u2192';
+  }
 }
 
 function bmPrintNext() {
-  bmNewBinNum = bmGetNextBinNum();
-  document.getElementById('bm-new-num').textContent = bmNewBinNum;
-  const qrData = BM_TOOL_URL + '?mode=binassign&bin=' + bmNewBinNum;
-  const qrUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(qrData);
-  document.getElementById('bm-label-qr-img').src = qrUrl;
-  document.getElementById('bm-print-success').style.display = 'none';
-  document.getElementById('bm-print-next-btn').style.display = 'none';
+  bmStageLabel(bmNewType);   // recomputes the next number for the same type
 }
 
 function bmOpenAssignFromPrint() {
-  if (bmNewBinNum === null) return;
-  bmOpenAssign(bmNewBinNum);
+  if (bmNewType === 'Main Collective') { bmOpenAssign('Main Collective'); return; }
+  if (bmNewNum == null) return;
+  bmOpenAssign(bmLocKey(bmNewType, bmNewNum));
 }
 
-function bmOpenAssign(binNum) {
-  bmCurrentBin = parseInt(binNum);
-  document.getElementById('bm-assign-bin-display').textContent = bmCurrentBin;
+function bmOpenAssign(locKey) {
+  const loc = bmParseLoc(locKey);
+  bmCurrentLoc = loc ? loc.key : String(locKey);
+  const label   = loc ? loc.label : String(locKey);
+  const numeric = loc && loc.num != null;
+  const disp = document.getElementById('bm-assign-bin-display');
+  disp.textContent = numeric ? loc.num : 'Main Collective';
+  disp.style.fontSize = numeric ? '72px' : '30px';
+  const lblEl = document.getElementById('bm-assign-type-lbl');
+  if (lblEl) lblEl.textContent = 'Assigning to ' + label;
   document.getElementById('bm-eb-input').value = '';
   bmStopCamera();
   document.getElementById('bm-camera-section').style.display = 'none';
@@ -4421,10 +4524,11 @@ function bmOpenAssign(binNum) {
 
 function bmRenderCurrentPieces() {
   const container = document.getElementById('bm-current-pieces');
-  const bin = String(bmCurrentBin);
-  const pieces = allRecords.filter(r => String(r.fields['Bin location'] || '').trim() === bin);
+  const key = bmCurrentLoc;
+  const label = (bmParseLoc(key) || { label: key }).label;
+  const pieces = allRecords.filter(r => { const l = bmParseLoc(r.fields['Bin location']); return l && l.key === key; });
   if (pieces.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">No pieces in bin ' + bmCurrentBin + ' yet</div>';
+    container.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">No pieces in ' + escHtml(label) + ' yet</div>';
     return;
   }
   container.innerHTML = pieces.map(r => {
@@ -4450,41 +4554,11 @@ function bmCleanEBInput() {
 }
 
 function bmReprintLabel() {
-  const binNum = bmCurrentBin;
-  if (!binNum) return;
-  const qrData = BM_TOOL_URL + '?mode=binassign&bin=' + binNum;
-  const qrUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=480x480&data=' + encodeURIComponent(qrData);
+  if (!bmCurrentLoc) return;
+  const loc = bmParseLoc(bmCurrentLoc);
+  if (!loc) return;
   const win = window.open('', '_blank');
-  const html = [
-    '<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>',
-    '<style>',
-    '@page { size: 4in 6in; margin: 0mm; }','@media print { @page { margin: 0mm !important; } }',
-    '* { box-sizing: border-box; margin: 0; padding: 0; }',
-    'body { width: 4in; height: 6in; font-family: Arial, sans-serif; background: #fff;',
-    '  display: flex; flex-direction: column; align-items: center; padding: 0.18in 0.22in; }',
-    '.header { background: #bb8588; color: #fff; width: 100%; padding: 0.1in 0.15in;',
-    '  text-align: center; border-radius: 7px; margin-bottom: 0.14in; }',
-    '.brand { font-size: 11pt; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }',
-    '.domain { font-size: 7.5pt; opacity: .82; margin-top: 2px; }',
-    '.bin-lbl { font-size: 9pt; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;',
-    '  color: #5b5248; margin-bottom: 0.02in; }',
-    '.bin-num { font-size: 130pt; font-weight: 900; color: #46867f; line-height: .88;',
-    '  margin-bottom: 0.1in; text-align: center; }',
-    '.rule { width: 78%; border: none; border-top: 1.5px solid #e9e6e2; margin: 0.08in 0 0.1in; }',
-    '.scan-lbl { font-size: 8.5pt; color: #817365; font-weight: 700; text-align: center;',
-    '  margin-bottom: 0.1in; letter-spacing: .02em; }',
-    'img { width: 2in; height: 2in; display: block; }',
-    '</style></head><body>',
-    '<div class="header"><div class="brand">Eternal Blooms Designs</div><div class="domain">eternalbloomsbypatti.com</div></div>',
-    '<div class="bin-lbl">Bin</div>',
-    '<div class="bin-num">' + binNum + '</div>',
-    '<hr class="rule">',
-    '<div class="scan-lbl">Scan to assign a piece to this bin</div>',
-    '<img src="' + qrUrl + '" alt="QR">',
-    '<script>window.onload=function(){setTimeout(function(){window.print();},900);};<\/script>',
-    '</body></html>'
-  ].join('\n');
-  win.document.write(html);
+  win.document.write(bmBuildLabelHTML(loc.type, loc.num));
   win.document.close();
   // No Airtable write — bin is already registered
 }
@@ -4506,17 +4580,18 @@ async function bmAssignPiece() {
   });
   if (!rec) { setStatus('bm', '"' + cleanEB + '" not found \u2014 check the EB number and try again.', 'error'); return; }
 
-  const currentBin = String(rec.fields['Bin location'] || '').trim();
-  if (currentBin === String(bmCurrentBin)) {
-    setStatus('bm', cleanEB + ' is already in bin ' + bmCurrentBin + '.', 'warn'); return;
+  const currentKey = (bmParseLoc(rec.fields['Bin location']) || { key:'' }).key;
+  const curLabel   = (bmParseLoc(bmCurrentLoc) || { label: bmCurrentLoc }).label;
+  if (currentKey === bmCurrentLoc) {
+    setStatus('bm', cleanEB + ' is already in ' + curLabel + '.', 'warn'); return;
   }
 
   // Piece is in a DIFFERENT bin — show move confirmation
-  if (currentBin !== '') {
-    bmPendingMove = { recordId: rec.id, ebNumber: cleanEB, fromBin: currentBin };
+  if (currentKey !== '') {
+    bmPendingMove = { recordId: rec.id, ebNumber: cleanEB, fromBin: (bmParseLoc(rec.fields['Bin location']) || { label: currentKey }).label };
     const confirmEl = document.getElementById('bm-move-confirm');
     document.getElementById('bm-move-msg').textContent =
-      '\u26a0 ' + cleanEB + ' is currently in Bin ' + currentBin + '. Move it to Bin ' + bmCurrentBin + '?';
+      '\u26a0 ' + cleanEB + ' is currently in ' + bmPendingMove.fromBin + '. Move it to ' + curLabel + '?';
     confirmEl.style.display = 'block';
     document.getElementById('bm-eb-input').value = '';
     return;
@@ -4527,13 +4602,14 @@ async function bmAssignPiece() {
 }
 
 async function bmDoAssign(rec, ebNumber) {
-  setStatus('bm', 'Assigning ' + ebNumber + ' to bin ' + bmCurrentBin + '...', 'loading');
+  const label = (bmParseLoc(bmCurrentLoc) || { label: bmCurrentLoc }).label;
+  setStatus('bm', 'Assigning ' + ebNumber + ' to ' + label + '...', 'loading');
   try {
-    await airtableFetch('/' + rec.id, { method:'PATCH', body:JSON.stringify({ fields:{ 'Bin location': String(bmCurrentBin) } }) });
-    rec.fields['Bin location'] = String(bmCurrentBin);
+    await airtableFetch('/' + rec.id, { method:'PATCH', body:JSON.stringify({ fields:{ 'Bin location': bmCurrentLoc } }) });
+    rec.fields['Bin location'] = bmCurrentLoc;
     document.getElementById('bm-eb-input').value = '';
     bmRenderCurrentPieces();
-    setStatus('bm', '\u2713 ' + ebNumber + ' \u2192 bin ' + bmCurrentBin, 'success');
+    setStatus('bm', '\u2713 ' + ebNumber + ' \u2192 ' + label, 'success');
     setTimeout(() => hideStatus('bm'), 3000);
   } catch(e) { setStatus('bm', 'Error: ' + e.message, 'error'); }
 }
@@ -4560,12 +4636,13 @@ async function bmRemovePiece(recordId) {
   const rawEB = rec.fields['EB Number'] || recordId;
   const ebMatch = rawEB.match(/^(EB-\d{2}[A-Z]{2}-[A-Z]{2,3}-\d{3})/i);
   const eb = ebMatch ? ebMatch[1] : rawEB;
-  setStatus('bm', 'Removing ' + eb + ' from bin ' + bmCurrentBin + '...', 'loading');
+  const label = (bmParseLoc(bmCurrentLoc) || { label: bmCurrentLoc }).label;
+  setStatus('bm', 'Removing ' + eb + ' from ' + label + '...', 'loading');
   try {
     await airtableFetch('/' + recordId, { method:'PATCH', body:JSON.stringify({ fields:{ 'Bin location': '' } }) });
     rec.fields['Bin location'] = '';
     bmRenderCurrentPieces();
-    setStatus('bm', '\u2713 ' + eb + ' removed from bin ' + bmCurrentBin, 'success');
+    setStatus('bm', '\u2713 ' + eb + ' removed from ' + label, 'success');
     setTimeout(() => hideStatus('bm'), 2500);
   } catch(e) { setStatus('bm', 'Error: ' + e.message, 'error'); }
 }
