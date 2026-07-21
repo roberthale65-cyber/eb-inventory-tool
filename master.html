@@ -1995,15 +1995,8 @@ function msAddOption(host, val, checked){
   const menu = host.querySelector('.ms-menu');
   const label = document.createElement('label'); label.className='ms-opt';
   const cb = document.createElement('input'); cb.type='checkbox'; cb.value=val; cb.checked=!!checked;
-  cb.addEventListener('change', ()=>{
-    msSync(host);
-    // Close the dropdown after a pick so its tall option list can't stay open on
-    // top of the fields below it (e.g. Product description). Reset the search so
-    // the next open shows the full list again.
-    const s=host.querySelector('.ms-search'); if(s) s.value='';
-    msFilter(host);
-    host.classList.remove('ms-open');
-  });
+  // Menu stays open after a pick so multiple values can be selected in a row.
+  cb.addEventListener('change', ()=> msSync(host));
   const span = document.createElement('span'); span.textContent=val;
   label.appendChild(cb); label.appendChild(span);
   const add = menu.querySelector('.ms-add'); menu.insertBefore(label, add||null);
