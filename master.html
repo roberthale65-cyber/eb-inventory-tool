@@ -277,6 +277,11 @@ button:active{transform:scale(.97)}
 .mode-card.log-cost{border-top:3px solid var(--purple)}
 .mode-card.bin-mgmt{border-top:3px solid var(--teal)}
 .mode-card.readiness{border-top:3px solid var(--purple)}
+.mode-card.raw-label{border-top:3px solid var(--gold)}
+#rl-preview-frame{width:100%;display:flex;justify-content:center;margin:4px 0 16px}
+#rl-preview{width:min(340px,80%);aspect-ratio:4/6;background:#fff;border:1.5px solid var(--border-strong);border-radius:8px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.5%;padding:6% 7%;overflow:hidden}
+#rl-preview .rl-line{width:100%;text-align:center;font-weight:800;color:#2b2622;line-height:1.08;white-space:nowrap;font-family:Arial,Helvetica,sans-serif}
+#rl-preview .rl-empty{color:var(--text-muted);font-style:italic;font-size:15px}
 .rd-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:10px}
 .rd-card.attention{border-left:4px solid var(--amber-border)}
 .rd-card.ready{border-left:4px solid var(--green-text)}
@@ -426,6 +431,7 @@ button:active{transform:scale(.97)}
     <div class="mode-card mark-sold" onclick="goTo('screen-sold')"><span class="mode-icon">✅</span><div class="mode-title">Mark as sold</div><div class="mode-desc">Record a sale, update Shopify and Airtable instantly</div><div class="mode-arrow">→</div></div>
     <div class="mode-card craft-fair" onclick="goTo('screen-craft-fair')"><span class="mode-icon">🛍️</span><div class="mode-title">Craft fair</div><div class="mode-desc">Mobile-optimized selling at shows and events</div><div class="mode-arrow">→</div></div>
     <div class="mode-card bin-mgmt" onclick="goTo('screen-bin-mgmt')"><span class="mode-icon">📦</span><div class="mode-title">Bin management</div><div class="mode-desc">Print bin labels, scan to assign pieces, update anytime</div><div class="mode-arrow">→</div></div>
+    <div class="mode-card raw-label" onclick="goTo('screen-raw-label')"><span class="mode-icon">🧵</span><div class="mode-title">Raw material label</div><div class="mode-desc">Free-form 4×6 bin label — type up to 4 lines, big auto-sized text, print one off</div><div class="mode-arrow">→</div></div>
     <div class="mode-card readiness" onclick="goTo('screen-readiness')"><span class="mode-icon">&#x1F4CB;</span><div class="mode-title">Listing readiness</div><div class="mode-desc">See what each piece is missing before it can publish to Shopify</div><div class="mode-arrow">→</div></div>
     <div class="mode-card log-cost" onclick="goTo('screen-costs')"><span class="mode-icon">&#x1F9FE;</span><div class="mode-title">Log a cost</div><div class="mode-desc">Snap a receipt, log mileage, or enter manually — saved to Airtable</div><div class="mode-arrow">→</div></div>
     <div class="mode-card resync" onclick="goTo('screen-resync')"><span class="mode-icon">&#x21BB;</span><div class="mode-title">Re-sync to Shopify</div><div class="mode-desc">Push attribute &amp; inventory updates to an already-published piece — keeps title, photos &amp; price</div><div class="mode-arrow">→</div></div>
@@ -464,6 +470,22 @@ button:active{transform:scale(.97)}
     <div class="info-card sage"><strong>🏷 Tap any piece to print its QR tag.</strong> Opens a 3×2 print page — select your Phomemo printer from the print dialog.</div>
     <div class="field" style="margin-top:12px"><input type="text" id="pt-search" placeholder="Search by EB number, type, or season..." oninput="ptFilter()" spellcheck="false"></div>
     <div id="pt-list" style="display:grid;gap:8px;margin-top:4px"><div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">Loading...</div></div>
+  </div>
+</div>
+
+<!-- RAW-MATERIAL LABEL SCREEN -->
+<div id="screen-raw-label" class="screen">
+  <div class="wizard-header"><button class="hdr-nav-btn home-btn" onclick="goHome()" title="Home screen">⌂ Home</button><div class="wizard-title">Raw material label</div><div class="wizard-step-pill">4 × 6</div></div>
+  <div class="wizard-body">
+    <div class="info-card sage"><strong>🧵 Free-form 4×6 bin label.</strong> Type up to 4 lines for a raw-material bin, then Print — pick your label printer in the dialog. The text auto-sizes as large as it fits.</div>
+    <div class="field" style="margin-top:12px"><label>Line 1</label><input type="text" id="rl-line1" maxlength="42" placeholder="e.g. RIBBON" autocomplete="off" spellcheck="false" oninput="rlPreview()"></div>
+    <div class="field"><label>Line 2</label><input type="text" id="rl-line2" maxlength="42" placeholder="e.g. Wired • 2.5 in" autocomplete="off" spellcheck="false" oninput="rlPreview()"></div>
+    <div class="field"><label>Line 3 <span style="font-weight:600;text-transform:none;letter-spacing:0">(optional)</span></label><input type="text" id="rl-line3" maxlength="42" placeholder="" autocomplete="off" spellcheck="false" oninput="rlPreview()"></div>
+    <div class="field"><label>Line 4 <span style="font-weight:600;text-transform:none;letter-spacing:0">(optional)</span></label><input type="text" id="rl-line4" maxlength="42" placeholder="" autocomplete="off" spellcheck="false" oninput="rlPreview()"></div>
+    <div class="section-label">Preview</div>
+    <div id="rl-preview-frame"><div id="rl-preview"></div></div>
+    <button class="btn-primary btn-full" onclick="rlPrint()">🖨 Print label</button>
+    <button class="btn btn-full" style="margin-top:8px" onclick="rlClear()">Clear</button>
   </div>
 </div>
 
@@ -1538,6 +1560,7 @@ function goTo(screenId) {
   if(screenId==='screen-video') avScreenInit();
   if(screenId==='screen-resync') rsScreenInit();
   if(screenId==='screen-print-tag') ptInit();
+  if(screenId==='screen-raw-label') rlInit();
   if(screenId==='screen-backlog') blOnScreenEnter();
   if(screenId==='screen-readiness') readinessRender();
   if(screenId==='screen-bin-mgmt') bmOnScreenEnter();
@@ -4307,6 +4330,96 @@ function bmBuildLabelHTML(type, num) {
     '</body></html>'
   ].join('\n');
 }
+
+// ── Raw-material label (free-form 6×4, print one-off) ─────────────────────────
+// A standalone label maker: type up to 4 lines, they auto-size as large as they
+// fit a 6in×4in label. No Airtable/Shopify — just a print window.
+function rlGetLines() {
+  return ['rl-line1','rl-line2','rl-line3','rl-line4']
+    .map(id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; })
+    .filter(s => s.length);
+}
+
+// Shrink each line to fit its width, then shrink the whole stack to fit height.
+// `cap` = starting/max font size; `unit` = 'px' (on-screen preview) or 'pt' (print).
+function rlFit(boxEl, lineEls, cap, unit) {
+  lineEls.forEach(el => {
+    let s = cap; el.style.fontSize = s + unit;
+    while (el.scrollWidth > el.clientWidth && s > 6) { s -= 1; el.style.fontSize = s + unit; }
+  });
+  let guard = 0;
+  while (boxEl.scrollHeight > boxEl.clientHeight && guard < 400) {
+    lineEls.forEach(el => { const s = parseFloat(el.style.fontSize); el.style.fontSize = Math.max(6, s - 1) + unit; });
+    guard++;
+  }
+}
+
+function rlPreview() {
+  const box = document.getElementById('rl-preview');
+  if (!box) return;
+  const lines = rlGetLines();
+  if (!lines.length) {
+    box.innerHTML = '<div class="rl-empty">Your label preview</div>';
+    return;
+  }
+  box.innerHTML = lines.map(t => '<div class="rl-line">' + escHtml(t) + '</div>').join('');
+  // Max font scales with the preview's actual inner width so it stays true-to-print
+  // and responsive; fewer lines ⇒ bigger text.
+  const factor = { 1: 0.30, 2: 0.24, 3: 0.20, 4: 0.17 }[lines.length] || 0.17;
+  const cap = Math.max(10, box.clientWidth * factor);
+  rlFit(box, [...box.querySelectorAll('.rl-line')], cap, 'px');
+}
+
+function rlBuildLabelHTML(lines) {
+  const cap = { 1: 78, 2: 62, 3: 52, 4: 44 }[lines.length] || 44;
+  const body = lines.map(t => '<div class="rl-line">' + escHtml(t) + '</div>').join('');
+  return [
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>',
+    '<style>',
+    '@page { size: 4in 6in; margin: 0; }',
+    '@media print { @page { margin: 0 !important; } html, body { margin: 0 !important; padding: 0 !important; } }',
+    '* { box-sizing: border-box; margin: 0; padding: 0; }',
+    'html, body { width: 4in; height: 6in; }',
+    'body { font-family: Arial, Helvetica, sans-serif; background: #fff; display: flex; align-items: center; justify-content: center; }',
+    '.label { width: 4in; height: 6in; padding: 0.3in 0.3in; display: flex; flex-direction: column;',
+    '  align-items: center; justify-content: center; gap: 0.12in; overflow: hidden; }',
+    '.rl-line { width: 100%; text-align: center; font-weight: 800; color: #000; line-height: 1.08; white-space: nowrap; }',
+    '</style></head><body>',
+    '<div class="label">' + body + '</div>',
+    '<script>window.onload=function(){',
+    'var CAP=' + cap + ';',
+    'var box=document.querySelector(".label");',
+    'var els=[].slice.call(document.querySelectorAll(".rl-line"));',
+    'els.forEach(function(el){var s=CAP;el.style.fontSize=s+"pt";while(el.scrollWidth>el.clientWidth&&s>6){s-=1;el.style.fontSize=s+"pt";}});',
+    'var g=0;while(box.scrollHeight>box.clientHeight&&g<400){els.forEach(function(el){var s=parseFloat(el.style.fontSize);el.style.fontSize=Math.max(6,s-1)+"pt";});g++;}',
+    'setTimeout(function(){window.print();},300);',
+    '};<\/script>',
+    '</body></html>'
+  ].join('\n');
+}
+
+function rlPrint() {
+  const lines = rlGetLines();
+  if (!lines.length) { alert('Type at least one line before printing.'); return; }
+  const win = window.open('', '_blank');
+  if (!win) { alert('Pop-up blocked — allow pop-ups for this site to print the label.'); return; }
+  win.document.write(rlBuildLabelHTML(lines));
+  win.document.close();
+}
+
+function rlClear() {
+  ['rl-line1','rl-line2','rl-line3','rl-line4'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  rlPreview();
+  const first = document.getElementById('rl-line1'); if (first) first.focus();
+}
+
+function rlInit() { rlPreview(); }
+
+// Keep the responsive preview correctly sized on window resize.
+window.addEventListener('resize', () => {
+  const s = document.getElementById('screen-raw-label');
+  if (s && s.classList.contains('active')) rlPreview();
+});
 
 function bmStep(stepName) {
   const bmBack={overview:null,print:'overview',assign:'overview'};
