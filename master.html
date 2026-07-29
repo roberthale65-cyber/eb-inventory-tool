@@ -936,6 +936,7 @@ button:active{transform:scale(.97)}
       <div class="info-card teal"><strong>📦 Storage bins</strong> Assign pieces to bins, bars &amp; the main collective so anyone can find anything — fast at fairs, fast in the studio.</div>
       <button class="btn-primary btn-full" onclick="bmStartNewLabel()" style="margin-bottom:20px">+ Print new label</button>
       <div class="section-label">All bins</div>
+      <div class="field" style="margin-bottom:12px"><input type="text" id="bm-search" placeholder="Find an EB number, bin, or bar…" autocorrect="off" spellcheck="false" oninput="bmFilterOverview()"></div>
       <div id="bm-bin-list"><div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">Loading…</div></div>
     </div>
 
@@ -4194,7 +4195,7 @@ function ptInit() { document.getElementById('pt-search').value = ''; ptRender(''
 function ptFilter() { ptRender(document.getElementById('pt-search').value.trim()); }
 function ptRender(filter) {
   const container = document.getElementById('pt-list');
-  const sorted = allRecords.filter(r => r.fields['Status'] !== 'Archived').filter(r => { if(!filter)return true; const q=filter.toLowerCase(); const seasonStr=Array.isArray(r.fields['Season'])?r.fields['Season'].join(' '):(r.fields['Season']||''); return(r.fields['EB Number']||'').toLowerCase().includes(q)||(r.fields['Type']||'').toLowerCase().includes(q)||seasonStr.toLowerCase().includes(q)||(r.fields['Occasion']||'').toLowerCase().includes(q)||(r.fields['Reference name']||'').toLowerCase().includes(q); }).sort((a,b)=>{ const da=a.fields['Date made']||'',db=b.fields['Date made']||''; return db.localeCompare(da); });
+  const sorted = allRecords.filter(r => r.fields['Status'] !== 'Archived').filter(r => { if(!filter)return true; const q=filter.toLowerCase(); const seasonStr=Array.isArray(r.fields['Season'])?r.fields['Season'].join(' '):(r.fields['Season']||''); const occasionStr=Array.isArray(r.fields['Occasion'])?r.fields['Occasion'].join(' '):(r.fields['Occasion']||''); return(r.fields['EB Number']||'').toLowerCase().includes(q)||(r.fields['Type']||'').toLowerCase().includes(q)||seasonStr.toLowerCase().includes(q)||occasionStr.toLowerCase().includes(q)||(r.fields['Reference name']||'').toLowerCase().includes(q); }).sort((a,b)=>{ const da=a.fields['Date made']||'',db=b.fields['Date made']||''; return db.localeCompare(da); });
   document.getElementById('print-tag-pill').textContent = filter ? sorted.length+' result'+(sorted.length!==1?'s':'') : sorted.length+' pieces';
   if(!sorted.length){container.innerHTML='<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">'+(filter?'No pieces match "'+escHtml(filter)+'"':'No pieces found')+'</div>';return;}
   const statusColor={'In stock':'var(--text-muted)','Photographed':'var(--teal)','Ready to list':'var(--gold)','Listed':'var(--sage)','Sold':'var(--rose)','Craft fair':'var(--gold)'};
@@ -4292,7 +4293,10 @@ function bmQRData(type, num) {
 }
 
 // Single source for the 4x6 label markup (used by both print and reprint).
-function bmBuildLabelHTML(type, num) {
+// autoPrint (default true) embeds an onload→print script — used for the new-tab
+// path. The iframe fallback passes false and drives printing from the parent.
+function bmBuildLabelHTML(type, num, autoPrint) {
+  if (autoPrint === undefined) autoPrint = true;
   const isMC = type === 'Main Collective';
   const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=480x480&data=' + encodeURIComponent(bmQRData(type, num));
   const hero = isMC
@@ -4326,9 +4330,34 @@ function bmBuildLabelHTML(type, num) {
     '<hr class="rule">',
     '<div class="scan-lbl">' + scanLbl + '</div>',
     '<img src="' + qrUrl + '" alt="QR">',
-    '<script>window.onload=function(){setTimeout(function(){window.print();},900);};<\/script>',
+    (autoPrint ? '<script>window.onload=function(){setTimeout(function(){window.print();},900);};<\/script>' : ''),
     '</body></html>'
   ].join('\n');
+}
+
+// Print a label HTML string reliably. Primary path opens a new tab (works on
+// desktop and most mobile). If the browser blocks the popup — common on iPad
+// Safari — window.open returns null; rather than silently fail we fall back to a
+// hidden in-page iframe so the label still prints.
+function bmPrintHTML(buildFn) {
+  let win = null;
+  try { win = window.open('', '_blank'); } catch(e) { win = null; }
+  if (win && win.document) {
+    win.document.write(buildFn(true));   // label's own onload triggers print
+    win.document.close();
+    return;
+  }
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentWindow.document;
+  doc.open(); doc.write(buildFn(false)); doc.close();   // no auto-print; we drive it
+  let fired = false;
+  const fire = function(){ if (fired) return; fired = true; try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch(e){} setTimeout(function(){ iframe.remove(); }, 60000); };
+  // Let the QR image finish loading so it isn't blank on the print.
+  iframe.onload = function(){ setTimeout(fire, 800); };
+  if (iframe.contentWindow.document.readyState === 'complete') setTimeout(fire, 800);
 }
 
 // ── Raw-material label (free-form 6×4, print one-off) ─────────────────────────
@@ -4435,6 +4464,7 @@ function bmStep(stepName) {
 
 async function bmOnScreenEnter() {
   bmStep('overview');
+  const s = document.getElementById('bm-search'); if (s) s.value = '';
   await bmLoadBins();
   bmRenderOverview();
 }
@@ -4452,7 +4482,31 @@ async function bmLoadBins() {
   }
 }
 
-function bmRenderOverview() {
+// Wrap any part of `text` that matches the search query `q` (already lowercased)
+// so matched EB numbers / labels stand out. Returns escaped, highlight-safe HTML.
+function bmHighlight(text, q) {
+  text = String(text == null ? '' : text);
+  if (!q) return escHtml(text);
+  const lower = text.toLowerCase();
+  let out = '', i = 0, idx = lower.indexOf(q);
+  while (idx !== -1) {
+    out += escHtml(text.slice(i, idx))
+      + '<span style="background:var(--teal-bg);color:var(--teal);font-weight:800;border-radius:3px;padding:0 2px">'
+      + escHtml(text.slice(idx, idx + q.length)) + '</span>';
+    i = idx + q.length;
+    idx = lower.indexOf(q, i);
+  }
+  return out + escHtml(text.slice(i));
+}
+
+function bmFilterOverview() {
+  const el = document.getElementById('bm-search');
+  bmRenderOverview(el ? el.value.trim() : '');
+}
+
+function bmRenderOverview(filter) {
+  filter = (filter || '').trim();
+  const q = filter.toLowerCase();
   const container = document.getElementById('bm-bin-list');
   // Group pieces by their location key.
   const pieceMap = {};
@@ -4472,20 +4526,37 @@ function bmRenderOverview() {
   Object.keys(pieceMap).forEach(key => {
     if (!locByKey[key]) { const l = bmParseLoc(key); locByKey[key] = { type:l.type, num:l.num, key, label:l.label }; }
   });
-  const locs = Object.values(locByKey);
+  let locs = Object.values(locByKey);
   if (locs.length === 0) {
     container.innerHTML = '<div style="text-align:center;padding:32px 20px;color:var(--text-muted)"><div style="font-size:40px;margin-bottom:12px">📦</div><div style="font-size:14px;font-weight:700;margin-bottom:6px">No labels yet</div><div style="font-size:12px">Tap &ldquo;Print new label&rdquo; to add your first bin, bar or the main collective.</div></div>';
     return;
   }
   const typeOrder = { 'Bin':0, 'Bar':1, 'Main Collective':2, 'Other':3 };
   locs.sort((a,b) => (typeOrder[a.type] - typeOrder[b.type]) || ((a.num||0) - (b.num||0)) || a.key.localeCompare(b.key));
+  // Search: keep a location if its own label matches, or if it holds a matching EB number.
+  if (q) {
+    locs = locs.filter(loc =>
+      loc.label.toLowerCase().includes(q) ||
+      (pieceMap[loc.key] || []).some(r => (r.fields['EB Number'] || '').toLowerCase().includes(q)));
+  }
+  if (locs.length === 0) {
+    // Nothing matched. If the query names a real piece that just isn't binned yet,
+    // say so plainly — that's the answer to "which bin is this EB in?".
+    const orphans = allRecords.filter(r => (r.fields['EB Number'] || '').toLowerCase().includes(q));
+    container.innerHTML = orphans.length
+      ? '<div style="text-align:center;padding:28px 20px;color:var(--text-muted);font-size:13px"><div style="font-size:28px;margin-bottom:10px">🔍</div>'
+        + orphans.map(r => '<strong style="color:var(--text)">' + escHtml(r.fields['EB Number'] || '—') + '</strong>').join(', ')
+        + ' ' + (orphans.length === 1 ? 'is' : 'are') + ' not assigned to any bin yet.</div>'
+      : '<div style="text-align:center;padding:28px 20px;color:var(--text-muted);font-size:13px">No bins or pieces match &ldquo;' + escHtml(filter) + '&rdquo;</div>';
+    return;
+  }
   container.innerHTML = locs.map(loc => {
     const records = pieceMap[loc.key] || [];
     const empty = records.length === 0;
-    const pieceNames = empty ? '' : records.map(r => {
+    const piecesHtml = empty ? '' : records.map(r => {
       const eb = (r.fields['EB Number'] || '\u2014');
       const m = eb.match(/^(EB-\d{2}[A-Z]{2}-[A-Z]{2,3}-\d{3})/i);
-      return m ? m[1] : eb;
+      return bmHighlight(m ? m[1] : eb, q);
     }).join(', ');
     const countLabel = empty
       ? '<span style="color:var(--text-muted);font-style:italic">Empty &mdash; ready to fill</span>'
@@ -4495,9 +4566,9 @@ function bmRenderOverview() {
     return '<div class="bm-bin-card" style="' + (empty ? 'opacity:.7;' : '') + '">'
       + '<div class="bm-bin-num">' + bigCell + '</div>'
       + '<div class="bm-bin-info">'
-      + '<div style="font-size:12px;font-weight:800;color:var(--teal);letter-spacing:.02em;margin-bottom:2px">' + escHtml(loc.label) + '</div>'
+      + '<div style="font-size:12px;font-weight:800;color:var(--teal);letter-spacing:.02em;margin-bottom:2px">' + bmHighlight(loc.label, q) + '</div>'
       + '<div class="bm-bin-count">' + countLabel + '</div>'
-      + (pieceNames ? '<div class="bm-bin-pieces">' + escHtml(pieceNames) + '</div>' : '')
+      + (piecesHtml ? '<div class="bm-bin-pieces">' + piecesHtml + '</div>' : '')
       + '</div>'
       + '<button onclick="bmOpenAssign(\'' + keyJs + '\')" class="btn-teal" style="font-size:12px;padding:8px 14px;border-radius:8px;flex-shrink:0">Manage</button>'
       + '</div>';
@@ -4570,9 +4641,7 @@ async function bmPrintLabel() {
   const type = bmNewType;
   const num  = bmNewNum;
   const isMC = (type === 'Main Collective');
-  const win = window.open('', '_blank');
-  win.document.write(bmBuildLabelHTML(type, num));
-  win.document.close();
+  bmPrintHTML(function(autoPrint){ return bmBuildLabelHTML(type, num, autoPrint); });
 
   // Register the label so an empty (not-yet-filled) area still shows up and still
   // advances the per-type counter. Main Collective is registered only once.
@@ -4670,9 +4739,7 @@ function bmReprintLabel() {
   if (!bmCurrentLoc) return;
   const loc = bmParseLoc(bmCurrentLoc);
   if (!loc) return;
-  const win = window.open('', '_blank');
-  win.document.write(bmBuildLabelHTML(loc.type, loc.num));
-  win.document.close();
+  bmPrintHTML(function(autoPrint){ return bmBuildLabelHTML(loc.type, loc.num, autoPrint); });
   // No Airtable write — bin is already registered
 }
 
