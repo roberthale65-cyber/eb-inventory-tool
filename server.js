@@ -408,8 +408,12 @@ app.get('/auth', (req, res) => {
   const redirectUri = `${SERVER_URL}/auth/callback`;
   // write_inventory/read_inventory are REQUIRED for inventorySetQuantities — without
   // them the inventory write is silently denied and products land at 0 available.
+  // read_orders/read_customers power the sold-order lookup (buyer, address, amount,
+  // tracking) for online sales — covers Shopify + Facebook/Instagram Shops, which
+  // route their orders through Shopify. NOTE: plain read_orders only returns the last
+  // 60 days of orders; older orders need read_all_orders (separate Shopify approval).
   // Changing this string requires re-running /auth so Shopify re-grants the scopes.
-  const scopes = 'read_products,write_products,read_inventory,write_inventory';
+  const scopes = 'read_products,write_products,read_inventory,write_inventory,read_orders,read_customers';
   const authUrl = `https://${SHOPIFY_STORE}/admin/oauth/authorize?client_id=${SHOPIFY_API_KEY}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
   res.redirect(authUrl);
 });
