@@ -1154,7 +1154,7 @@ function buildToolMetafieldGids(product_category, body){
 // ── Create product ────────────────────────────────────────────
 app.post('/create-product', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized. Visit ' + SERVER_URL + '/auth to complete Shopify OAuth first.' });
-  const { title, body_html, sku, price, tags, product_type, collections, weight_oz, weight_lbs, dimensions, meta_description, requires_shipping, images, quantity, product_category, colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material, celebration_type, lighting_options, shape, care_instructions, indoor_outdoor, suggested_display } = req.body;
+  const { title, body_html, sku, price, tags, product_type, collections, ship_weight_lb, dimensions, meta_description, requires_shipping, images, quantity, product_category, colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material, celebration_type, lighting_options, shape, care_instructions, indoor_outdoor, suggested_display } = req.body;
   if (!title || !sku) return res.status(400).json({ error: 'title and sku are required' });
 
   // ── Idempotency guard: never create a second product for a SKU that already exists ──
@@ -1197,9 +1197,19 @@ app.post('/create-product', async (req, res) => {
   // Inventory quantity — default to 1 (one-of-a-kind) when unset; clamp to a non-negative integer.
   const qty = (quantity != null && quantity !== '' && Number.isFinite(Number(quantity))) ? Math.max(0, Math.round(Number(quantity))) : 1;
   const variant = { sku, price: price || '0.00', inventory_management: 'shopify', inventory_policy: 'deny', fulfillment_service: 'manual', requires_shipping: requires_shipping !== false };
-  // Weight: prefer ounces (Shopify WeightUnit OUNCES) — exact, matches the Airtable "Item weight (oz)" field.
-  if (weight_oz != null && weight_oz !== '') { variant.weight = Number(weight_oz); variant.weight_unit = 'oz'; }
-  else if (weight_lbs) { variant.weight = Math.round(weight_lbs * 453.592); variant.weight_unit = 'g'; }
+  // Weight is a SYNTHETIC shipping-tier key, NOT a physical weight. It carries the Airtable
+  // "Shopify Ship Weight (lb)" formula (field fldQvj1c5tZBVDRAe) — always one of 5 / 15 / 28 / 45 lb —
+  // which snaps each piece to the mid-band weight of its flat-rate shipping tier. The tier is
+  // derived upstream from Effective Net Charge (wreaths tie out box → UPS rate → charge → tier).
+  // Shopify flat-rate shipping can only condition on order weight, so we encode the tier here.
+  // Blank means the piece has no shipping estimate yet — DON'T write a weight (leave Shopify's
+  // default untouched) and warn with the SKU; the piece shouldn't go live until it's fixed.
+  if (ship_weight_lb != null && ship_weight_lb !== '' && Number.isFinite(Number(ship_weight_lb))) {
+    variant.weight = Number(ship_weight_lb);
+    variant.weight_unit = 'lb';
+  } else {
+    console.warn(`create-product: SKU ${sku} has no Shopify Ship Weight (lb) — variant weight left unset (piece needs a shipping estimate before it goes live).`);
+  }
   let fullDescription = body_html || '';
   if (dimensions) {
     fullDescription += '<p><strong>Dimensions:</strong> ' + dimensions + '</p>';
