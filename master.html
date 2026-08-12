@@ -2888,6 +2888,11 @@ function lpColorsFromRecord(f){const c=f['Color(s)'];return Array.isArray(c)?c.j
 // they're passed separately to /generate-description and only influence the copy when premium.
 function lpMaterialsFromRecord(f){const parts=[];const km=f['Key Materials'];if(Array.isArray(km))parts.push(...km);else if(km)parts.push(km);return parts.join(', ');}
 function lpWeightOzFromRecord(f){const o=f['Item weight (oz)'];return (o===''||o==null)?null:Number(o);}
+// Shipping-tier weight (lb) — the SYNTHETIC value that drives Shopify's weight-based flat-rate
+// tiers. It's the Airtable "Shopify Ship Weight (lb)" formula (5/15/28/45), derived from the
+// piece's shipping tier. This — NOT the physical item weight — is what publishes to Shopify.
+function lpShipWeightLbFromRecord(f){const w=f['Shopify Ship Weight (lb)'];return (w===''||w==null)?null:Number(w);}
+function lpShipTierFromRecord(f){const t=f['Shipping Tier'];return (t===''||t==null)?'':String(t);}
 function ozToLbOzStr(oz){oz=Number(oz);const lb=Math.floor(oz/16),r=oz%16;return (lb?lb+' lb':'')+(lb&&r?' ':'')+(r||!lb?r+' oz':'');}
 
 function lpRenderLPPreview(f) {
@@ -3258,6 +3263,7 @@ function lpUpdatePublishSummary(){
   const title=(titleEl&&titleEl.value.trim())||lpCurrentTitle||'';
   const desc=descEl?(descEl.innerHTML||'').trim():'';
   const oz=lpWeightOzFromRecord(f), hasWeight=oz!=null;
+  const shipLb=lpShipWeightLbFromRecord(f), shipTier=lpShipTierFromRecord(f), hasShipWeight=shipLb!=null;
   const dimW=f['Width (in)'],dimH=f['Height (in)'],dimD=f['Depth (in)'],hasDims=dimW&&dimH&&dimD;
   const photoCount=lpPhotoItems.length;
   const uncropped=lpUncroppedCount();
@@ -3266,6 +3272,7 @@ function lpUpdatePublishSummary(){
   if(!sku) blocks.push('EB number not selected');
   if(!price||Number(price)<=0) blocks.push('Price not set in Airtable');
   if(!hasWeight) blocks.push('Item weight missing — add it in Step 1 or Step 2.1');
+  if(!hasShipWeight) blocks.push('Shipping estimate missing — this piece has no ship-weight tier yet (check dimensions & box mapping in Airtable). It would publish at the wrong flat rate.');
   if(!hasDims) blocks.push('Dimensions missing — add them in Step 2.1');
   if(!title) blocks.push('Product title is empty');
   if(!desc) blocks.push('Description is empty');
@@ -3275,7 +3282,8 @@ function lpUpdatePublishSummary(){
   const dimsDisplay=hasDims?`${dimW}" W × ${dimH}" H × ${dimD}" D`:'missing';
   const cropsOk=photoCount>0&&uncropped===0;
   const cropsDisplay=photoCount===0?'no photos yet':(uncropped===0?'all '+photoCount+' cropped ✓':uncropped+' of '+photoCount+' not cropped');
-  document.getElementById('lp-publish-summary').innerHTML=checkRow('Title',title||'empty',!!title)+checkRow('SKU',sku,!!sku)+checkRow('Price',priceDisplay,!!(price&&Number(price)>0))+checkRow('Weight',hasWeight?ozToLbOzStr(oz):'missing',hasWeight)+checkRow('Dimensions',dimsDisplay,!!hasDims)+checkRow('Description',desc?'ready':'empty',!!desc)+checkRow('Photos',photoCount>0?photoCount+' added'+(photoCount<8?' (aim for 8)':' ✓'):'none added',photoCount>0)+checkRow('Square crops',cropsDisplay,cropsOk);
+  const shipDisplay=hasShipWeight?((shipTier?shipTier+' · ':'')+shipLb+' lb ship weight'):'no estimate yet';
+  document.getElementById('lp-publish-summary').innerHTML=checkRow('Title',title||'empty',!!title)+checkRow('SKU',sku,!!sku)+checkRow('Price',priceDisplay,!!(price&&Number(price)>0))+checkRow('Weight',hasWeight?ozToLbOzStr(oz):'missing',hasWeight)+checkRow('Shipping',shipDisplay,hasShipWeight)+checkRow('Dimensions',dimsDisplay,!!hasDims)+checkRow('Description',desc?'ready':'empty',!!desc)+checkRow('Photos',photoCount>0?photoCount+' added'+(photoCount<8?' (aim for 8)':' ✓'):'none added',photoCount>0)+checkRow('Square crops',cropsDisplay,cropsOk);
   const blocksEl=document.getElementById('lp-blocks');
   if(blocks.length>0){blocksEl.style.display='block';blocksEl.innerHTML='<strong>Fix before publishing:</strong><br>'+blocks.map(b=>'• '+b).join('<br>');}
   else blocksEl.style.display='none';
@@ -3360,7 +3368,7 @@ async function lpPublish(){
   const titleEl=document.getElementById('lp-title');
   const title=(titleEl&&titleEl.value.trim())||lpCurrentTitle||lpFallbackTitle(f), tags=lpBuildTags(f), sku=f['EB Number']||'';
   const price=f['Price ($)']!=null?Number(f['Price ($)']).toFixed(2):'0.00';
-  const collections=lpBuildCollections(f), weightOz=lpWeightOzFromRecord(f);
+  const collections=lpBuildCollections(f), shipWeightLb=lpShipWeightLbFromRecord(f);
   const meta=((document.getElementById('lp-meta')||{value:''}).value.trim()||lpStepTwoCache.meta||'');
   const dimW=f['Width (in)'],dimH=f['Height (in)'],dimD=f['Depth (in)'];
   const dims=(dimW||dimH||dimD)?`${dimW||'?'}" W × ${dimH||'?'}" H × ${dimD||'?'}" D`:'';
@@ -3410,7 +3418,7 @@ async function lpPublish(){
     const pubSuitableSpace=f['Indoor/Outdoor']||(pubCategory==='Wreaths'?'Indoor':'');
     // Indoor/Outdoor (universal custom metafield) — raw Airtable value, all categories.
     const pubIndoorOutdoor=f['Indoor/Outdoor']||'';
-    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,weight_oz:weightOz,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial,celebration_type:pubCelebration,lighting_options:pubLighting,shape:pubShape,season:pubSeason,suitable_space:pubSuitableSpace,indoor_outdoor:pubIndoorOutdoor,care_instructions:asArr(f['Care instructions']),suggested_display:asArr(f['Suggested display'])})});
+    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,ship_weight_lb:shipWeightLb,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial,celebration_type:pubCelebration,lighting_options:pubLighting,shape:pubShape,season:pubSeason,suitable_space:pubSuitableSpace,indoor_outdoor:pubIndoorOutdoor,care_instructions:asArr(f['Care instructions']),suggested_display:asArr(f['Suggested display'])})});
     clearTimeout(timeout);const data=await res.json();
     if(!res.ok||!data.success) throw new Error(data.error||'Publish failed');
     try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;if(meta)photoFields['Listing Meta Description']=meta;await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:photoFields})});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;if(meta)rec.fields['Listing Meta Description']=meta;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
