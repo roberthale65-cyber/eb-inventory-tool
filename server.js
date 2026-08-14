@@ -789,11 +789,30 @@ app.get('/airtable/inventory/:id', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /airtable/inventory — create new inventory record
+// POST /airtable/inventory — create (or upsert) an inventory record.
+// Upserts on EB Number so the SAME SKU can never spawn a duplicate record — e.g. a
+// double-submit, a slow-network retry, or two rapid creates that computed the same
+// next EB number. If a record with this EB Number already exists it is UPDATED in
+// place (atomic, via Airtable performUpsert); otherwise a new record is created.
+// "Mark as sold" already updates by record id, so this closes the remaining gap:
+// duplicate EB Numbers can no longer be created. Records without an EB Number
+// (shouldn't happen for inventory) fall back to a plain create.
 app.post('/airtable/inventory', async (req, res) => {
   const { fields } = req.body;
   if (!fields) return res.status(400).json({ error: 'fields required' });
   try {
+    if (fields['EB Number']) {
+      const data = await airtableReq(AT_INVENTORY_TBL, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          performUpsert: { fieldsToMergeOn: ['EB Number'] },
+          records: [{ fields }],
+          typecast: true
+        })
+      });
+      // Return the single record in the same shape a plain create returns.
+      return res.json((data.records && data.records[0]) || data);
+    }
     const data = await airtableReq(AT_INVENTORY_TBL, {
       method: 'POST',
       body: JSON.stringify({ fields, typecast: true })
