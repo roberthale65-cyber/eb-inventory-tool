@@ -5,7 +5,12 @@ const fetch   = (...args) => import('node-fetch').then(({default: f}) => f(...ar
 const FormData = require('form-data'); // streaming multipart for staged video uploads
  
 const app = express();
-app.use(express.json({limit: '150mb'}));
+// Capture the raw request body ONLY for Shopify webhook routes, so we can verify
+// the HMAC signature (JSON parsing otherwise discards the exact bytes Shopify signed).
+// Scoped by path to avoid holding large image-upload buffers in memory.
+app.use(express.json({limit: '150mb', verify: (req, res, buf) => {
+  if (req.url && req.url.startsWith('/webhooks/')) req.rawBody = buf;
+}}));
 app.use(cors({
   origin: [
     'https://roberthale65-cyber.github.io',
@@ -1138,6 +1143,56 @@ app.post('/mark-sold', async (req, res) => {
     res.json({ success: true, product_id: productId });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
+
+// ── Shopify webhook: orders/create → auto-mark ONLINE sales as Sold in Airtable ──
+// Online orders sync automatically here, so the "Mark as sold" tile is reserved for
+// in-person sales (Facebook Marketplace, craft fairs, outdoor planters, etc.) which
+// never create a Shopify order. We verify Shopify's HMAC over the raw body before
+// trusting anything, then look up each line item's SKU (EB Number) in Airtable and
+// set Status=Sold / Sales channel=Shopify / Date sold. Shopify already decremented
+// inventory to 0 on order creation, so we don't touch inventory here.
+app.post('/webhooks/orders-create', async (req, res) => {
+  // 1) Verify the webhook is genuinely from Shopify (signed with our app secret).
+  const sentHmac = req.get('X-Shopify-Hmac-Sha256') || '';
+  const digest = crypto.createHmac('sha256', SHOPIFY_API_SECRET || '')
+    .update(req.rawBody || Buffer.from(''))
+    .digest('base64');
+  let verified = false;
+  try { verified = sentHmac.length > 0 && crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(sentHmac)); }
+  catch { verified = false; }
+  if (!verified) { console.warn('orders-create webhook: HMAC verification failed — rejecting'); return res.status(401).send('unauthorized'); }
+
+  // 2) Process. Respond 200 on success; 500 on a transient Airtable error so Shopify
+  //    retries. A SKU simply not found in Airtable is logged but NOT retried.
+  const order = req.body || {};
+  const orderRef = order.name || order.id || 'unknown';
+  const dateSold = (order.created_at && String(order.created_at).slice(0, 10)) || undefined;
+  const skus = [...new Set((order.line_items || [])
+    .map(li => (li && li.sku ? String(li.sku).trim() : ''))
+    .filter(s => /^EB-/i.test(s)))];
+
+  if (!skus.length) { console.log(`orders-create ${orderRef}: no EB SKUs on order — nothing to sync`); return res.status(200).send('ok'); }
+
+  let transientError = false;
+  for (const sku of skus) {
+    try {
+      const formula = encodeURIComponent(`{EB Number}='${sku}'`);
+      const found = await airtableReq(`${AT_INVENTORY_TBL}?filterByFormula=${formula}&maxRecords=2`);
+      const recs = (found && found.records) || [];
+      if (!recs.length) { console.warn(`orders-create ${orderRef}: SKU ${sku} sold online but not found in Airtable — skipped`); continue; }
+      if (recs.length > 1) console.warn(`orders-create ${orderRef}: SKU ${sku} matches ${recs.length} Airtable records — updating the first (${recs[0].id}); resolve the duplicate`);
+      const fields = { 'Status': 'Sold', 'Sales channel': 'Shopify' };
+      if (dateSold) fields['Date sold'] = dateSold;
+      await airtableReq(`${AT_INVENTORY_TBL}/${recs[0].id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) });
+      console.log(`orders-create ${orderRef}: marked ${sku} as Sold (Shopify) in Airtable`);
+    } catch (e) {
+      transientError = true;
+      console.warn(`orders-create ${orderRef}: failed to update ${sku} in Airtable — ${e.message}`);
+    }
+  }
+  if (transientError) return res.status(500).send('airtable error — retry');
+  res.status(200).send('ok');
+});
  
 // ── Version / health (verify what's actually deployed) ────────
 app.get('/version', (req, res) => res.json({ version: '2026-07-03-fixpack9', features: ['create-product idempotent by SKU (returns existing product instead of duplicating on retry/timeout)','drive-move-folder: publish→Published, sold→Sold (idempotent bucket move)','custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions', 'indoor_outdoor->custom.indoor_outdoor (universal multi-select; wreaths also get native suitable-space)', 'suggested_display->custom.suggested_display (multi-select surface/spot)'] }));
@@ -1911,4 +1966,34 @@ app.post('/recovery/generate-and-set-seo', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.listen(PORT, () => console.log(`EB server running on port ${PORT}`));
+// ── Ensure the orders/create webhook is registered (idempotent, runs on startup) ──
+// Registers a webhook pointing at THIS server so online Shopify orders auto-sync to
+// Airtable. Safe on every boot: it checks for an existing subscription first, and
+// requires the app to have the read_orders scope (already in the OAuth scope string).
+async function ensureOrderWebhook() {
+  if (!shopifyAccessToken) { console.log('orders webhook: no Shopify token yet — skipping registration (visit /auth).'); return; }
+  if (!SERVER_URL) { console.warn('orders webhook: SERVER_URL not set — cannot register callback address.'); return; }
+  const address = `${SERVER_URL.replace(/\/$/, '')}/webhooks/orders-create`;
+  try {
+    const listRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/webhooks.json?topic=orders/create&limit=250`, {
+      headers: { 'X-Shopify-Access-Token': shopifyAccessToken }
+    });
+    const listData = await listRes.json();
+    if (!listRes.ok) { console.warn('orders webhook: could not list existing webhooks —', JSON.stringify(listData.errors || listData)); return; }
+    const existing = (listData.webhooks || []).find(w => w.address === address);
+    if (existing) { console.log(`orders webhook: already registered (#${existing.id}) → ${address}`); return; }
+    const createRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/webhooks.json`, {
+      method: 'POST',
+      headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhook: { topic: 'orders/create', address, format: 'json' } })
+    });
+    const createData = await createRes.json();
+    if (!createRes.ok) { console.warn('orders webhook: registration FAILED —', JSON.stringify(createData.errors || createData), '(the app likely needs the read_orders scope granted)'); return; }
+    console.log(`orders webhook: registered (#${createData.webhook && createData.webhook.id}) → ${address}`);
+  } catch (e) { console.warn('orders webhook: registration error —', e.message); }
+}
+
+app.listen(PORT, () => {
+  console.log(`EB server running on port ${PORT}`);
+  ensureOrderWebhook();
+});
