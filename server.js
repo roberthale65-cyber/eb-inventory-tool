@@ -1194,13 +1194,14 @@ app.post('/webhooks/orders-create', async (req, res) => {
   res.status(200).send('ok');
 });
  
-// ── Order fulfillment: open Shopify orders → PirateShip-ready data ────────────
-// Pulls OPEN + UNFULFILLED orders straight from Shopify (no manual CSV export),
-// then joins each EB line item to its Airtable shipping box ("Normal Shipping")
-// and item weight so the app can emit a PirateShip-ready CSV without the field-
-// mapping step. Read-only. Rows the caller can't ship blind (missing box size or
-// weight) are returned WITH warnings rather than dropped, so the UI can surface
-// them. Multi-item orders are flagged (multiItem) for manual packing review.
+// ── Order fulfillment: open Shopify orders → packing reference ────────────────
+// Pulls OPEN + UNFULFILLED orders straight from Shopify and joins each line item
+// to its Airtable record so the app can show a quick PACKING REFERENCE: the real
+// item weight, the actual product dimensions, and the "Normal Shipping" box size.
+// PirateShip's own Shopify app imports the orders — so this is NOT a CSV export;
+// it's the bench reference the Shopify order can't give, because the Shopify
+// weight field carries our DIM-lb shipping-tier value, not the true weight.
+// Read-only. Missing fields are returned WITH per-item warnings, never dropped.
 app.get('/orders/open', async (req, res) => {
   if (!shopifyAccessToken) return res.status(400).json({ error: 'Shopify is not connected on the server yet — open /auth once to connect.' });
   try {
@@ -1227,7 +1228,7 @@ app.get('/orders/open', async (req, res) => {
       const s = (li.sku || '').trim();
       if (s) skuSet.add(s);
     }
-    const WANT = ['EB Number', 'Normal Shipping', 'Aggressive Compression', 'Item weight (oz)', 'Reference name', 'Type', 'Shopify Ship Weight (lb)'];
+    const WANT = ['EB Number', 'Reference name', 'Normal Shipping', 'Item weight (oz)', 'Width (in)', 'Height (in)', 'Depth (in)'];
     const fieldQS = WANT.map(f => `&fields%5B%5D=${encodeURIComponent(f)}`).join('');
     const shipBySku = {};
     const skus = [...skuSet];
@@ -1241,16 +1242,10 @@ app.get('/orders/open', async (req, res) => {
       }
     }
 
-    // 3) Parse "Normal Shipping" (e.g. "16x18x5" or "28×24×22") into L/W/H numbers.
-    const parseDims = (str) => {
-      const nums = String(str || '').match(/[\d.]+/g);
-      if (!nums || nums.length < 3) return null;
-      const [l, w, h] = nums.slice(0, 3).map(Number);
-      if (!(l > 0 && w > 0 && h > 0)) return null;
-      return { length: l, width: w, height: h };
-    };
-
-    // 4) Shape each order + line item with resolved shipping + warnings.
+    // 3) Shape each order + line item as a packing reference: real item weight
+    //    (oz, plus a lb convenience value), the actual product dimensions, and the
+    //    "Normal Shipping" box size. Missing fields become warnings, not blockers.
+    const num = (v) => (v != null && v !== '' && !isNaN(Number(v))) ? Number(v) : null;
     const out = orders.map(o => {
       const sa = o.shipping_address || {};
       const orderWarnings = [];
@@ -1261,23 +1256,26 @@ app.get('/orders/open', async (req, res) => {
           const sku = (li.sku || '').trim();
           const rec = shipBySku[sku];
           const warnings = [];
-          let dims = null, pounds = null, normalShipping = null, itemWeightOz = null;
+          let normalShipping = null, itemWeightOz = null, pounds = null, actualDims = null;
           if (!sku) {
             warnings.push('Line item has no SKU — add one in Shopify so it can match Airtable');
           } else if (!rec) {
             warnings.push(`SKU ${sku} not found in Airtable`);
           } else {
             normalShipping = rec['Normal Shipping'] || null;
-            dims = parseDims(normalShipping);
-            if (!dims) warnings.push("Missing/unreadable 'Normal Shipping' box size");
-            itemWeightOz = (rec['Item weight (oz)'] != null) ? Number(rec['Item weight (oz)']) : null;
-            if (itemWeightOz != null && itemWeightOz > 0) pounds = Math.max(0.1, Math.round((itemWeightOz / 16) * 10) / 10);
-            else warnings.push('Missing item weight');
+            if (!normalShipping) warnings.push("No 'Normal Shipping' box size in Airtable");
+            itemWeightOz = num(rec['Item weight (oz)']);
+            if (itemWeightOz != null && itemWeightOz > 0) pounds = Math.round((itemWeightOz / 16) * 10) / 10;
+            else warnings.push('No item weight in Airtable');
+            const w = num(rec['Width (in)']), h = num(rec['Height (in)']), d = num(rec['Depth (in)']);
+            if (w != null || h != null || d != null) actualDims = { width: w, height: h, depth: d };
+            else warnings.push('No actual dimensions in Airtable');
           }
           return {
             sku, title: li.name || li.title || '', quantity: li.quantity || 1,
-            normalShipping, dims, itemWeightOz, pounds,
-            ready: !!(dims && pounds != null), warnings
+            reference: rec ? (rec['Reference name'] || null) : null,
+            itemWeightOz, pounds, actualDims, normalShipping,
+            found: !!rec, warnings
           };
         });
       return {
