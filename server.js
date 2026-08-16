@@ -1194,6 +1194,115 @@ app.post('/webhooks/orders-create', async (req, res) => {
   res.status(200).send('ok');
 });
  
+// ── Order fulfillment: open Shopify orders → PirateShip-ready data ────────────
+// Pulls OPEN + UNFULFILLED orders straight from Shopify (no manual CSV export),
+// then joins each EB line item to its Airtable shipping box ("Normal Shipping")
+// and item weight so the app can emit a PirateShip-ready CSV without the field-
+// mapping step. Read-only. Rows the caller can't ship blind (missing box size or
+// weight) are returned WITH warnings rather than dropped, so the UI can surface
+// them. Multi-item orders are flagged (multiItem) for manual packing review.
+app.get('/orders/open', async (req, res) => {
+  if (!shopifyAccessToken) return res.status(400).json({ error: 'Shopify is not connected on the server yet — open /auth once to connect.' });
+  try {
+    // 1) Fetch open, unfulfilled orders from Shopify (most recent first).
+    const fields = 'id,name,email,created_at,cancelled_at,fulfillment_status,shipping_address,line_items';
+    const url = `https://${SHOPIFY_STORE}/admin/api/2026-04/orders.json?status=open&fulfillment_status=unshipped&limit=250&fields=${encodeURIComponent(fields)}`;
+    const oRes = await fetch(url, { headers: { 'X-Shopify-Access-Token': shopifyAccessToken } });
+    if (!oRes.ok) {
+      const body = await oRes.text().catch(() => '');
+      const hint = (oRes.status === 401 || oRes.status === 403)
+        ? ' — the read_orders scope may be missing; reconnect Shopify via /auth.' : '';
+      return res.status(oRes.status).json({ error: `Shopify orders fetch failed (${oRes.status})${hint}`, detail: body.slice(0, 300) });
+    }
+    const oData = await oRes.json();
+    const orders = (oData.orders || []).filter(o => !o.cancelled_at);
+
+    // 2) Collect unique EB SKUs across all orders and look up shipping data from
+    //    Airtable (batched OR-filter queries, capped so the formula stays short).
+    const skuSet = new Set();
+    for (const o of orders) for (const li of (o.line_items || [])) {
+      const s = (li.sku || '').trim();
+      if (/^EB-/i.test(s)) skuSet.add(s);
+    }
+    const WANT = ['EB Number', 'Normal Shipping', 'Aggressive Compression', 'Item weight (oz)', 'Reference name', 'Type', 'Shopify Ship Weight (lb)'];
+    const fieldQS = WANT.map(f => `&fields%5B%5D=${encodeURIComponent(f)}`).join('');
+    const shipBySku = {};
+    const skus = [...skuSet];
+    for (let i = 0; i < skus.length; i += 40) {
+      const batch = skus.slice(i, i + 40);
+      const formula = 'OR(' + batch.map(s => `{EB Number}='${s.replace(/'/g, "\\'")}'`).join(',') + ')';
+      const data = await airtableReq(`${AT_INVENTORY_TBL}?filterByFormula=${encodeURIComponent(formula)}&maxRecords=100${fieldQS}`);
+      for (const r of (data.records || [])) {
+        const f = r.fields || {};
+        if (f['EB Number']) shipBySku[String(f['EB Number']).trim()] = f;
+      }
+    }
+
+    // 3) Parse "Normal Shipping" (e.g. "16x18x5" or "28×24×22") into L/W/H numbers.
+    const parseDims = (str) => {
+      const nums = String(str || '').match(/[\d.]+/g);
+      if (!nums || nums.length < 3) return null;
+      const [l, w, h] = nums.slice(0, 3).map(Number);
+      if (!(l > 0 && w > 0 && h > 0)) return null;
+      return { length: l, width: w, height: h };
+    };
+
+    // 4) Shape each order + line item with resolved shipping + warnings.
+    const out = orders.map(o => {
+      const sa = o.shipping_address || {};
+      const orderWarnings = [];
+      if (!o.shipping_address) orderWarnings.push('No shipping address on this order');
+      const items = (o.line_items || [])
+        .filter(li => li.requires_shipping !== false)
+        .map(li => {
+          const sku = (li.sku || '').trim();
+          const rec = shipBySku[sku];
+          const warnings = [];
+          let dims = null, pounds = null, normalShipping = null, itemWeightOz = null;
+          if (!/^EB-/i.test(sku)) {
+            warnings.push(sku ? `SKU "${sku}" is not an EB item — no Airtable match` : 'Line item has no SKU');
+          } else if (!rec) {
+            warnings.push(`SKU ${sku} not found in Airtable`);
+          } else {
+            normalShipping = rec['Normal Shipping'] || null;
+            dims = parseDims(normalShipping);
+            if (!dims) warnings.push("Missing/unreadable 'Normal Shipping' box size");
+            itemWeightOz = (rec['Item weight (oz)'] != null) ? Number(rec['Item weight (oz)']) : null;
+            if (itemWeightOz != null && itemWeightOz > 0) pounds = Math.max(0.1, Math.round((itemWeightOz / 16) * 10) / 10);
+            else warnings.push('Missing item weight');
+          }
+          return {
+            sku, title: li.name || li.title || '', quantity: li.quantity || 1,
+            normalShipping, dims, itemWeightOz, pounds,
+            ready: !!(dims && pounds != null), warnings
+          };
+        });
+      return {
+        orderId: o.name || String(o.id),
+        createdAt: o.created_at || null,
+        email: o.email || '',
+        ship: {
+          name: sa.name || [sa.first_name, sa.last_name].filter(Boolean).join(' '),
+          company: sa.company || '',
+          address1: sa.address1 || '',
+          address2: sa.address2 || '',
+          city: sa.city || '',
+          province: sa.province_code || sa.province || '',
+          zip: sa.zip || '',
+          country: sa.country_code || sa.country || '',
+          phone: sa.phone || ''
+        },
+        multiItem: items.length > 1,
+        items,
+        warnings: orderWarnings
+      };
+    });
+    res.json({ ok: true, count: out.length, orders: out });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Version / health (verify what's actually deployed) ────────
 app.get('/version', (req, res) => res.json({ version: '2026-07-03-fixpack9', features: ['create-product idempotent by SKU (returns existing product instead of duplicating on retry/timeout)','drive-move-folder: publish→Published, sold→Sold (idempotent bucket move)','custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions', 'indoor_outdoor->custom.indoor_outdoor (universal multi-select; wreaths also get native suitable-space)', 'suggested_display->custom.suggested_display (multi-select surface/spot)'] }));
 
