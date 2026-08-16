@@ -1217,12 +1217,15 @@ app.get('/orders/open', async (req, res) => {
     const oData = await oRes.json();
     const orders = (oData.orders || []).filter(o => !o.cancelled_at);
 
-    // 2) Collect unique EB SKUs across all orders and look up shipping data from
+    // 2) Collect unique SKUs across all orders and look up shipping data from
     //    Airtable (batched OR-filter queries, capped so the formula stays short).
+    //    Match ANY non-empty SKU against Airtable's EB Number — not just EB-*
+    //    prefixed ones — so test SKUs (e.g. TEST-T1) and any future naming still
+    //    join. Unmatched SKUs are reported per-item as "not found", not skipped.
     const skuSet = new Set();
     for (const o of orders) for (const li of (o.line_items || [])) {
       const s = (li.sku || '').trim();
-      if (/^EB-/i.test(s)) skuSet.add(s);
+      if (s) skuSet.add(s);
     }
     const WANT = ['EB Number', 'Normal Shipping', 'Aggressive Compression', 'Item weight (oz)', 'Reference name', 'Type', 'Shopify Ship Weight (lb)'];
     const fieldQS = WANT.map(f => `&fields%5B%5D=${encodeURIComponent(f)}`).join('');
@@ -1259,8 +1262,8 @@ app.get('/orders/open', async (req, res) => {
           const rec = shipBySku[sku];
           const warnings = [];
           let dims = null, pounds = null, normalShipping = null, itemWeightOz = null;
-          if (!/^EB-/i.test(sku)) {
-            warnings.push(sku ? `SKU "${sku}" is not an EB item — no Airtable match` : 'Line item has no SKU');
+          if (!sku) {
+            warnings.push('Line item has no SKU — add one in Shopify so it can match Airtable');
           } else if (!rec) {
             warnings.push(`SKU ${sku} not found in Airtable`);
           } else {
