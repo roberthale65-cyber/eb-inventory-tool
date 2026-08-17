@@ -34,6 +34,7 @@ const PORT               = process.env.PORT || 3000;
 const AT_BASE_ID       = 'appHw4SEE5RNT8tCV';
 const AT_INVENTORY_TBL = 'tbl29ndzXDXXU8f7x';
 const AT_COSTS_TBL     = 'Costs';
+const AT_SHIP_PROFILE_MAP_TBL = 'tblvrYkGkIFP9rEPg'; // "Shipping Profile Map": Tier (T1–T4) → Delivery Profile GID
 
 // ── Shopify standard product category (taxonomy) GIDs ─────────
 // Map the "Product Category" label (from Airtable / Step 1.1) to a Shopify
@@ -327,6 +328,82 @@ async function airtableReq(tablePath, opts = {}) {
     throw new Error('Airtable error ' + res.status + ': ' + JSON.stringify(err));
   }
   return res.json();
+}
+
+// ── Shipping delivery profiles ────────────────────────────────
+// Shopify's weight-based rate engine collapses a multi-item cart into ONE rate, so a
+// T1+T4 cart charges only T4 (~one box) instead of T1+T4 (~two boxes). Delivery profiles
+// are the native fix: Shopify computes a rate PER profile and SUMS them at checkout. Each
+// tier has its own profile holding a single US-wide flat rate, so assigning each variant
+// to its tier's profile makes a mixed cart price additively (one box per arrangement).
+//
+// The tier is recovered from the synthetic ship-weight the publish payload already carries
+// (5/15/28/45 lb ⇒ T1..T4 — same Effective Net Charge that drives the Airtable "Shipping
+// Tier" formula). The tier→profile-GID mapping is NOT hardcoded: it lives in the Airtable
+// "Shipping Profile Map" table so a future profile rebuild is a one-cell edit, no redeploy.
+const SHIP_LB_TO_TIER = { 5: 'T1', 15: 'T2', 28: 'T3', 45: 'T4' };
+
+// Cache the tiny tier→GID crosswalk briefly so we don't re-fetch on every publish, while
+// still picking up an Airtable edit within the TTL (that's the whole point of not hardcoding).
+let _shipProfileCache = { at: 0, map: null };
+async function getShippingProfileMap() {
+  const now = Date.now();
+  if (_shipProfileCache.map && (now - _shipProfileCache.at) < 5 * 60 * 1000) return _shipProfileCache.map;
+  const data = await airtableReq(AT_SHIP_PROFILE_MAP_TBL);
+  const map = {};
+  for (const rec of (data.records || [])) {
+    const tier = String((rec.fields || {})['Tier'] || '').trim();
+    const gid  = String((rec.fields || {})['Delivery Profile GID'] || '').trim();
+    if (tier && gid) map[tier] = gid;
+  }
+  _shipProfileCache = { at: now, map };
+  return map;
+}
+
+// Associate a freshly-created variant with its weight-tier delivery profile. Associating a
+// variant with a profile auto-dissociates it from its previous one, so this is idempotent —
+// re-publishing or fixing a mis-tiered piece is just the same call again, no cleanup step.
+// Fully non-fatal: any miss (non-shippable item, blank/unknown weight, missing crosswalk row,
+// Shopify error) logs and leaves the variant on the General profile — it never blocks a publish.
+async function assignShippingProfile(sku, variantGid, shipWeightLb, requiresShipping) {
+  // Shippability branch FIRST. Outdoor planters / local-delivery-only pieces publish with
+  // requires_shipping:false — they must NEVER get a US tier profile, or they'd quote a
+  // national carrier rate on an item that can't ship. Leave them off tier profiles entirely.
+  if (requiresShipping === false) {
+    console.log(`ship profile: ${sku} is non-shippable (local delivery only) — no tier profile assigned.`);
+    return;
+  }
+  const tier = SHIP_LB_TO_TIER[Number(shipWeightLb)];
+  if (!tier) {
+    console.warn(`ship profile: ${sku} has no recognized ship weight (${shipWeightLb}) — no tier profile assigned (stays on General; piece needs a shipping estimate).`);
+    return;
+  }
+  let profileGid;
+  try {
+    profileGid = (await getShippingProfileMap())[tier];
+  } catch (e) {
+    console.warn(`ship profile: crosswalk lookup failed for ${sku} (${e.message}) — stays on General.`);
+    return;
+  }
+  if (!profileGid) {
+    console.warn(`ship profile: no Delivery Profile GID for tier ${tier} in Shipping Profile Map — ${sku} stays on General.`);
+    return;
+  }
+  try {
+    const mutation = `mutation AssignVariantToProfile($profileId: ID!, $variantId: ID!) {
+  deliveryProfileUpdate(id: $profileId, profile: { variantsToAssociate: [$variantId] }) {
+    profile { id }
+    userErrors { field message }
+  }
+}`;
+    const data = await shopifyGraphql(mutation, { profileId: profileGid, variantId: variantGid });
+    if (data?.errors) { console.warn(`ship profile GraphQL error for ${sku}:`, JSON.stringify(data.errors)); return; }
+    const errs = data?.data?.deliveryProfileUpdate?.userErrors || [];
+    if (errs.length) { console.warn(`ship profile assign failed for ${sku}:`, errs.map(e => e.message).join(', ')); return; }
+    console.log(`ship profile: ${sku} → ${tier} (${profileGid})`);
+  } catch (e) {
+    console.warn(`ship profile assign error for ${sku} (non-fatal):`, e.message);
+  }
 }
 
 // ── Google token helpers ──────────────────────────────────────
@@ -1417,6 +1494,7 @@ app.post('/create-product', async (req, res) => {
     if (!r.ok) return res.status(r.status).json({ error: data.errors || 'Shopify error' });
     const productId = data.product.id;
     const inventoryItemId = data.product.variants[0].inventory_item_id;
+    const variantRestId = data.product.variants[0].id;
     const locRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/locations.json`, { headers: { 'X-Shopify-Access-Token': shopifyAccessToken } });
     const locData = await locRes.json();
     const locationId = locData.locations && locData.locations[0] && locData.locations[0].id;
@@ -1453,6 +1531,10 @@ app.post('/create-product', async (req, res) => {
         if (!invData?.errors && !invErrs.length) console.log('Inventory set ok:', sku, '→', qty);
       } catch (invErr) { console.warn('Inventory set error (non-fatal):', invErr.message); }
     }
+    // Assign the variant to its weight-tier delivery profile so multi-box carts price
+    // additively (rates from different profiles SUM at checkout). Non-fatal + idempotent;
+    // outdoor planters (requires_shipping:false) are skipped and stay off tier profiles.
+    await assignShippingProfile(sku, `gid://shopify/ProductVariant/${variantRestId}`, ship_weight_lb, requires_shipping);
     // Set the Shopify standard product category (taxonomy) AND the native
     // "Color" attribute (shopify.color-pattern) — REST can set neither, so use a
     // productUpdate GraphQL mutation. Category is skipped for Add-ons (no mapping).
