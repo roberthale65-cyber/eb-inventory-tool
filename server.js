@@ -1350,7 +1350,92 @@ app.post('/webhooks/orders-create', async (req, res) => {
   if (transientError) return res.status(500).send('airtable error — retry');
   res.status(200).send('ok');
 });
- 
+
+// ── Shopify webhook: products/update → mirror Sale/Clearance state into Airtable ──
+// Closes the loop the other direction: a markdown made DIRECTLY in Shopify admin (set
+// a compare-at price, and/or add a `Sale`/`Clearance` tag) gets tracked in Airtable
+// too — not just markdowns made from the app's Sale & Clearance screen. We read the
+// product's price/compare-at + tags, derive the sale state, and reconcile the four
+// Airtable fields (Sale status / Sale price ($) / Markdown (%) / Sale date).
+//   • Writes ONLY to Airtable, never back to Shopify → it cannot loop with /mark-sale.
+//   • Fires on EVERY product edit, so we read the record first and PATCH only when the
+//     sale state actually changed — which also preserves the original Sale date across
+//     unrelated edits (title, photos, inventory, etc.).
+//   • Tag wins for the type; a compare-at markdown with no tag defaults to Sale.
+//   • read_products (already granted) is the only scope needed.
+app.post('/webhooks/products-update', async (req, res) => {
+  // 1) Verify the webhook is genuinely from Shopify (signed with our app secret).
+  const sentHmac = req.get('X-Shopify-Hmac-Sha256') || '';
+  const digest = crypto.createHmac('sha256', SHOPIFY_API_SECRET || '')
+    .update(req.rawBody || Buffer.from(''))
+    .digest('base64');
+  let verified = false;
+  try { verified = sentHmac.length > 0 && crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(sentHmac)); }
+  catch { verified = false; }
+  if (!verified) { console.warn('products-update webhook: HMAC verification failed — rejecting'); return res.status(401).send('unauthorized'); }
+
+  // 2) Derive the sale state from the product. One-of-a-kind pieces have a single
+  //    EB-* variant; fall back to the first variant if the SKU isn't on that one.
+  const product = req.body || {};
+  const variants = Array.isArray(product.variants) ? product.variants : [];
+  const v = variants.find(x => x && /^EB-/i.test(String(x.sku || ''))) || variants[0] || {};
+  const sku = String(v.sku || '').trim();
+  if (!/^EB-/i.test(sku)) return res.status(200).send('ok'); // not an EB piece — ignore
+
+  const price = Number(v.price);
+  const compareAt = (v.compare_at_price != null && v.compare_at_price !== '') ? Number(v.compare_at_price) : null;
+  const onMarkdown = compareAt != null && Number.isFinite(compareAt) && Number.isFinite(price) && compareAt > price;
+  const tags = String(product.tags || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+  const hasClearance = tags.includes('clearance');
+  const hasSale = tags.includes('sale');
+  const onSale = onMarkdown || hasSale || hasClearance;
+  const type = hasClearance ? 'Clearance' : 'Sale'; // tag wins; markdown w/o tag defaults to Sale
+  const desiredStatus = onSale ? type : 'None';
+  const desiredSalePrice = (onSale && Number.isFinite(price)) ? Number(price.toFixed(2)) : null;
+  const desiredPctInt = onSale ? (onMarkdown ? Math.round((compareAt - price) / compareAt * 100) : 0) : null;
+  // Can't determine a sale price (bad/blank price on a supposedly-on-sale item) — don't guess.
+  if (onSale && desiredSalePrice == null) { console.warn(`products-update: SKU ${sku} looks on sale but has no usable price — skipped`); return res.status(200).send('ok'); }
+
+  // 3) Reconcile into Airtable, but only when the sale state actually changed.
+  try {
+    const formula = encodeURIComponent(`{EB Number}='${sku}'`);
+    const found = await airtableReq(`${AT_INVENTORY_TBL}?filterByFormula=${formula}&maxRecords=2`);
+    const recs = (found && found.records) || [];
+    if (!recs.length) { console.log(`products-update: SKU ${sku} not in Airtable — skipped`); return res.status(200).send('ok'); }
+    if (recs.length > 1) console.warn(`products-update: SKU ${sku} matches ${recs.length} Airtable records — updating the first (${recs[0].id}); resolve the duplicate`);
+    const rec = recs[0];
+    const f = rec.fields || {};
+    const curStatus = f['Sale status'] || 'None';
+    const curSalePrice = (f['Sale price ($)'] != null) ? Number(f['Sale price ($)']) : null;
+    const curPctInt = (f['Markdown (%)'] != null) ? Math.round(Number(f['Markdown (%)']) * 100) : null;
+
+    const statusChanged = curStatus !== desiredStatus;
+    const priceChanged = onSale && (curSalePrice == null || Number(curSalePrice.toFixed(2)) !== desiredSalePrice);
+    const pctChanged = onSale && (curPctInt !== desiredPctInt);
+    if (!statusChanged && !priceChanged && !pctChanged) return res.status(200).send('ok'); // already in sync
+
+    const fields = { 'Sale status': desiredStatus };
+    if (onSale) {
+      fields['Sale price ($)'] = desiredSalePrice;
+      fields['Markdown (%)'] = desiredPctInt / 100;
+      // Stamp Sale date only when the piece NEWLY enters a sale (or has none yet);
+      // keep the original date when it was already on sale and just got re-priced.
+      const wasOnSale = curStatus === 'Sale' || curStatus === 'Clearance';
+      if (!wasOnSale || f['Sale date'] == null) fields['Sale date'] = new Date().toISOString().split('T')[0];
+    } else {
+      fields['Sale price ($)'] = null;
+      fields['Markdown (%)'] = null;
+      fields['Sale date'] = null;
+    }
+    await airtableReq(`${AT_INVENTORY_TBL}/${rec.id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) });
+    console.log(`products-update: SKU ${sku} → Sale status ${desiredStatus}${onSale ? ` @ $${desiredSalePrice} (${desiredPctInt}% off)` : ''} (synced from Shopify)`);
+    res.status(200).send('ok');
+  } catch (e) {
+    console.warn(`products-update: failed to reconcile ${sku} — ${e.message}`);
+    return res.status(500).send('airtable error — retry');
+  }
+});
+
 // ── Order fulfillment: open Shopify orders → packing reference ────────────────
 // Pulls OPEN + UNFULFILLED orders straight from Shopify and joins each line item
 // to its Airtable record so the app can show a quick PACKING REFERENCE: the real
@@ -1462,7 +1547,7 @@ app.get('/orders/open', async (req, res) => {
 });
 
 // ── Version / health (verify what's actually deployed) ────────
-app.get('/version', (req, res) => res.json({ version: '2026-07-03-fixpack9', features: ['create-product idempotent by SKU (returns existing product instead of duplicating on retry/timeout)','drive-move-folder: publish→Published, sold→Sold (idempotent bucket move)','custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions', 'indoor_outdoor->custom.indoor_outdoor (universal multi-select; wreaths also get native suitable-space)', 'suggested_display->custom.suggested_display (multi-select surface/spot)', 'mark-sale: Sale/Clearance markdown (compare-at strikethrough + Sale/Clearance tag → tag-driven collections), apply/remove'] }));
+app.get('/version', (req, res) => res.json({ version: '2026-07-03-fixpack9', features: ['create-product idempotent by SKU (returns existing product instead of duplicating on retry/timeout)','drive-move-folder: publish→Published, sold→Sold (idempotent bucket move)','custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions', 'indoor_outdoor->custom.indoor_outdoor (universal multi-select; wreaths also get native suitable-space)', 'suggested_display->custom.suggested_display (multi-select surface/spot)', 'mark-sale: Sale/Clearance markdown (compare-at strikethrough + Sale/Clearance tag → tag-driven collections), apply/remove', 'webhooks/products-update: mirror Sale/Clearance markdowns made directly in Shopify back into Airtable (change-only reconcile)'] }));
 
 // Resolve the tool-owned taxonomy metafield GIDs for a product, category-gated.
 // Shared by /create-product (replace) and /resync-attributes (merge) so the value→GID
@@ -2265,7 +2350,34 @@ async function ensureOrderWebhook() {
   } catch (e) { console.warn('orders webhook: registration error —', e.message); }
 }
 
+// Register the products/update webhook so Sale/Clearance markdowns made directly in
+// Shopify sync back to Airtable. Mirrors ensureOrderWebhook; needs only read_products
+// (already granted), so unlike the orders webhook it doesn't wait on a scope grant.
+async function ensureProductWebhook() {
+  if (!shopifyAccessToken) { console.log('products webhook: no Shopify token yet — skipping registration (visit /auth).'); return; }
+  if (!SERVER_URL) { console.warn('products webhook: SERVER_URL not set — cannot register callback address.'); return; }
+  const address = `${SERVER_URL.replace(/\/$/, '')}/webhooks/products-update`;
+  try {
+    const listRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/webhooks.json?topic=products/update&limit=250`, {
+      headers: { 'X-Shopify-Access-Token': shopifyAccessToken }
+    });
+    const listData = await listRes.json();
+    if (!listRes.ok) { console.warn('products webhook: could not list existing webhooks —', JSON.stringify(listData.errors || listData)); return; }
+    const existing = (listData.webhooks || []).find(w => w.address === address);
+    if (existing) { console.log(`products webhook: already registered (#${existing.id}) → ${address}`); return; }
+    const createRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/webhooks.json`, {
+      method: 'POST',
+      headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhook: { topic: 'products/update', address, format: 'json' } })
+    });
+    const createData = await createRes.json();
+    if (!createRes.ok) { console.warn('products webhook: registration FAILED —', JSON.stringify(createData.errors || createData)); return; }
+    console.log(`products webhook: registered (#${createData.webhook && createData.webhook.id}) → ${address}`);
+  } catch (e) { console.warn('products webhook: registration error —', e.message); }
+}
+
 app.listen(PORT, () => {
   console.log(`EB server running on port ${PORT}`);
   ensureOrderWebhook();
+  ensureProductWebhook();
 });
