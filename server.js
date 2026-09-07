@@ -1221,6 +1221,86 @@ app.post('/mark-sold', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Sale & Clearance: apply or remove a storefront markdown ──────────────────
+// Sets the Shopify variant to a discounted price while keeping the ORIGINAL price
+// as compare-at (the strikethrough the theme renders + "Sale" badge), and tags the
+// product `Sale` or `Clearance` so the tag-driven Sale/Clearance smart collections
+// pick it up. action:'remove' restores the original price (compare-at cleared) and
+// strips both tags. Airtable is the record of the markdown (Sale status / Sale
+// price ($) / Markdown (%) / Sale date) and is written by the client; this route
+// only touches Shopify. Idempotent — safe to re-run or re-price an item already on
+// sale. A SKU that isn't on Shopify yet returns success so Airtable still records it.
+app.post('/mark-sale', async (req, res) => {
+  if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized — complete OAuth first.' });
+  const { eb_number, action, sale_type, sale_price, original_price } = req.body || {};
+  if (!eb_number) return res.status(400).json({ error: 'eb_number required' });
+  const act = action === 'remove' ? 'remove' : 'apply';
+  if (act === 'apply') {
+    const sp = Number(sale_price), op = Number(original_price);
+    if (!Number.isFinite(sp) || sp <= 0) return res.status(400).json({ error: 'sale_price must be a positive number' });
+    if (!Number.isFinite(op) || op <= 0) return res.status(400).json({ error: 'original_price must be a positive number' });
+    if (sp >= op) return res.status(400).json({ error: 'sale_price must be below the original price' });
+    if (sale_type !== 'Sale' && sale_type !== 'Clearance') return res.status(400).json({ error: "sale_type must be 'Sale' or 'Clearance'" });
+  }
+  try {
+    // 1) Find the variant + product by EXACT SKU (variant search tokenizes on hyphens,
+    //    so we trust equality only — same guard the publish path uses).
+    const lookup = await shopifyGraphql(
+      `query($q:String!){ productVariants(first:10, query:$q){ edges { node { id sku price compareAtPrice product { id legacyResourceId handle tags } } } } }`,
+      { q: `sku:${JSON.stringify(String(eb_number))}` }
+    );
+    const edges = (((lookup || {}).data || {}).productVariants || {}).edges || [];
+    const node = edges.map(e => e.node).find(n => n && n.sku === eb_number && n.product);
+    if (!node) return res.json({ success: true, note: 'Product not found in Shopify — Airtable updated only' });
+
+    const variantId = node.id;
+    const productGid = node.product.id;
+    const productId = Number(node.product.legacyResourceId);
+    const handle = node.product.handle;
+
+    // 2) Compute the new variant price + compare-at.
+    let newPrice, newCompareAt, addTag = null;
+    if (act === 'apply') {
+      newPrice = Number(sale_price).toFixed(2);
+      // Compare-at is the ORIGINAL full price. If the item is ALREADY on sale (compare-at
+      // set), keep that existing anchor so re-pricing a sale doesn't lose the true original;
+      // otherwise use the caller's original_price (the Airtable Price ($)).
+      const anchor = (node.compareAtPrice != null && Number(node.compareAtPrice) > 0)
+        ? Number(node.compareAtPrice) : Number(original_price);
+      newCompareAt = anchor.toFixed(2);
+      addTag = sale_type;
+    } else {
+      // Remove: restore full price = compare-at if present, else caller's original_price,
+      // else the current live price. Compare-at cleared.
+      const restore = (node.compareAtPrice != null && Number(node.compareAtPrice) > 0)
+        ? Number(node.compareAtPrice)
+        : (Number.isFinite(Number(original_price)) && Number(original_price) > 0 ? Number(original_price) : Number(node.price));
+      newPrice = restore.toFixed(2);
+      newCompareAt = null;
+    }
+
+    // 3) Update the variant price + compare-at.
+    const upd = await shopifyGraphql(
+      `mutation($productId: ID!, $variants: [ProductVariantsBulkInput!]!){ productVariantsBulkUpdate(productId: $productId, variants: $variants){ productVariants { id price compareAtPrice } userErrors { field message } } }`,
+      { productId: productGid, variants: [{ id: variantId, price: newPrice, compareAtPrice: newCompareAt }] }
+    );
+    const vErr = (((upd || {}).data || {}).productVariantsBulkUpdate || {}).userErrors || (upd || {}).errors;
+    if (vErr && vErr.length) return res.status(500).json({ error: 'Variant price update failed: ' + JSON.stringify(vErr) });
+
+    // 4) Tags: keep exactly one of Sale/Clearance (or neither on remove). Remove first,
+    //    then add, so switching Sale↔Clearance never leaves both tags on the product.
+    const removeTags = ['Sale', 'Clearance'].filter(t => t !== addTag);
+    if (removeTags.length) {
+      await shopifyGraphql(`mutation($id: ID!, $tags: [String!]!){ tagsRemove(id: $id, tags: $tags){ userErrors { field message } } }`, { id: productGid, tags: removeTags });
+    }
+    if (addTag) {
+      await shopifyGraphql(`mutation($id: ID!, $tags: [String!]!){ tagsAdd(id: $id, tags: $tags){ userErrors { field message } } }`, { id: productGid, tags: [addTag] });
+    }
+
+    res.json({ success: true, product_id: productId, handle, action: act, price: newPrice, compare_at_price: newCompareAt, tag: addTag });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Shopify webhook: orders/create → auto-mark ONLINE sales as Sold in Airtable ──
 // Online orders sync automatically here, so the "Mark as sold" tile is reserved for
 // in-person sales (Facebook Marketplace, craft fairs, outdoor planters, etc.) which
@@ -1382,7 +1462,7 @@ app.get('/orders/open', async (req, res) => {
 });
 
 // ── Version / health (verify what's actually deployed) ────────
-app.get('/version', (req, res) => res.json({ version: '2026-07-03-fixpack9', features: ['create-product idempotent by SKU (returns existing product instead of duplicating on retry/timeout)','drive-move-folder: publish→Published, sold→Sold (idempotent bucket move)','custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions', 'indoor_outdoor->custom.indoor_outdoor (universal multi-select; wreaths also get native suitable-space)', 'suggested_display->custom.suggested_display (multi-select surface/spot)'] }));
+app.get('/version', (req, res) => res.json({ version: '2026-07-03-fixpack9', features: ['create-product idempotent by SKU (returns existing product instead of duplicating on retry/timeout)','drive-move-folder: publish→Published, sold→Sold (idempotent bucket move)','custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions', 'indoor_outdoor->custom.indoor_outdoor (universal multi-select; wreaths also get native suitable-space)', 'suggested_display->custom.suggested_display (multi-select surface/spot)', 'mark-sale: Sale/Clearance markdown (compare-at strikethrough + Sale/Clearance tag → tag-driven collections), apply/remove'] }));
 
 // Resolve the tool-owned taxonomy metafield GIDs for a product, category-gated.
 // Shared by /create-product (replace) and /resync-attributes (merge) so the value→GID
