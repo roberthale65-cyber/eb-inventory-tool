@@ -434,7 +434,7 @@ button:active{transform:scale(.97)}
     <div class="mode-card sale-clearance" onclick="saOpen()"><span class="mode-icon">🏷️</span><div class="mode-title">Sale &amp; Clearance</div><div class="mode-desc">Mark a piece Sale or Clearance — discounts Shopify, records it in Airtable</div><div class="mode-arrow">→</div></div>
     <div class="mode-card fulfillment" onclick="goTo('screen-fulfillment')"><span class="mode-icon">🚢</span><div class="mode-title">Order fulfillment</div><div class="mode-desc">Packing reference for open orders — real item weight, actual size &amp; box</div><div class="mode-arrow">→</div></div>
     <div class="mode-card craft-fair" onclick="goTo('screen-craft-fair')"><span class="mode-icon">🛍️</span><div class="mode-title">Craft fair</div><div class="mode-desc">Mobile-optimized selling at shows and events</div><div class="mode-arrow">→</div></div>
-    <div class="mode-card bin-mgmt" onclick="goTo('screen-bin-mgmt')"><span class="mode-icon">📦</span><div class="mode-title">Bin management</div><div class="mode-desc">Print bin labels, scan to assign pieces, update anytime</div><div class="mode-arrow">→</div></div>
+    <div class="mode-card bin-mgmt" onclick="goTo('screen-bin-mgmt')"><span class="mode-icon">📦</span><div class="mode-title">Bin management</div><div class="mode-desc">Print bin, bar &amp; shelf labels, scan to assign pieces, update anytime</div><div class="mode-arrow">→</div></div>
     <div class="mode-card raw-label" onclick="goTo('screen-raw-label')"><span class="mode-icon">🧵</span><div class="mode-title">Raw material label</div><div class="mode-desc">Free-form 4×6 bin label — type up to 4 lines, big auto-sized text, print one off</div><div class="mode-arrow">→</div></div>
     <div class="mode-card readiness" onclick="goTo('screen-readiness')"><span class="mode-icon">&#x1F4CB;</span><div class="mode-title">Listing readiness</div><div class="mode-desc">See what each piece is missing before it can publish to Shopify</div><div class="mode-arrow">→</div></div>
     <div class="mode-card log-cost" onclick="goTo('screen-costs')"><span class="mode-icon">&#x1F9FE;</span><div class="mode-title">Log a cost</div><div class="mode-desc">Snap a receipt, log mileage, or enter manually — saved to Airtable</div><div class="mode-arrow">→</div></div>
@@ -984,17 +984,18 @@ button:active{transform:scale(.97)}
 
     <!-- OVERVIEW -->
     <div class="step-block active" id="bm-step-overview">
-      <div class="info-card teal"><strong>📦 Storage bins</strong> Assign pieces to bins, bars &amp; the main collective so anyone can find anything — fast at fairs, fast in the studio.</div>
+      <div class="info-card teal"><strong>📦 Storage locations</strong> Assign pieces to bins, bars, shelves &amp; the main collective so anyone can find anything — fast at fairs, fast in the studio.</div>
       <button class="btn-primary btn-full" onclick="bmStartNewLabel()" style="margin-bottom:20px">+ Print new label</button>
-      <div class="section-label">All bins</div>
-      <div class="field" style="margin-bottom:12px"><input type="text" id="bm-search" placeholder="Find an EB number, bin, or bar…" autocorrect="off" spellcheck="false" oninput="bmFilterOverview()"></div>
+      <div class="section-label">All locations</div>
+      <div class="field" style="margin-bottom:12px"><input type="text" id="bm-search" placeholder="Find an EB number, bin, bar, or shelf…" autocorrect="off" spellcheck="false" oninput="bmFilterOverview()"></div>
       <div id="bm-bin-list"><div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">Loading…</div></div>
     </div>
 
     <!-- PRINT LABEL -->
     <div class="step-block" id="bm-step-print">
       <div class="section-label">New label</div>
-      <div style="display:flex;gap:8px;margin-bottom:16px" id="bm-type-choice"></div>
+      <!-- 2x2 grid — four types are too cramped side-by-side on a phone -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px" id="bm-type-choice"></div>
       <div style="background:var(--teal-bg);border:1.5px solid var(--teal-light);border-radius:var(--radius);padding:28px 20px;text-align:center;margin-bottom:16px">
         <div style="font-size:11px;font-weight:800;color:var(--teal);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px" id="bm-new-lbl">Bin number</div>
         <div style="font-family:var(--font-display);font-size:96px;font-weight:700;color:var(--teal);line-height:.9;margin-bottom:20px" id="bm-new-num">—</div>
@@ -1010,8 +1011,8 @@ button:active{transform:scale(.97)}
       <div class="btn-row" style="margin-top:10px">
         <button id="bm-print-next-btn" style="display:none;background:var(--card);border:1.5px solid var(--teal);color:var(--teal);border-radius:var(--radius-sm);padding:13px 20px;font-size:15px;font-weight:700;cursor:pointer;width:100%" onclick="bmPrintNext()">+ Print next bin →</button>
       </div>
-      <div class="btn-row" style="margin-top:8px"><button class="btn btn-full" onclick="bmOpenAssignFromPrint()">📦 Assign pieces to this bin →</button></div>
-      <button class="btn btn-full" style="margin-top:8px" onclick="bmStep('overview')">← Back to all bins</button>
+      <div class="btn-row" style="margin-top:8px"><button class="btn btn-full" onclick="bmOpenAssignFromPrint()">📦 Assign pieces here →</button></div>
+      <button class="btn btn-full" style="margin-top:8px" onclick="bmStep('overview')">← Back to all locations</button>
     </div>
 
     <!-- ASSIGN / MANAGE -->
@@ -1049,10 +1050,10 @@ button:active{transform:scale(.97)}
         </div>
         <div id="bm-scan-status" style="text-align:center;font-size:12px;color:var(--teal);font-weight:600;margin-bottom:10px;padding:6px">Point at an EB QR tag…</div>
       </div>
-      <button class="btn-primary btn-full" onclick="bmAssignPiece()" id="bm-assign-btn">+ Add to bin</button>
-      <div class="section-label" style="margin-top:20px">Currently in this bin</div>
+      <button class="btn-primary btn-full" onclick="bmAssignPiece()" id="bm-assign-btn">+ Add piece here</button>
+      <div class="section-label" style="margin-top:20px">Currently stored here</div>
       <div id="bm-current-pieces"><div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">No pieces assigned yet</div></div>
-      <button class="btn btn-full" style="margin-top:16px" onclick="bmStep('overview')">← Back to all bins</button>
+      <button class="btn btn-full" style="margin-top:16px" onclick="bmStep('overview')">← Back to all locations</button>
     </div>
 
       <div class="channel-btn" onclick="modalSelectChannel(this,'Etsy')"><span class="channel-icon">🧡</span><div class="channel-label">Etsy</div></div>
@@ -4415,13 +4416,14 @@ function npDismissSpelling() {
 // BIN MANAGEMENT
 // ══════════════════════════════════════════
 const BM_TOOL_URL = 'https://roberthale65-cyber.github.io/eb-inventory-tool/master.html';
-// A "location" is one storage area. It has a TYPE (Bin / Bar / Main Collective)
-// and, for Bin & Bar, a number counted independently per type. It's stored on a
-// piece's 'Bin location' field as a KEY:
+// A "location" is one storage area. It has a TYPE (Bin / Bar / Shelf / Main
+// Collective) and, for the numbered types, a number counted independently per
+// type. It's stored on a piece's 'Bin location' field as a KEY:
 //   Bin             -> bare number      ('5')   — unchanged, backward compatible
 //   Bar             -> 'Bar <n>'        ('Bar 3')
+//   Shelf           -> 'Shelf <n>'      ('Shelf 2')  — one shelving unit
 //   Main Collective -> 'Main Collective'         — single area, no number
-const BM_TYPES = ['Bin', 'Bar', 'Main Collective'];
+const BM_TYPES = ['Bin', 'Bar', 'Shelf', 'Main Collective'];
 let bmNewType    = 'Bin';   // type staged for the new label
 let bmNewNum     = null;    // number staged for the new label (null for Main Collective)
 let bmCurrentLoc = null;    // 'Bin location' KEY currently being managed
@@ -4430,19 +4432,24 @@ let bmScanActive   = false;
 
 function bmLocKey(type, num) {
   if (type === 'Main Collective') return 'Main Collective';
-  if (type === 'Bar') return 'Bar ' + num;
-  return String(num);                        // Bin
+  if (type === 'Bin') return String(num);    // bare number — legacy format
+  return type + ' ' + num;                   // 'Bar 3' / 'Shelf 2'
 }
 function bmLocLabel(type, num) {
   if (type === 'Main Collective') return 'Main Collective';
-  return type + ' ' + num;                   // 'Bin 5' / 'Bar 3'
+  return type + ' ' + num;                   // 'Bin 5' / 'Bar 3' / 'Shelf 2'
 }
 function bmParseLoc(raw) {
   const s = String(raw == null ? '' : raw).trim();
   if (!s) return null;
   if (/^main collective$/i.test(s)) return { type:'Main Collective', num:null, key:'Main Collective', label:'Main Collective' };
-  const bar = s.match(/^bar\s+(\d+)$/i);
-  if (bar) { const n = parseInt(bar[1]); return { type:'Bar', num:n, key:'Bar ' + n, label:'Bar ' + n }; }
+  // Prefixed types share one shape — must be tried before the bare-number Bin fallback.
+  const pre = s.match(/^(bar|shelf)\s+(\d+)$/i);
+  if (pre) {
+    const t = pre[1].toLowerCase() === 'bar' ? 'Bar' : 'Shelf';
+    const pn = parseInt(pre[2]);
+    return { type:t, num:pn, key:t + ' ' + pn, label:t + ' ' + pn };
+  }
   const n = parseInt(s);
   if (!isNaN(n) && n > 0 && String(n) === s) return { type:'Bin', num:n, key:String(n), label:'Bin ' + n };
   return { type:'Other', num:null, key:s, label:s };   // legacy / freeform value
@@ -4450,11 +4457,12 @@ function bmParseLoc(raw) {
 function bmRegType(r) { return r.fields['Type'] || 'Bin'; }   // blank registry rows = Bin
 
 // QR payload. Plain bins keep the original ?bin=N form so labels already printed
-// (and in the wild) keep working; Bar adds &type=Bar; Main Collective has no number.
+// (and in the wild) keep working; other numbered types add &type=; Main
+// Collective has no number.
 function bmQRData(type, num) {
   if (type === 'Main Collective') return BM_TOOL_URL + '?mode=binassign&type=' + encodeURIComponent('Main Collective');
-  if (type === 'Bar') return BM_TOOL_URL + '?mode=binassign&bin=' + num + '&type=Bar';
-  return BM_TOOL_URL + '?mode=binassign&bin=' + num;         // Bin
+  if (type === 'Bin') return BM_TOOL_URL + '?mode=binassign&bin=' + num;
+  return BM_TOOL_URL + '?mode=binassign&bin=' + num + '&type=' + encodeURIComponent(type);
 }
 
 // Single source for the 4x6 label markup (used by both print and reprint).
@@ -4693,11 +4701,13 @@ function bmRenderOverview(filter) {
   });
   let locs = Object.values(locByKey);
   if (locs.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:32px 20px;color:var(--text-muted)"><div style="font-size:40px;margin-bottom:12px">📦</div><div style="font-size:14px;font-weight:700;margin-bottom:6px">No labels yet</div><div style="font-size:12px">Tap &ldquo;Print new label&rdquo; to add your first bin, bar or the main collective.</div></div>';
+    container.innerHTML = '<div style="text-align:center;padding:32px 20px;color:var(--text-muted)"><div style="font-size:40px;margin-bottom:12px">📦</div><div style="font-size:14px;font-weight:700;margin-bottom:6px">No labels yet</div><div style="font-size:12px">Tap &ldquo;Print new label&rdquo; to add your first bin, bar, shelf or the main collective.</div></div>';
     return;
   }
-  const typeOrder = { 'Bin':0, 'Bar':1, 'Main Collective':2, 'Other':3 };
-  locs.sort((a,b) => (typeOrder[a.type] - typeOrder[b.type]) || ((a.num||0) - (b.num||0)) || a.key.localeCompare(b.key));
+  // Keep in step with BM_TYPES — an unlisted type would sort as NaN.
+  const typeOrder = { 'Bin':0, 'Bar':1, 'Shelf':2, 'Main Collective':3, 'Other':4 };
+  const rank = t => (typeOrder[t] == null ? 4 : typeOrder[t]);
+  locs.sort((a,b) => (rank(a.type) - rank(b.type)) || ((a.num||0) - (b.num||0)) || a.key.localeCompare(b.key));
   // Search: keep a location if its own label matches, or if it holds a matching EB number.
   if (q) {
     locs = locs.filter(loc =>
@@ -4711,8 +4721,8 @@ function bmRenderOverview(filter) {
     container.innerHTML = orphans.length
       ? '<div style="text-align:center;padding:28px 20px;color:var(--text-muted);font-size:13px"><div style="font-size:28px;margin-bottom:10px">🔍</div>'
         + orphans.map(r => '<strong style="color:var(--text)">' + escHtml(r.fields['EB Number'] || '—') + '</strong>').join(', ')
-        + ' ' + (orphans.length === 1 ? 'is' : 'are') + ' not assigned to any bin yet.</div>'
-      : '<div style="text-align:center;padding:28px 20px;color:var(--text-muted);font-size:13px">No bins or pieces match &ldquo;' + escHtml(filter) + '&rdquo;</div>';
+        + ' ' + (orphans.length === 1 ? 'is' : 'are') + ' not assigned to a location yet.</div>'
+      : '<div style="text-align:center;padding:28px 20px;color:var(--text-muted);font-size:13px">No locations or pieces match &ldquo;' + escHtml(filter) + '&rdquo;</div>';
     return;
   }
   container.innerHTML = locs.map(loc => {
@@ -4741,7 +4751,7 @@ function bmRenderOverview(filter) {
 }
 
 // Next number for a given type, counted independently per type
-// (Bin and Bar each have their own sequence). Main Collective is un-numbered.
+// (Bin, Bar and Shelf each have their own sequence). Main Collective is un-numbered.
 function bmGetNextNum(type) {
   if (type === 'Main Collective') return null;
   let maxN = 0;
@@ -4769,14 +4779,14 @@ async function bmStartNewLabel() {
   bmStep('print');
 }
 
-// Render the Bin / Bar / Main Collective selector on the print step.
+// Render the Bin / Bar / Shelf / Main Collective selector on the print step.
 function bmRenderTypeChoice() {
   const wrap = document.getElementById('bm-type-choice');
   if (!wrap) return;
   wrap.innerHTML = BM_TYPES.map(t => {
     const on = (t === bmNewType);
     return '<button type="button" onclick="bmStageLabel(\'' + t + '\')" '
-      + 'style="flex:1;padding:10px 6px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;line-height:1.15;'
+      + 'style="padding:12px 6px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;line-height:1.15;'
       + 'border:1.5px solid ' + (on ? 'var(--teal)' : 'var(--border)') + ';'
       + 'background:' + (on ? 'var(--teal)' : 'var(--card)') + ';'
       + 'color:' + (on ? '#fff' : 'var(--text)') + '">' + t + '</button>';
@@ -4820,9 +4830,15 @@ async function bmPrintLabel() {
         body: JSON.stringify({ fields })
       }).then(r => r.json());
       if (rec && rec.id) bmPrintedBins.push(rec);
+      // A 422 (e.g. the Type choice missing from the Airtable single-select)
+      // comes back as JSON without an id — no throw. Say so, or the per-type
+      // counter silently sticks and you reprint the same number forever.
+      else if (!isMC) setStatus('bm', 'Label printed, but ' + bmLocLabel(type, num)
+        + ' was not registered in Airtable — check that "' + type + '" exists in the Bins table Type field.', 'error');
     }
   } catch(e) {
     console.warn('Could not register label in Airtable:', e.message);
+    setStatus('bm', 'Label printed, but it could not be registered in Airtable: ' + e.message, 'error');
   }
 
   // Show success state and, for numbered types, a "print next" button.

@@ -972,9 +972,11 @@ app.post('/airtable/bins', async (req, res) => {
   try {
     const { fields } = req.body;
     if (!fields) return res.status(400).json({ error: 'fields required' });
+    // typecast lets Airtable auto-create a missing 'Type' single-select choice,
+    // so adding a storage type to BM_TYPES needs no manual Airtable edit.
     const data = await airtableReq('Bins', {
       method: 'POST',
-      body: JSON.stringify({ fields })
+      body: JSON.stringify({ fields, typecast: true })
     });
     res.json(data);
   } catch(e) { res.status(500).json({ error: e.message }); }
