@@ -1479,6 +1479,10 @@ async function init() {
     if (currentNpStep > 1) wipSaveNP();
     wipSaveLP();
     wipSaveCost();
+    atFlushSoon({immediate:true, keepalive:true});
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') atFlushSoon({immediate:true, keepalive:true});
   });
   // Handle bin QR scan — master.html?mode=binassign&bin=5
   const urlP = new URLSearchParams(window.location.search);
@@ -1501,6 +1505,7 @@ async function connectAirtable() {
   setServerStatus('loading','Connecting...');
   try {
     await loadAllRecords();
+    atRestorePending(); // re-apply + retry any edits that didn't reach Airtable last session
     setServerStatus('ok', allRecords.length + ' pieces loaded');
     populateHomeStats(); populateLPSelect(); populateMSSelect(); populateSASelect(); populateCFInventory();
     reconcileDriveFolders(); // background: tidy published/sold folders out of "Listing media sorted"
@@ -1526,9 +1531,142 @@ async function airtableFetch(path, opts={}) {
     url = SERVER_URL + '/airtable/inventory/' + recId;
     fetchOpts = { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: opts.body };
   }
+  if (opts.keepalive) fetchOpts.keepalive = true; // lets an unload/tab-hide flush finish
   const res = await fetch(url, fetchOpts);
   if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error || 'Server error ' + res.status); }
   return res.json();
+}
+
+// ── Airtable write buffer ─────────────────────────────────────
+// Airtable's free plan caps the workspace at 1,000 API calls/month, so edits to an
+// existing record are buffered per record and sent as ONE PATCH at a flush point
+// instead of one PATCH per save. Flush points: every wizard step / screen change, every
+// explicit Save/Publish action, tab hidden, page unload, and an idle debounce. The buffer
+// is mirrored to localStorage, so an unsent edit survives a reload or a failed flush —
+// it's re-applied to the cache and retried on the next app open.
+//   queueFieldWrite(id, fields) — buffer + update the cache now (no Airtable call yet)
+//   flushWrites(id?)            — send what's buffered (one PATCH per record)
+//   atWriteNow(id, fields)      — immediate write for terminal actions (publish, sold,
+//                                 sale, bins); folds in anything buffered for the record
+// Fields whose value already matches the cached record are dropped (no-op writes), so
+// re-saving an unchanged screen makes zero calls. Record CREATION stays immediate.
+const AT_PENDING_KEY = 'eb_at_pending';
+const AT_IDLE_FLUSH_MS = 8000;
+let atPending = {};                 // { recordId: { fieldName: value } }
+let atIdleTimer = null, atRetryTimer = null, atRetryDelay = 0;
+let atFlushChain = Promise.resolve();
+
+function atPersist(){ try{ if(Object.keys(atPending).length) localStorage.setItem(AT_PENDING_KEY, JSON.stringify(atPending)); else localStorage.removeItem(AT_PENDING_KEY); }catch(e){} }
+function atIsEmpty(v){ return v==null || v==='' || v===false || (Array.isArray(v) && v.length===0); }
+// Airtable omits empty fields and returns multi-selects as arrays, while some form code
+// sends comma-joined strings — compare on normalized values (arrays order-insensitive).
+function atSameValue(cur, next){
+  if (atIsEmpty(cur) && atIsEmpty(next)) return true;
+  const toArr = v => String(v).split(',').map(x=>x.trim()).filter(Boolean);
+  if (Array.isArray(cur) && typeof next==='string') next = toArr(next);
+  if (Array.isArray(next) && typeof cur==='string') cur = toArr(cur);
+  if (Array.isArray(cur) || Array.isArray(next)) {
+    if (!Array.isArray(cur) || !Array.isArray(next)) return false;
+    return JSON.stringify(cur.map(String).sort()) === JSON.stringify(next.map(String).sort());
+  }
+  return cur === next;
+}
+function atRecord(id){ return allRecords.find(r=>r.id===id) || (lpSelectedRecord && lpSelectedRecord.id===id ? lpSelectedRecord : null); }
+function atApplyToCache(id, fields){
+  const rec = atRecord(id); if (rec) Object.assign(rec.fields, fields);
+  if (lpSelectedRecord && lpSelectedRecord.id===id && lpSelectedRecord!==rec) Object.assign(lpSelectedRecord.fields, fields);
+}
+function atChangedFields(id, fields){
+  const rec = atRecord(id), cur = rec ? rec.fields : {}, out = {};
+  for (const k in fields) if (!atSameValue(cur[k], fields[k])) out[k] = Array.isArray(fields[k]) ? fields[k].slice() : fields[k];
+  return out;
+}
+// Re-apply unsent edits after the cache is refreshed from Airtable (full load / re-fetch).
+function atReapplyPending(id){ (id ? [id] : Object.keys(atPending)).forEach(rid=>{ if (atPending[rid]) atApplyToCache(rid, atPending[rid]); }); }
+function atRestorePending(){
+  try { const saved = JSON.parse(localStorage.getItem(AT_PENDING_KEY) || 'null'); if (saved && typeof saved==='object') for (const id in saved) atPending[id] = Object.assign({}, saved[id], atPending[id]||{}); } catch(e) {}
+  atReapplyPending();
+  if (Object.keys(atPending).length) atFlushSoon();
+}
+
+function queueFieldWrite(id, fields){
+  if (!id || !fields) return {};
+  const changed = atChangedFields(id, fields);
+  if (!Object.keys(changed).length) return changed;
+  atPending[id] = Object.assign(atPending[id] || {}, changed);
+  atApplyToCache(id, changed);
+  atPersist();
+  clearTimeout(atIdleTimer); atIdleTimer = setTimeout(atFlushSoon, AT_IDLE_FLUSH_MS);
+  return changed;
+}
+
+// One PATCH. If Airtable rejects an unknown field name, drop that field and retry once so a
+// single bad field can't block the rest of a merged write.
+async function atPatch(id, fields, keepalive){
+  try { return await airtableFetch('/'+id, {method:'PATCH', body:JSON.stringify({fields}), keepalive}); }
+  catch(e) {
+    const m = String(e.message||'').match(/Unknown field name: \\?"(.+?)\\?"/);
+    if (!m || !(m[1] in fields)) throw e;
+    console.warn('Airtable has no field "'+m[1]+'" — dropped from this write');
+    const rest = Object.assign({}, fields); delete rest[m[1]];
+    if (!Object.keys(rest).length) return null;
+    return await airtableFetch('/'+id, {method:'PATCH', body:JSON.stringify({fields:rest}), keepalive});
+  }
+}
+// Send buffered + extra fields for one record. The buffer snapshot is taken synchronously so
+// overlapping flushes never double-send; on failure the snapshot goes back in the buffer
+// (newer edits win) and a backed-off retry is scheduled. `extra` fields are the caller's
+// terminal write — the caller reports that failure, so they're only buffered when
+// `bufferExtra` is set (publish writeback: Shopify is already live, so retry later).
+async function atSendRecord(id, extra, keepalive, bufferExtra){
+  const snap = atPending[id] || {};
+  delete atPending[id]; atPersist();
+  const body = Object.assign({}, snap, extra || {});
+  if (!Object.keys(body).length) return null;
+  try {
+    const res = await atPatch(id, body, keepalive);
+    atApplyToCache(id, body);
+    if (res && res.fields) atApplyToCache(id, res.fields);   // Airtable-normalized values
+    atReapplyPending(id);                                    // edits queued mid-flight win
+    return res;
+  } catch(e) {
+    if (/Airtable error 404|NOT_FOUND|ROW_DOES_NOT_EXIST/.test(String(e.message))) { console.warn('Airtable record '+id+' no longer exists — dropping its unsent edits'); throw e; }
+    const keep = Object.assign({}, snap, bufferExtra ? extra : {}, atPending[id] || {});
+    if (Object.keys(keep).length) { atPending[id] = keep; atPersist(); }
+    if (bufferExtra) atApplyToCache(id, extra);
+    atScheduleRetry();
+    throw e;
+  }
+}
+function atScheduleRetry(){
+  if (atRetryTimer) return;
+  atRetryDelay = Math.min(Math.max(atRetryDelay*2, 30000), 300000);
+  atRetryTimer = setTimeout(()=>{ atRetryTimer = null; atFlushSoon(); }, atRetryDelay);
+}
+// Serialized through atFlushChain. `immediate` (unload / tab hide) skips the queue so the
+// keepalive fetch starts synchronously, before the page can go away.
+function flushWrites(id, opts={}){
+  const run = async () => {
+    clearTimeout(atIdleTimer);
+    let firstErr = null;
+    for (const rid of (id ? [id] : Object.keys(atPending))) {
+      if (!atPending[rid]) continue;
+      try { await atSendRecord(rid, null, opts.keepalive); } catch(e) { firstErr = firstErr || e; }
+    }
+    if (!Object.keys(atPending).length) atRetryDelay = 0;
+    if (firstErr) throw firstErr;
+  };
+  if (opts.immediate) return run();
+  const p = atFlushChain.then(run, run);
+  atFlushChain = p.catch(()=>{});
+  return p;
+}
+function atFlushSoon(opts){ flushWrites(null, opts).catch(e=>console.warn('Airtable flush failed — kept locally, will retry:', e.message)); }
+function atWriteNow(id, fields, opts={}){
+  const send = () => atSendRecord(id, fields, false, !!opts.bufferOnFail);
+  const p = atFlushChain.then(send, send);
+  atFlushChain = p.catch(()=>{});
+  return p;
 }
 
 // CHANGE: loadAllRecords fetches directly from Render — no field filter params needed
@@ -1623,6 +1761,7 @@ function goTo(screenId) {
   if(screenId==='screen-fulfillment') ffInit();
   if(screenId==='screen-new-piece') npFolderInit();
   wipShowBanner(screenId);
+  atFlushSoon(); // leaving a screen persists any buffered Airtable edits
 }
 function goHome() { stepBackFn = null; updateHeaderBackBtn(); goTo('screen-home'); }
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -2041,6 +2180,7 @@ function npStep(n) {
   if(n===2){ const cb=document.getElementById('np-tag-printed'); if(cb){ const rec=(npCurrentRecordId&&allRecords.find(r=>r.id===npCurrentRecordId))||allRecords.find(r=>r.fields['EB Number']===npCurrentEB); cb.checked=!!(rec&&rec.fields['Tag printed']); } }
   if(n===1) npGoSub(5); // returning to Step 1 (e.g. Back from Step 2) lands on the EB-number screen
   wipSaveNP(); window.scrollTo({top:0,behavior:'smooth'});
+  atFlushSoon(); // step change persists any buffered Airtable edits
 }
 // ── Step 1 sub-screens (1.1–1.5) ──────────────────────────────────────────────
 // 1.1 basics · 1.2 shared details · 1.3 "publishes to Shopify" (own category) ·
@@ -2682,8 +2822,8 @@ async function npSaveEdit() {
   if(!fields['Product description']){alert('Please enter a Product description.');return;}
   setStatus('np','Saving changes to Airtable...','loading');
   try {
-    const result=await airtableFetch('/'+npCurrentRecordId,{method:'PATCH',body:JSON.stringify({fields})});
-    const rec=allRecords.find(r=>r.id===npCurrentRecordId); if(rec)Object.assign(rec.fields,(result&&result.fields)||fields);
+    queueFieldWrite(npCurrentRecordId, fields);   // unchanged fields dropped; cache updated
+    await flushWrites(npCurrentRecordId);         // one PATCH with this + anything buffered
     cfCachedRecords=allRecords; populateHomeStats(); populateLPSelect();
     const qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=140x140&data='+encodeURIComponent(SHOPIFY_BASE+(npCurrentEB||'').toLowerCase());
     document.getElementById('np-qr-img').src=qrUrl;
@@ -2767,12 +2907,11 @@ async function npSaveDimensions() {
   if (npCurrentRecordId && Object.keys(fields).length) {
     setStatus('np','Saving dimensions to Airtable...','loading');
     try {
-      await airtableFetch('/'+npCurrentRecordId, {method:'PATCH', body:JSON.stringify({fields})});
-      const rec=allRecords.find(r=>r.id===npCurrentRecordId);
-      if(rec) Object.assign(rec.fields, fields);
+      queueFieldWrite(npCurrentRecordId, fields);
+      await flushWrites(npCurrentRecordId);
       hideStatus('np');
     } catch(e) {
-      setStatus('np','Warning: dimensions/weight did not save — ' + e.message,'error');
+      setStatus('np','Warning: dimensions/weight not saved to Airtable yet (kept on this device, will retry) — ' + e.message,'error');
       await new Promise(res=>setTimeout(res,2500));
       hideStatus('np');
     }
@@ -2821,8 +2960,8 @@ async function npMarkPhotographed() {
   const bar=document.getElementById('status-np-photo'), msg=document.getElementById('status-np-photo-msg');
   bar.style.display='flex'; bar.className='status-bar loading'; msg.textContent='Updating Airtable...';
   try {
-    await airtableFetch('/'+npCurrentRecordId,{method:'PATCH',body:JSON.stringify({fields:{'Status':'Photographed'}})});
-    const rec=allRecords.find(r=>r.id===npCurrentRecordId); if(rec) rec.fields['Status']='Photographed';
+    queueFieldWrite(npCurrentRecordId, {'Status':'Photographed'});
+    await flushWrites(npCurrentRecordId);
     populateHomeStats(); populateLPSelect();
     bar.className='status-bar success'; msg.textContent='✓ Status set to Photographed!';
     btn.textContent='✓ Photographed!'; btn.style.background='var(--sage)'; btn.style.borderColor='var(--sage)';
@@ -2853,8 +2992,7 @@ async function npToggleTagPrinted(checked){
   const rec=(npCurrentRecordId&&allRecords.find(r=>r.id===npCurrentRecordId))||allRecords.find(r=>r.fields['EB Number']===npCurrentEB);
   const id=npCurrentRecordId||(rec&&rec.id);
   if(!id) return;
-  try{ await airtableFetch('/'+id,{method:'PATCH',body:JSON.stringify({fields:{'Tag printed':checked}})}); if(rec)rec.fields['Tag printed']=checked; }
-  catch(e){ const cb=document.getElementById('np-tag-printed'); if(cb)cb.checked=!checked; alert('Could not save: '+e.message); }
+  queueFieldWrite(id, {'Tag printed':checked}); // buffered — goes out with the next flush
 }
 
 function npSetPhotoStatus(status) {
@@ -2915,11 +3053,7 @@ function lpStep(n) {
       if (_care.length) _s2fields['Care instructions'] = _care;
       if (_sd.length) _s2fields['Suggested display'] = _sd;
       if (_io) _s2fields['Indoor/Outdoor'] = _io;
-      if (Object.keys(_s2fields).length) {
-        airtableFetch('/'+lpSelectedRecord.id, {method:'PATCH', body:JSON.stringify({fields:_s2fields})})
-          .then(() => { Object.assign(lpSelectedRecord.fields, _s2fields); })
-          .catch(e => console.warn('Step 2 Airtable writeback failed (non-fatal):', e.message));
-      }
+      if (Object.keys(_s2fields).length) queueFieldWrite(lpSelectedRecord.id, _s2fields); // flushed at the end of lpStep
     }
     lpDriveInit();
   }
@@ -2941,6 +3075,7 @@ function lpStep(n) {
   }
   if(n===5){ lpRenderReview(); lpUpdatePublishSummary(); }
   window.scrollTo({top:0,behavior:'smooth'}); wipSaveLP();
+  atFlushSoon(); // step change persists any buffered Airtable edits
 }
 
 function populateLPSelect() {
@@ -2970,6 +3105,7 @@ async function lpOnSelectRecord() {
     const fresh = await airtableFetch('/'+recId);
     if (fresh && fresh.fields) {
       Object.assign(lpSelectedRecord.fields, fresh.fields);
+      atReapplyPending(recId); // keep edits that haven't reached Airtable yet
       lpRenderLPPreview(lpSelectedRecord.fields);
       // Pre-populate Step 2 cache from any previously-saved Airtable fields
       // so the data is ready whether or not a WIP session exists.
@@ -3056,8 +3192,9 @@ async function lpSaveDimsInline(){
   if(totalOz!==null) fields['Item weight (oz)']=totalOz;
   let ok=true;
   if(Object.keys(fields).length){
-    try{ await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields})}); Object.assign(lpSelectedRecord.fields,fields); const rec=allRecords.find(r=>r.id===lpSelectedRecord.id); if(rec&&rec!==lpSelectedRecord)Object.assign(rec.fields,fields); }
-    catch(e){ ok=false; if(ss){ss.style.color='var(--rose)';ss.textContent='⚠ Dimensions/weight did not save: '+e.message;} }
+    queueFieldWrite(lpSelectedRecord.id, fields);
+    try{ await flushWrites(lpSelectedRecord.id); }
+    catch(e){ ok=false; if(ss){ss.style.color='var(--rose)';ss.textContent='⚠ Not saved to Airtable yet (kept on this device, will retry): '+e.message;} }
   }
   lpRenderLPPreview(lpSelectedRecord.fields);
   if(ok&&ss){ss.style.display='block';ss.style.color='var(--green-text)';ss.textContent='✓ Saved to Airtable';setTimeout(()=>{ss.style.display='none';},2500);}
@@ -3157,12 +3294,8 @@ async function lpGenerateListing(){
       if(lpCurrentTitle) _autoFields['Draft Title']=lpCurrentTitle;
       if(lpCurrentDesc)  _autoFields['Draft Description']=lpCurrentDesc;
       if(lpStepTwoCache.meta) _autoFields['Listing Meta Description']=lpStepTwoCache.meta;
-      if(Object.keys(_autoFields).length){
-        airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:_autoFields})})
-          .then(()=>{ Object.assign(lpSelectedRecord.fields,_autoFields);
-            const _c=allRecords.find(r=>r.id===lpSelectedRecord.id); if(_c)Object.assign(_c.fields,_autoFields); })
-          .catch(e=>console.warn('Auto-save draft failed (non-fatal):',e.message));
-      }
+      // Buffered — goes out in the same PATCH as the next step change / save / idle flush.
+      if(Object.keys(_autoFields).length) queueFieldWrite(lpSelectedRecord.id,_autoFields);
     }
   } catch(e){
     if(inlineStatus){inlineStatus.style.display='block';inlineStatus.textContent='⚠ '+e.message+' — using a basic title; edit below.';inlineStatus.style.color='var(--rose)';}
@@ -3500,6 +3633,8 @@ async function lpPublish(){
   const bodyHtml = !desc ? '' : (/<(p|ul|ol|li|strong|em|br|h[1-6])\b[^>]*>/i.test(desc) ? desc : '<p>'+desc.replace(/\n{2,}/g,'</p><p>').replace(/\n/g,'<br>')+'</p>');
   const btn=document.getElementById('lp-publish-btn'),result=document.getElementById('lp-publish-result');
   btn.disabled=true;btn.textContent='⏳ Preparing photos...';result.style.display='none';
+  // Persist any buffered edits before the long Shopify step (non-fatal, as before).
+  try{ await flushWrites(lpSelectedRecord.id); }catch(e){ console.warn('Pre-publish Airtable flush failed (kept locally):',e.message); }
   setStatus('lp','Optimizing photos for Shopify...','loading');
   const images=[];
   let squaresSaved=0;
@@ -3541,7 +3676,7 @@ async function lpPublish(){
     const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,ship_weight_lb:shipWeightLb,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial,celebration_type:pubCelebration,lighting_options:pubLighting,shape:pubShape,season:pubSeason,suitable_space:pubSuitableSpace,indoor_outdoor:pubIndoorOutdoor,care_instructions:asArr(f['Care instructions']),suggested_display:asArr(f['Suggested display'])})});
     clearTimeout(timeout);const data=await res.json();
     if(!res.ok||!data.success) throw new Error(data.error||'Publish failed');
-    try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;if(meta)photoFields['Listing Meta Description']=meta;await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:photoFields})});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;if(meta)rec.fields['Listing Meta Description']=meta;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
+    try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;if(meta)photoFields['Listing Meta Description']=meta;await atWriteNow(lpSelectedRecord.id,photoFields,{bufferOnFail:true});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;if(meta)rec.fields['Listing Meta Description']=meta;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
     lpLastProductId = data.product_id || null;
     // Published → move this piece's Drive folder out of "Listing media sorted" into "Published"
     // so the folder picker stays lean (non-fatal, runs in the background).
@@ -3695,19 +3830,9 @@ async function lpSelectFolder(folderId, folderName) {
 
   // Save to Airtable immediately
   if (!lpSelectedRecord) return;
-  try {
-    await airtableFetch('/'+lpSelectedRecord.id, {method:'PATCH', body:JSON.stringify({fields:{'Drive Folder ID':folderId,'Drive Folder Name':folderName}})});
-    lpSelectedRecord.fields['Drive Folder ID'] = folderId;
-    lpSelectedRecord.fields['Drive Folder Name'] = folderName;
-    const cached = allRecords.find(r=>r.id===lpSelectedRecord.id);
-    if (cached) { cached.fields['Drive Folder ID']=folderId; cached.fields['Drive Folder Name']=folderName; }
-    lpRenderFolderSection(); // switch to linked state
-  } catch(e) {
-    // Still allow continue even if Airtable write fails
-    console.warn('Airtable folder save failed:', e.message);
-    lpRenderFolderLinkedUI(folderId, folderName);
-    lpDriveLoadImages(folderId);
-  }
+  // Buffered (cache updated now) — goes out with the next step change / save / idle flush.
+  queueFieldWrite(lpSelectedRecord.id, {'Drive Folder ID':folderId,'Drive Folder Name':folderName});
+  lpRenderFolderSection(); // switch to linked state
 }
 
 function lpShowFolderPicker() {
@@ -3815,10 +3940,8 @@ async function lpSaveStepTwo() {
     if (care.length) fields['Care instructions'] = care;
     if (sd.length) fields['Suggested display'] = sd;
     if (io) fields['Indoor/Outdoor'] = io;
-    await airtableFetch('/'+lpSelectedRecord.id, {method:'PATCH', body:JSON.stringify({fields})});
-    Object.assign(lpSelectedRecord.fields, fields);
-    const cached = allRecords.find(r=>r.id===lpSelectedRecord.id);
-    if (cached) Object.assign(cached.fields, fields);
+    queueFieldWrite(lpSelectedRecord.id, fields);   // unchanged fields dropped; cache updated
+    await flushWrites(lpSelectedRecord.id);
     if (loc)  lpStepTwoCache.location = loc;
     if (meta) lpStepTwoCache.meta     = meta;
     if (spec) lpStepTwoCache.special  = spec;
@@ -3854,10 +3977,8 @@ async function lpSaveDraft() {
   const _handle = (_shopifyUrl.match(/\/products\/([^/?#]+)/) || [])[1] || '';
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
-    await airtableFetch('/'+lpSelectedRecord.id, {method:'PATCH', body:JSON.stringify({fields})});
-    Object.assign(lpSelectedRecord.fields, fields);
-    const cached = allRecords.find(r=>r.id===lpSelectedRecord.id);
-    if (cached) Object.assign(cached.fields, fields);
+    queueFieldWrite(lpSelectedRecord.id, fields);   // unchanged fields dropped; cache updated
+    await flushWrites(lpSelectedRecord.id);
     if (loc)   lpStepTwoCache.location = loc;
     if (meta)  lpStepTwoCache.meta     = meta;
     if (spec)  lpStepTwoCache.special  = spec;
@@ -3951,12 +4072,15 @@ async function lpSaveSeoMeta() {
       });
       const d = await r.json();
       if (!r.ok || !d.success) throw new Error(d.error || 'Save failed');
+      // The server just wrote this meta to Airtable — don't let an older buffered value overwrite it.
+      if (atPending[lpSelectedRecord.id]) { delete atPending[lpSelectedRecord.id]['Listing Meta Description']; atPersist(); }
       btn.textContent='✓ Saved';
       stat.style.cssText='display:block;background:var(--green-bg);color:var(--green-text)';
       stat.textContent='✓ SEO meta saved to Airtable and updated on Shopify.';
     } else {
       // Not yet listed — write to Airtable only; Shopify gets it at publish
-      await airtableFetch('/'+lpSelectedRecord.id, {method:'PATCH', body:JSON.stringify({fields:{'Listing Meta Description':meta}})});
+      queueFieldWrite(lpSelectedRecord.id, {'Listing Meta Description':meta});
+      await flushWrites(lpSelectedRecord.id);
       btn.textContent='✓ Saved to Airtable';
       stat.style.cssText='display:block;background:var(--green-bg);color:var(--green-text)';
       stat.textContent='✓ Saved to Airtable. Shopify will be updated at publish.';
@@ -4067,7 +4191,7 @@ function msStep(n){stepBackFn=n>1?()=>msStep(n-1):null;updateHeaderBackBtn();doc
 function populateMSSelect(){const listed=sortPiecesByEB(allRecords.filter(r=>r.fields['Status']==='Listed'||r.fields['Status']==='In stock'));msAllOpts=listed.map(r=>({value:r.id,label:pieceLabel(r.fields)||r.id}));const sel=document.getElementById('ms-eb-select');if(listed.length===0){sel.innerHTML='<option value="">— no listed pieces —</option>';return;}sel.innerHTML='<option value="">— pick a piece —</option>'+msAllOpts.map(o=>'<option value="'+escHtml(o.value)+'">'+escHtml(o.label)+'</option>').join('');_clearEbSearch('ms-eb-search','ms-eb-results');sel.onchange=()=>{const recId=sel.value;document.getElementById('ms-next-btn').disabled=!recId;if(!recId){msSelectedRecord=null;document.getElementById('ms-piece-preview').style.display='none';return;}msSelectedRecord=allRecords.find(r=>r.id===recId);if(!msSelectedRecord)return;const f=msSelectedRecord.fields;document.getElementById('ms-piece-preview').style.display='block';document.getElementById('ms-piece-preview').innerHTML='<div class="at-preview"><div class="at-preview-title">Selected piece</div><div class="at-grid"><div class="at-field"><div class="at-label">EB Number</div><div class="at-value">'+escHtml(f['EB Number'])+'</div></div><div class="at-field"><div class="at-label">Type</div><div class="at-value">'+escHtml(f['Type']||'—')+'</div></div><div class="at-field"><div class="at-label">Price</div><div class="at-value">'+(f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—')+'</div></div></div></div>';};}
 function msSelectChannel(el,channel){document.querySelectorAll('#screen-sold .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');msSelectedChannel=channel;}
 async function msConfirmSale(){if(!msSelectedRecord||!msSelectedChannel){alert('Select a piece and sale channel.');return;}const salePrice=document.getElementById('ms-sale-price').value.trim();const saleDate=document.getElementById('ms-sale-date').value;const btn=document.getElementById('ms-confirm-btn');btn.disabled=true;btn.textContent='⏳ Recording...';setStatus('ms','Marking as sold...','loading');try{await markSold(msSelectedRecord,msSelectedChannel,salePrice,saleDate);const result=document.getElementById('ms-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(msSelectedRecord.fields['EB Number'])+'</strong> marked as sold via '+msSelectedChannel+'.';btn.textContent='✓ Done!';setStatus('ms','Sale recorded ✓','success');populateHomeStats();populateMSSelect();populateLPSelect();populateCFInventory();setTimeout(()=>hideStatus('ms'),4000);}catch(e){setStatus('ms','Error: '+e.message,'error');btn.disabled=false;btn.textContent='✓ Mark as sold';}}
-async function markSold(record,channel,salePrice,saleDate){const f=record.fields;const atFields={'Status':'Sold','Sales channel':channel};if(salePrice)atFields['Price ($)']=parseFloat(salePrice);if(saleDate)atFields['Date sold']=saleDate;await airtableFetch('/'+record.id,{method:'PATCH',body:JSON.stringify({fields:atFields})});Object.assign(f,atFields);try{await fetch(SERVER_URL+'/mark-sold',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shopify_url:f['Shopify URL'],eb_number:f['EB Number']})});}catch(e){console.warn('Shopify mark sold failed:',e.message);}
+async function markSold(record,channel,salePrice,saleDate){const f=record.fields;const atFields={'Status':'Sold','Sales channel':channel};if(salePrice)atFields['Price ($)']=parseFloat(salePrice);if(saleDate)atFields['Date sold']=saleDate;await atWriteNow(record.id,atFields);Object.assign(f,atFields);try{await fetch(SERVER_URL+'/mark-sold',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shopify_url:f['Shopify URL'],eb_number:f['EB Number']})});}catch(e){console.warn('Shopify mark sold failed:',e.message);}
   // Sold → move this piece's Drive folder into "Sold" (non-fatal, background).
   driveMoveFolder(f['Drive Folder ID'],'sold');}
 
@@ -4094,8 +4218,8 @@ function saCurrentValues(){const op=saOrigPrice();const price=parseFloat(documen
 function saUpdatePreview(){const {op,price}=saCurrentValues();const el=document.getElementById('sa-preview-line');if(op!=null&&Number.isFinite(price)&&price>0&&price<op){el.style.display='block';el.innerHTML='New price <strong>$'+price.toFixed(2)+'</strong> · was <s>$'+op.toFixed(2)+'</s> · <strong>'+Math.round((1-price/op)*100)+'% off</strong> (save $'+(op-price).toFixed(2)+')';}else{el.style.display='none';}}
 function saUpdateBandHint(){const warn=document.getElementById('sa-warn');if(!saType){warn.style.display='none';return;}const b=SA_BANDS[saType];const {pct}=saCurrentValues();if(Number.isFinite(pct)&&(pct<b.lo||pct>b.hi)){warn.style.display='block';warn.textContent=saType+' is usually '+b.lo+'–'+b.hi+'% off — '+pct+'% is outside that range, but it will still be applied.';}else{warn.style.display='none';}}
 function saUpdateApplyState(){const {op,price}=saCurrentValues();const ok=!!saSelectedRecord&&!!saType&&op!=null&&Number.isFinite(price)&&price>0&&price<op;document.getElementById('sa-apply-btn').disabled=!ok;}
-async function saApply(){if(!saSelectedRecord||!saType)return;const {op,price}=saCurrentValues();if(op==null){alert('This piece has no Price ($) set — add a price before marking it Sale/Clearance.');return;}if(!(Number.isFinite(price)&&price>0&&price<op)){alert('Enter a sale price below the original ($'+op.toFixed(2)+').');return;}const pct=Math.round((1-price/op)*100);const f=saSelectedRecord.fields;const eb=f['EB Number'];const btn=document.getElementById('sa-apply-btn');btn.disabled=true;btn.textContent='⏳ Applying…';setStatus('sa','Applying '+saType.toLowerCase()+' markdown…','loading');try{const atFields={'Sale status':saType,'Sale price ($)':price,'Markdown (%)':pct/100,'Sale date':new Date().toISOString().split('T')[0]};await airtableFetch('/'+saSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:atFields})});Object.assign(f,atFields);const r=await fetch(SERVER_URL+'/mark-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:eb,action:'apply',sale_type:saType,sale_price:price,original_price:op})});const d=await r.json().catch(()=>({}));if(!r.ok||d.error)throw new Error(d.error||('Shopify update failed ('+r.status+')'));const result=document.getElementById('sa-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(eb)+'</strong> marked <strong>'+saType+'</strong> at $'+price.toFixed(2)+' ('+pct+'% off).<br><span style="font-size:12px">'+(d.note?escHtml(d.note):'Live on the '+saType+' collection · original shown as a strikethrough.')+'</span>';btn.textContent='✓ Applied';setStatus('sa',saType+' applied ✓','success');document.getElementById('sa-remove-row').style.display='';saRenderCard();populateSASelect();populateHomeStats();setTimeout(()=>{hideStatus('sa');btn.disabled=false;btn.textContent='🏷️ Apply markdown';},4000);}catch(e){setStatus('sa','Error: '+e.message,'error');btn.disabled=false;btn.textContent='🏷️ Apply markdown';}}
-async function saRemove(){if(!saSelectedRecord)return;const f=saSelectedRecord.fields;const eb=f['EB Number'];const op=saOrigPrice();const btn=document.getElementById('sa-remove-btn');btn.disabled=true;btn.textContent='⏳ Removing…';setStatus('sa','Restoring full price…','loading');try{const atFields={'Sale status':'None','Sale price ($)':null,'Markdown (%)':null,'Sale date':null};await airtableFetch('/'+saSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:atFields})});Object.assign(f,atFields);const r=await fetch(SERVER_URL+'/mark-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:eb,action:'remove',original_price:op})});const d=await r.json().catch(()=>({}));if(!r.ok||d.error)throw new Error(d.error||('Shopify update failed ('+r.status+')'));const result=document.getElementById('sa-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(eb)+'</strong> back to full price'+(op!=null?' ($'+op.toFixed(2)+')':'')+'.';setStatus('sa','Full price restored ✓','success');document.getElementById('sa-remove-row').style.display='none';document.getElementById('sa-pct').value='';document.getElementById('sa-price').value='';document.getElementById('sa-preview-line').style.display='none';document.getElementById('sa-warn').style.display='none';document.getElementById('sa-type-sale').classList.remove('selected');document.getElementById('sa-type-clear').classList.remove('selected');saType=null;saUpdateApplyState();saRenderCard();populateSASelect();populateHomeStats();setTimeout(()=>{hideStatus('sa');btn.disabled=false;btn.textContent='↩ Remove markdown — restore full price';},4000);}catch(e){setStatus('sa','Error: '+e.message,'error');btn.disabled=false;btn.textContent='↩ Remove markdown — restore full price';}}
+async function saApply(){if(!saSelectedRecord||!saType)return;const {op,price}=saCurrentValues();if(op==null){alert('This piece has no Price ($) set — add a price before marking it Sale/Clearance.');return;}if(!(Number.isFinite(price)&&price>0&&price<op)){alert('Enter a sale price below the original ($'+op.toFixed(2)+').');return;}const pct=Math.round((1-price/op)*100);const f=saSelectedRecord.fields;const eb=f['EB Number'];const btn=document.getElementById('sa-apply-btn');btn.disabled=true;btn.textContent='⏳ Applying…';setStatus('sa','Applying '+saType.toLowerCase()+' markdown…','loading');try{const atFields={'Sale status':saType,'Sale price ($)':price,'Markdown (%)':pct/100,'Sale date':new Date().toISOString().split('T')[0]};await atWriteNow(saSelectedRecord.id,atFields);Object.assign(f,atFields);const r=await fetch(SERVER_URL+'/mark-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:eb,action:'apply',sale_type:saType,sale_price:price,original_price:op})});const d=await r.json().catch(()=>({}));if(!r.ok||d.error)throw new Error(d.error||('Shopify update failed ('+r.status+')'));const result=document.getElementById('sa-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(eb)+'</strong> marked <strong>'+saType+'</strong> at $'+price.toFixed(2)+' ('+pct+'% off).<br><span style="font-size:12px">'+(d.note?escHtml(d.note):'Live on the '+saType+' collection · original shown as a strikethrough.')+'</span>';btn.textContent='✓ Applied';setStatus('sa',saType+' applied ✓','success');document.getElementById('sa-remove-row').style.display='';saRenderCard();populateSASelect();populateHomeStats();setTimeout(()=>{hideStatus('sa');btn.disabled=false;btn.textContent='🏷️ Apply markdown';},4000);}catch(e){setStatus('sa','Error: '+e.message,'error');btn.disabled=false;btn.textContent='🏷️ Apply markdown';}}
+async function saRemove(){if(!saSelectedRecord)return;const f=saSelectedRecord.fields;const eb=f['EB Number'];const op=saOrigPrice();const btn=document.getElementById('sa-remove-btn');btn.disabled=true;btn.textContent='⏳ Removing…';setStatus('sa','Restoring full price…','loading');try{const atFields={'Sale status':'None','Sale price ($)':null,'Markdown (%)':null,'Sale date':null};await atWriteNow(saSelectedRecord.id,atFields);Object.assign(f,atFields);const r=await fetch(SERVER_URL+'/mark-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:eb,action:'remove',original_price:op})});const d=await r.json().catch(()=>({}));if(!r.ok||d.error)throw new Error(d.error||('Shopify update failed ('+r.status+')'));const result=document.getElementById('sa-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(eb)+'</strong> back to full price'+(op!=null?' ($'+op.toFixed(2)+')':'')+'.';setStatus('sa','Full price restored ✓','success');document.getElementById('sa-remove-row').style.display='none';document.getElementById('sa-pct').value='';document.getElementById('sa-price').value='';document.getElementById('sa-preview-line').style.display='none';document.getElementById('sa-warn').style.display='none';document.getElementById('sa-type-sale').classList.remove('selected');document.getElementById('sa-type-clear').classList.remove('selected');saType=null;saUpdateApplyState();saRenderCard();populateSASelect();populateHomeStats();setTimeout(()=>{hideStatus('sa');btn.disabled=false;btn.textContent='↩ Remove markdown — restore full price';},4000);}catch(e){setStatus('sa','Error: '+e.message,'error');btn.disabled=false;btn.textContent='↩ Remove markdown — restore full price';}}
 
 // ── CRAFT FAIR ──
 function populateCFInventory(filter=''){const container=document.getElementById('cf-inventory');const records=cfCachedRecords.filter(r=>{const f=r.fields,status=f['Status']||'';if(status==='Archived')return false;if(!filter)return true;const q=filter.toLowerCase();return(f['EB Number']||'').toLowerCase().includes(q)||(f['Type']||'').toLowerCase().includes(q)||(f['Season']||'').toLowerCase().includes(q)||(f['Occasion']||'').toLowerCase().includes(q);});if(records.length===0){container.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:12px">🔍</div><div style="font-size:14px">No pieces found</div></div>';return;}const order={'In stock':0,'Photographed':0,'Ready to list':0,'Listed':1,'Craft fair':1,'Hair Salon':1,'Sold':2};records.sort((a,b)=>(order[a.fields['Status']]||3)-(order[b.fields['Status']]||3));container.innerHTML=records.map(r=>{const f=r.fields,isSold=f['Status']==='Sold'||f['Status']==='Archived';const price=f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—';const seasonDisplay=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||'');const tags=[seasonDisplay,f['Occasion']&&f['Occasion']!=='None'?f['Occasion']:null,f['Status']].filter(Boolean).join(' · ');return'<div class="cf-piece-card'+(isSold?' sold-out':'')+'" onclick="cfTapPiece(\''+r.id+'\')">'+'<div class="cf-piece-thumb-placeholder">'+cfTypeIcon(f['Type'])+'</div>'+'<div class="cf-piece-info"><div class="cf-piece-eb">'+escHtml(f['EB Number']||'—')+'</div>'+'<div class="cf-piece-type">'+escHtml(f['Type']||'Arrangement')+'</div>'+'<div class="cf-piece-tags">'+escHtml(tags)+'</div></div>'+(isSold?'<div class="cf-sold-badge">SOLD</div>':'<div class="cf-piece-price">'+price+'</div>')+'</div>';}).join('');}
@@ -4366,13 +4490,13 @@ function ptRender(filter) {
   }).join('');
 }
 async function ptToggleTagPrinted(recordId, checked) {
-  try { await airtableFetch('/'+recordId,{method:'PATCH',body:JSON.stringify({fields:{'Tag printed':checked}})}); const rec=allRecords.find(r=>r.id===recordId); if(rec)rec.fields['Tag printed']=checked; }
-  catch(e){ const cb=document.getElementById('pt-tp-'+recordId); if(cb)cb.checked=!checked; alert('Could not save: '+e.message); }
+  queueFieldWrite(recordId, {'Tag printed':checked}); // buffered — goes out with the next flush
 }
 async function ptPromptPhoto(recordId, ebNumber) {
   const url = prompt('Paste the Shopify image URL for ' + ebNumber + ':','');
   if (!url || !url.trim()) return;
-  try { await airtableFetch('/'+recordId,{method:'PATCH',body:JSON.stringify({fields:{'Photo URL':url.trim()}})}); const rec=allRecords.find(r=>r.id===recordId); if(rec)rec.fields['Photo URL']=url.trim(); ptRender(document.getElementById('pt-search').value.trim()); } catch(e) { alert('Could not save: '+e.message); }
+  queueFieldWrite(recordId, {'Photo URL':url.trim()}); ptRender(document.getElementById('pt-search').value.trim());
+  try { await flushWrites(recordId); } catch(e) { alert('Not saved to Airtable yet (kept on this device, will retry): '+e.message); }
 }
 
 // ── Spell-check for reference name ──────────────────────────
@@ -4957,7 +5081,7 @@ async function bmDoAssign(rec, ebNumber) {
   const label = (bmParseLoc(bmCurrentLoc) || { label: bmCurrentLoc }).label;
   setStatus('bm', 'Assigning ' + ebNumber + ' to ' + label + '...', 'loading');
   try {
-    await airtableFetch('/' + rec.id, { method:'PATCH', body:JSON.stringify({ fields:{ 'Bin location': bmCurrentLoc } }) });
+    await atWriteNow(rec.id, { 'Bin location': bmCurrentLoc });
     rec.fields['Bin location'] = bmCurrentLoc;
     document.getElementById('bm-eb-input').value = '';
     bmRenderCurrentPieces();
@@ -4991,7 +5115,7 @@ async function bmRemovePiece(recordId) {
   const label = (bmParseLoc(bmCurrentLoc) || { label: bmCurrentLoc }).label;
   setStatus('bm', 'Removing ' + eb + ' from ' + label + '...', 'loading');
   try {
-    await airtableFetch('/' + recordId, { method:'PATCH', body:JSON.stringify({ fields:{ 'Bin location': '' } }) });
+    await atWriteNow(recordId, { 'Bin location': '' });
     rec.fields['Bin location'] = '';
     bmRenderCurrentPieces();
     setStatus('bm', '\u2713 ' + eb + ' removed from ' + label, 'success');
