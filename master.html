@@ -2753,14 +2753,18 @@ async function npSaveDimensions() {
   const cl=document.getElementById('np-comp-l').value.trim();
   const cw=document.getElementById('np-comp-w').value.trim();
   const ch=document.getElementById('np-comp-h').value.trim();
-  if (npCurrentRecordId && (w || h || d || sl || sw || sh || cl || cw || ch)) {
-    const fields={};
-    if(w) fields['Width (in)']=parseInt(w);
-    if(h) fields['Height (in)']=parseInt(h);
-    if(d) fields['Depth (in)']=parseInt(d);
-    if(sl||sw||sh) fields['Normal Shipping']=sl+'×'+sw+'×'+sh;
-    if(sl&&sw&&sh){ const est=estimateShipping(sl,sw,sh); if(est) fields['Shipping estimate ($)']=est.cost; }
-    if(cl||cw||ch) fields['Aggressive Compression']=cl+'×'+cw+'×'+ch;
+  // Dimensions + item weight go to Airtable in ONE PATCH (was two back-to-back calls
+  // to the same record — halves the writes for this step against the API quota).
+  const fields={};
+  if(w) fields['Width (in)']=parseInt(w);
+  if(h) fields['Height (in)']=parseInt(h);
+  if(d) fields['Depth (in)']=parseInt(d);
+  if(sl||sw||sh) fields['Normal Shipping']=sl+'×'+sw+'×'+sh;
+  if(sl&&sw&&sh){ const est=estimateShipping(sl,sw,sh); if(est) fields['Shipping estimate ($)']=est.cost; }
+  if(cl||cw||ch) fields['Aggressive Compression']=cl+'×'+cw+'×'+ch;
+  const totalOz=wtInputsToOz('np-weight-lb','np-weight-oz');
+  if(totalOz!==null) fields['Item weight (oz)']=totalOz;
+  if (npCurrentRecordId && Object.keys(fields).length) {
     setStatus('np','Saving dimensions to Airtable...','loading');
     try {
       await airtableFetch('/'+npCurrentRecordId, {method:'PATCH', body:JSON.stringify({fields})});
@@ -2768,14 +2772,11 @@ async function npSaveDimensions() {
       if(rec) Object.assign(rec.fields, fields);
       hideStatus('np');
     } catch(e) {
-      setStatus('np','Warning: dimensions did not save — ' + e.message,'error');
+      setStatus('np','Warning: dimensions/weight did not save — ' + e.message,'error');
       await new Promise(res=>setTimeout(res,2500));
       hideStatus('np');
     }
   }
-  // Item weight → total ounces. Saved in its own PATCH so a missing
-  // "Item weight (oz)" field can never break the dimensions save.
-  await npSaveWeight();
   document.getElementById('np-complete-eb').textContent=npCurrentEB;
   document.getElementById('np-complete-status-msg').textContent=npMode==='edit'?'Changes saved.':'Status: In stock.';
   if (npPhotoStatus === 'done') {
@@ -2796,15 +2797,6 @@ function wtInputsToOz(lbId,ozId){
   if(lbRaw===''&&ozRaw==='')return null;
   const lb=parseInt(lbRaw||'0',10)||0, oz=parseInt(ozRaw||'0',10)||0;
   return lb*16+oz;
-}
-async function npSaveWeight(){
-  if(!npCurrentRecordId)return;
-  const totalOz=wtInputsToOz('np-weight-lb','np-weight-oz');
-  if(totalOz===null)return;
-  try{
-    await airtableFetch('/'+npCurrentRecordId,{method:'PATCH',body:JSON.stringify({fields:{'Item weight (oz)':totalOz}})});
-    const rec=allRecords.find(r=>r.id===npCurrentRecordId); if(rec)rec.fields['Item weight (oz)']=totalOz;
-  }catch(e){ console.warn('Weight save skipped (Item weight (oz) field may not exist yet):',e.message); }
 }
 function npListNow(){
   const recId = npCurrentRecordId;
@@ -3059,14 +3051,13 @@ async function lpSaveDimsInline(){
   if(d)dimFields['Depth (in)']=parseInt(d);
   const totalOz=wtInputsToOz('lp-edit-weight-lb','lp-edit-weight-oz');
   if(ss){ss.style.display='block';ss.style.color='var(--text-muted)';ss.textContent='Saving to Airtable...';}
+  // Dimensions + weight in ONE PATCH (was two back-to-back calls to the same record).
+  const fields=Object.assign({},dimFields);
+  if(totalOz!==null) fields['Item weight (oz)']=totalOz;
   let ok=true;
-  if(Object.keys(dimFields).length){
-    try{ await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:dimFields})}); Object.assign(lpSelectedRecord.fields,dimFields); const rec=allRecords.find(r=>r.id===lpSelectedRecord.id); if(rec)Object.assign(rec.fields,dimFields); }
-    catch(e){ ok=false; if(ss){ss.style.color='var(--rose)';ss.textContent='⚠ Dimensions: '+e.message;} }
-  }
-  if(totalOz!==null){
-    try{ await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields:{'Item weight (oz)':totalOz}})}); lpSelectedRecord.fields['Item weight (oz)']=totalOz; const rec=allRecords.find(r=>r.id===lpSelectedRecord.id); if(rec)rec.fields['Item weight (oz)']=totalOz; }
-    catch(e){ ok=false; if(ss){ss.style.color='var(--rose)';ss.textContent='⚠ Weight field may not exist in Airtable yet: '+e.message;} }
+  if(Object.keys(fields).length){
+    try{ await airtableFetch('/'+lpSelectedRecord.id,{method:'PATCH',body:JSON.stringify({fields})}); Object.assign(lpSelectedRecord.fields,fields); const rec=allRecords.find(r=>r.id===lpSelectedRecord.id); if(rec&&rec!==lpSelectedRecord)Object.assign(rec.fields,fields); }
+    catch(e){ ok=false; if(ss){ss.style.color='var(--rose)';ss.textContent='⚠ Dimensions/weight did not save: '+e.message;} }
   }
   lpRenderLPPreview(lpSelectedRecord.fields);
   if(ok&&ss){ss.style.display='block';ss.style.color='var(--green-text)';ss.textContent='✓ Saved to Airtable';setTimeout(()=>{ss.style.display='none';},2500);}
