@@ -537,7 +537,7 @@ button:active{transform:scale(.97)}
         <div class="field"><label>Year</label><select id="np-year"><option value="26">2026</option><option value="27">2027</option><option value="28">2028</option></select></div>
         <div class="field"><label>Type</label><select id="np-type"><option value="WR">Wreath</option><option value="HD">Home decor</option><option value="OP">Outdoor planter</option><option value="CP">Centerpiece</option><option value="WD">Wall decor</option><option value="HA">Hanging</option><option value="SW">Swag</option><option value="CU">Custom order</option><option value="AO">Add-on</option></select></div>
       </div>
-      <div id="np-outdoor-warning" style="display:none" class="info-card amber"><strong>⚠ Outdoor pot — local delivery only.</strong></div>
+      <div id="np-outdoor-warning" style="display:none" class="info-card amber"><strong>⚠ Outdoor pot — local pickup / delivery only.</strong> It can’t ship; the listing is set up as local-only when you publish.</div>
       <div class="field"><label>Date made</label><input type="date" id="np-date-made"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">When the piece was made. Defaults to today (the EB creation date) if left blank.</div></div>
       <div class="grid-2">
         <div class="field"><label>Price ($)</label><input type="text" id="np-price" placeholder="e.g. 85.00" oninput="npAutoFillCost()"></div>
@@ -717,7 +717,7 @@ button:active{transform:scale(.97)}
       <div class="section-label">Select piece to list</div>
       <div class="field"><label>Choose EB number</label><div style="position:relative"><input type="text" id="lp-eb-search" placeholder="🔍 Type EB number or name…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding:11px 14px;font-size:14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);outline:none;color:var(--text);box-sizing:border-box" oninput="lpSearchInput(this.value)" onfocus="lpSearchInput(this.value)" onblur="setTimeout(()=>{const r=document.getElementById('lp-eb-results');if(r)r.style.display='none';},220)"><div id="lp-eb-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);max-height:260px;overflow-y:auto;z-index:500"></div></div><select id="lp-eb-select" style="display:none"><option value="">— loading inventory... —</option></select></div>
       <div id="lp-at-preview" style="display:none"></div>
-      <div id="lp-outdoor-warning" style="display:none" class="info-card amber"><strong>⚠ Outdoor pot — local delivery only.</strong></div>
+      <div id="lp-outdoor-warning" style="display:none" class="info-card amber"></div>
       <div id="lp-dims-editor" style="display:none" class="info-card rose">
         <strong>⚠ Some physical details are missing.</strong> Add them here and save — they're written straight back to Airtable.
         <div class="grid-3" style="margin-top:10px">
@@ -739,6 +739,7 @@ button:active{transform:scale(.97)}
       <div class="info-card sage" style="margin-bottom:12px"><strong>Colors, materials, weight &amp; product description come from Step 1.</strong> Just add the listing-specific details below.</div>
       <div class="field"><label>Best display location</label><div id="lp-location"></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Where the piece looks best — maps to Shopify "Suitable location".</div></div>
       <div class="field"><label>Indoor / Outdoor</label><select id="lp-indoor-outdoor"><option value="Indoor">Indoor</option><option value="Outdoor">Outdoor</option><option value="Both">Both</option></select><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Publishes to every piece (Shopify "Indoor / Outdoor"; wreaths also get native "Suitable space"). Defaults to Indoor.</div></div>
+      <div class="field"><label>Delivery option</label><select id="lp-delivery-option" onchange="lpRenderLocalOnlyWarning()"><option value="Ship">Ship</option><option value="Local only">Local only — pickup / local delivery, can’t ship</option></select><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Local only for anything too big or fragile to ship. Defaults to Local only for outdoor planters, Ship for everything else.</div></div>
       <div class="field"><label>Care instructions</label><div id="lp-care"></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Select any that apply — publishes to Shopify "Care instructions" (custom.care_instructions).</div></div>
       <div class="field"><label>Suggested display</label><div id="lp-suggested-display"></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Where the piece looks best displayed (surface/spot) — publishes to Shopify "Suggested display" (custom.suggested_display).</div></div>
       <div id="lp-s2-save-status" style="display:none;font-size:12px;padding:7px 10px;border-radius:6px;margin-bottom:8px;text-align:center"></div>
@@ -1371,6 +1372,10 @@ const SHOPIFY_BASE = 'https://eternalbloomsbypatti.com/products/';
 const DEFAULT_COST_PCT = 66; // Default cost as % of price — change here to update the global default
 const LISTABLE_STATUSES = ['In stock','Photographed','Ready to list'];
 const TYPE_CODES = {WR:'Wreath',HD:'Home decor',OP:'Outdoor planter',CP:'Centerpiece',WD:'Wall decor',HA:'Hanging',SW:'Swag',CU:'Custom order',AO:'Add-on'};
+// Local-only = pickup / local delivery, cannot ship. Airtable "Delivery option" wins when set;
+// blank defaults from Type (Outdoor planter → Local only). Mirrors isLocalOnlyRecord() in server.js.
+function lpIsLocalOnly(f){ const o=(f&&f['Delivery option'])||''; return o ? o==='Local only' : !!f && f['Type']==='Outdoor planter'; }
+const LOCAL_ONLY_WARNING_HTML = '<strong>⚠ Local pickup / delivery only.</strong> This piece can’t ship. Publishing puts it in the Shopify “Local only” delivery profile and adds a local-only notice to the top of the description automatically.';
 const SEASON_NAMES = {SP:'Spring',SU:'Summer',FA:'Fall',WI:'Winter',AS:'All Season'};
 // Season name → 2-letter EB code. Multiple seasons → MS (multi-season), or AS when "All Season" is among them.
 const SEASON_CODE = {Spring:'SP',Summer:'SU',Fall:'FA',Winter:'WI','All Season':'AS'};
@@ -1823,10 +1828,11 @@ function ffRender(){
       const size = ffDimStr(it.actualDims) || '—';
       const qty = (it.quantity > 1) ? ' <span style="color:var(--amber-text);font-weight:700">×' + it.quantity + '</span>' : '';
       const ref = it.reference ? '<div style="font-size:11.5px;color:var(--text-muted);margin-top:1px">' + escHtml(it.reference) + '</div>' : '';
+      const local = it.localOnly ? ' <span style="font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;background:var(--amber-bg);color:var(--amber-text);border-radius:999px;padding:2px 8px;margin-left:4px">Local only — do not ship</span>' : '';
       const warn = (it.warnings && it.warnings.length)
         ? '<div style="font-size:11.5px;color:var(--rose);margin-top:5px">⚠ ' + it.warnings.map(escHtml).join(' · ') + '</div>' : '';
       return '<div style="padding:10px 0;border-top:1px solid var(--border)">' +
-        '<div style="font-size:13px;font-weight:700;color:var(--text)">' + escHtml(it.sku || '(no SKU)') + qty + '</div>' + ref +
+        '<div style="font-size:13px;font-weight:700;color:var(--text)">' + escHtml(it.sku || '(no SKU)') + qty + local + '</div>' + ref +
         '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">' +
           kv('⚖ Item weight', wt) + kv('📐 Actual size', size) + kv('📦 Normal Shipping', box) +
         '</div>' + warn + '</div>';
@@ -3035,6 +3041,7 @@ function lpStep(n) {
     npSetChecks('lp-care', Array.isArray(lpSelectedRecord.fields['Care instructions'])?lpSelectedRecord.fields['Care instructions']:[]);
     npSetChecks('lp-suggested-display', Array.isArray(lpSelectedRecord.fields['Suggested display'])?lpSelectedRecord.fields['Suggested display']:[]);
     const _ioEl=document.getElementById('lp-indoor-outdoor'); if(_ioEl) _ioEl.value=lpSelectedRecord.fields['Indoor/Outdoor']||'Indoor';
+    const _doEl=document.getElementById('lp-delivery-option'); if(_doEl){ _doEl.value=lpIsLocalOnly(lpSelectedRecord.fields)?'Local only':'Ship'; _doEl.dataset.loaded='1'; }
   }
   if(n===3){
     // Silently write Step 2 values back to Airtable so they survive page reloads,
@@ -3046,6 +3053,7 @@ function lpStep(n) {
       const _care = lpGetCareArr();
       const _sd   = npGetChecks('lp-suggested-display');
       const _io   = (document.getElementById('lp-indoor-outdoor')||{value:''}).value || '';
+      const _do   = (document.getElementById('lp-delivery-option')||{value:''}).value || '';
       const _s2fields = {};
       if (_loc)  _s2fields['Listing Display Location'] = lpLocArr(_loc);
       if (_meta) _s2fields['Listing Meta Description']  = _meta;
@@ -3053,6 +3061,7 @@ function lpStep(n) {
       if (_care.length) _s2fields['Care instructions'] = _care;
       if (_sd.length) _s2fields['Suggested display'] = _sd;
       if (_io) _s2fields['Indoor/Outdoor'] = _io;
+      if (_do) _s2fields['Delivery option'] = _do;
       if (Object.keys(_s2fields).length) queueFieldWrite(lpSelectedRecord.id, _s2fields); // flushed at the end of lpStep
     }
     lpDriveInit();
@@ -3152,6 +3161,14 @@ function lpShipWeightLbFromRecord(f){const w=f['Shopify Ship Weight (lb)'];retur
 function lpShipTierFromRecord(f){const t=f['Shipping Tier'];return (t===''||t==null)?'':String(t);}
 function ozToLbOzStr(oz){oz=Number(oz);const lb=Math.floor(oz/16),r=oz%16;return (lb?lb+' lb':'')+(lb&&r?' ':'')+(r||!lb?r+' oz':'');}
 
+// Shows the local-only banner from the Step 2 select once it's loaded, else from the record.
+function lpRenderLocalOnlyWarning(f){
+  const el=document.getElementById('lp-outdoor-warning'); if(!el) return;
+  const sel=document.getElementById('lp-delivery-option');
+  const rec=f||(lpSelectedRecord&&lpSelectedRecord.fields)||null;
+  const local=(sel&&sel.dataset.loaded==='1') ? sel.value==='Local only' : lpIsLocalOnly(rec);
+  el.innerHTML=LOCAL_ONLY_WARNING_HTML; el.style.display=(rec&&local)?'block':'none';
+}
 function lpRenderLPPreview(f) {
   const dimW=f['Width (in)'],dimH=f['Height (in)'],dimD=f['Depth (in)'];
   const dims=(dimW||dimH||dimD)?`${dimW||'?'}" W × ${dimH||'?'}" H × ${dimD||'?'}" D`:null;
@@ -3160,7 +3177,8 @@ function lpRenderLPPreview(f) {
   const previewFields=[{l:'EB Number',v:f['EB Number']},{l:'Status',v:f['Status']},{l:'Season',v:seasonDisplay},{l:'Type',v:f['Type']},{l:'Occasion',v:f['Occasion']&&f['Occasion']!=='None'?f['Occasion']:null},{l:'Price',v:f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):null},{l:'Dimensions',v:dims},{l:'Weight',v:weightDisplay},{l:'Location',v:f['Bin location']}];
   document.getElementById('lp-at-preview').style.display='block';
   document.getElementById('lp-at-preview').innerHTML='<div class="at-preview"><div class="at-preview-title">Pulled from Airtable</div><div class="at-grid">'+previewFields.map(fld=>'<div class="at-field"><div class="at-label">'+fld.l+'</div><div class="at-value'+(fld.v?'':' empty')+'">'+escHtml(fld.v||'not set')+'</div></div>').join('')+'</div></div>';
-  document.getElementById('lp-outdoor-warning').style.display=f['Type']==='Outdoor planter'?'block':'none';
+  const _doP=document.getElementById('lp-delivery-option'); if(_doP) delete _doP.dataset.loaded; // new piece → record rule until Step 2 loads it
+  lpRenderLocalOnlyWarning(f);
   // Inline backfill editor: show when dimensions OR weight are missing; prefill whatever exists.
   const missingDims=(!dimW&&!dimH&&!dimD), missingWeight=(oz==null);
   const editor=document.getElementById('lp-dims-editor');
@@ -3625,7 +3643,9 @@ async function lpPublish(){
   const meta=((document.getElementById('lp-meta')||{value:''}).value.trim()||lpStepTwoCache.meta||'');
   const dimW=f['Width (in)'],dimH=f['Height (in)'],dimD=f['Depth (in)'];
   const dims=(dimW||dimH||dimD)?`${dimW||'?'}" W × ${dimH||'?'}" H × ${dimD||'?'}" D`:'';
-  const isOutdoor=f['Type']==='Outdoor planter';
+  // Step 2 select is what the user just confirmed; fall back to the record rule.
+  const _doSel=document.getElementById('lp-delivery-option');
+  const isLocalOnly=(_doSel&&_doSel.dataset.loaded==='1') ? _doSel.value==='Local only' : lpIsLocalOnly(f);
   const descEl=document.getElementById('lp-desc');
   const desc=descEl?(descEl.innerHTML||'').trim():'';
   // Description is now HTML (from the AI). Pass HTML through untouched; only wrap
@@ -3673,9 +3693,10 @@ async function lpPublish(){
     const pubSuitableSpace=f['Indoor/Outdoor']||(pubCategory==='Wreaths'?'Indoor':'');
     // Indoor/Outdoor (universal custom metafield) — raw Airtable value, all categories.
     const pubIndoorOutdoor=f['Indoor/Outdoor']||'';
-    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,ship_weight_lb:shipWeightLb,dimensions:dims,meta_description:meta,requires_shipping:!isOutdoor,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial,celebration_type:pubCelebration,lighting_options:pubLighting,shape:pubShape,season:pubSeason,suitable_space:pubSuitableSpace,indoor_outdoor:pubIndoorOutdoor,care_instructions:asArr(f['Care instructions']),suggested_display:asArr(f['Suggested display'])})});
+    const res=await fetch(SERVER_URL+'/create-product',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({title,body_html:bodyHtml,sku,price,tags,product_type:f['Type']||'',collections,ship_weight_lb:shipWeightLb,dimensions:dims,meta_description:meta,local_only:isLocalOnly,requires_shipping:true,images,quantity:pubQty,product_category:pubCategory,colors:pubColors,pattern:pubPattern,plant_name:pubPlant,locations:pubLocations,arrangement:pubArrangement,plant_container_type:pubContainer,stem_length:pubStem,decoration_material:pubDecorationMaterial,planter_material:pubPlanterMaterial,celebration_type:pubCelebration,lighting_options:pubLighting,shape:pubShape,season:pubSeason,suitable_space:pubSuitableSpace,indoor_outdoor:pubIndoorOutdoor,care_instructions:asArr(f['Care instructions']),suggested_display:asArr(f['Suggested display'])})});
     clearTimeout(timeout);const data=await res.json();
     if(!res.ok||!data.success) throw new Error(data.error||'Publish failed');
+    if(data.warning) alert('⚠ '+data.warning);
     try{const photoFields={'Shopify URL':data.shopify_url,'Listed on Shopify':true,'Status':'Listed'};if(data.hero_image_url)photoFields['Photo URL']=data.hero_image_url;if(meta)photoFields['Listing Meta Description']=meta;await atWriteNow(lpSelectedRecord.id,photoFields,{bufferOnFail:true});const rec=allRecords.find(r=>r.id===lpSelectedRecord.id);if(rec){rec.fields['Status']='Listed';rec.fields['Shopify URL']=data.shopify_url;rec.fields['Listed on Shopify']=true;if(data.hero_image_url)rec.fields['Photo URL']=data.hero_image_url;if(meta)rec.fields['Listing Meta Description']=meta;}populateHomeStats();}catch(e){console.warn('Airtable writeback failed:',e.message);}
     lpLastProductId = data.product_id || null;
     // Published → move this piece's Drive folder out of "Listing media sorted" into "Published"
@@ -3926,6 +3947,7 @@ async function lpSaveStepTwo() {
   const care   = lpGetCareArr();
   const sd     = npGetChecks('lp-suggested-display');
   const io     = (document.getElementById('lp-indoor-outdoor')||{value:''}).value || '';
+  const dopt   = (document.getElementById('lp-delivery-option')||{value:''}).value || '';
   if (!loc && !meta && !spec && !care.length && !sd.length && !io) {
     status.style.cssText = 'display:block;background:var(--amber-bg);color:var(--amber-text)';
     status.textContent = 'Fill in at least one field above to save.';
@@ -3940,6 +3962,7 @@ async function lpSaveStepTwo() {
     if (care.length) fields['Care instructions'] = care;
     if (sd.length) fields['Suggested display'] = sd;
     if (io) fields['Indoor/Outdoor'] = io;
+    if (dopt) fields['Delivery option'] = dopt;
     queueFieldWrite(lpSelectedRecord.id, fields);   // unchanged fields dropped; cache updated
     await flushWrites(lpSelectedRecord.id);
     if (loc)  lpStepTwoCache.location = loc;
@@ -4183,7 +4206,7 @@ async function lpAddVideoToShopify() {
 }
 
 
-function lpReset(){lpSelectedRecord=null;lpPhotoItems=[];lpDriveImages=[];lpDriveLinked=false;lpLoadedFolderId=null;lpFolderSelected=null;lpAllFolders=[];lpLastProductId=null;lpVideoFileId=null;lpVideoFileName=null;lpFolderVideos=[];lpVideoLoadedFolderId=null;lpStepTwoCache={location:'',meta:'',special:''};const fsec=document.getElementById('lp-folder-section');if(fsec)fsec.style.display='none';const vsec=document.getElementById('lp-video-section');if(vsec)vsec.style.display='none';const vpick=document.getElementById('lp-video-pick');if(vpick)vpick.style.display='none';const vpl=document.getElementById('lp-video-pick-list');if(vpl)vpl.innerHTML='';lpCurrentDesc='';lpCurrentTitle='';lpGeneratedFor='';['lp-location','lp-meta','lp-special','lp-title'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});const _lpd=document.getElementById('lp-desc');if(_lpd)_lpd.innerHTML='';lpDescResetEditor();lpRenderDisplayLocation('');;const _ioR=document.getElementById('lp-indoor-outdoor');if(_ioR)_ioR.value='Indoor';const dg=document.getElementById('lp-drive-grid');if(dg)dg.innerHTML='';document.getElementById('lp-eb-select').value='';_clearEbSearch('lp-eb-search','lp-eb-results');document.getElementById('lp-at-preview').style.display='none';document.getElementById('lp-outdoor-warning').style.display='none';const ed=document.getElementById('lp-dims-editor');if(ed)ed.style.display='none';document.getElementById('lp-next-1-btn').disabled=true;document.getElementById('lp-publish-result').style.display='none';const pb=document.getElementById('lp-publish-btn');if(pb){pb.disabled=true;pb.textContent='↑ Publish listing to Shopify';pb.style.background='';pb.style.borderColor='';}lpRenderPhotos();lpStep(1);populateLPSelect();WIP.clear('lp');}
+function lpReset(){lpSelectedRecord=null;lpPhotoItems=[];lpDriveImages=[];lpDriveLinked=false;lpLoadedFolderId=null;lpFolderSelected=null;lpAllFolders=[];lpLastProductId=null;lpVideoFileId=null;lpVideoFileName=null;lpFolderVideos=[];lpVideoLoadedFolderId=null;lpStepTwoCache={location:'',meta:'',special:''};const fsec=document.getElementById('lp-folder-section');if(fsec)fsec.style.display='none';const vsec=document.getElementById('lp-video-section');if(vsec)vsec.style.display='none';const vpick=document.getElementById('lp-video-pick');if(vpick)vpick.style.display='none';const vpl=document.getElementById('lp-video-pick-list');if(vpl)vpl.innerHTML='';lpCurrentDesc='';lpCurrentTitle='';lpGeneratedFor='';['lp-location','lp-meta','lp-special','lp-title'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});const _lpd=document.getElementById('lp-desc');if(_lpd)_lpd.innerHTML='';lpDescResetEditor();lpRenderDisplayLocation('');;const _ioR=document.getElementById('lp-indoor-outdoor');if(_ioR)_ioR.value='Indoor';const _doR=document.getElementById('lp-delivery-option');if(_doR){_doR.value='Ship';delete _doR.dataset.loaded;}const dg=document.getElementById('lp-drive-grid');if(dg)dg.innerHTML='';document.getElementById('lp-eb-select').value='';_clearEbSearch('lp-eb-search','lp-eb-results');document.getElementById('lp-at-preview').style.display='none';document.getElementById('lp-outdoor-warning').style.display='none';const ed=document.getElementById('lp-dims-editor');if(ed)ed.style.display='none';document.getElementById('lp-next-1-btn').disabled=true;document.getElementById('lp-publish-result').style.display='none';const pb=document.getElementById('lp-publish-btn');if(pb){pb.disabled=true;pb.textContent='↑ Publish listing to Shopify';pb.style.background='';pb.style.borderColor='';}lpRenderPhotos();lpStep(1);populateLPSelect();WIP.clear('lp');}
 
 
 // ── MARK AS SOLD ──
