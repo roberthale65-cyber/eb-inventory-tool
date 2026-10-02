@@ -527,8 +527,13 @@ app.get('/auth', (req, res) => {
   // tracking) for online sales — covers Shopify + Facebook/Instagram Shops, which
   // route their orders through Shopify. NOTE: plain read_orders only returns the last
   // 60 days of orders; older orders need read_all_orders (separate Shopify approval).
-  // Changing this string requires re-running /auth so Shopify re-grants the scopes.
-  const scopes = 'read_products,write_products,read_inventory,write_inventory,read_orders,read_customers';
+  // read_shipping/write_shipping are REQUIRED for deliveryProfileUpdate — without them
+  // every weight-tier (T1–T4) and LOCAL profile assignment fails and pieces sit on the
+  // General profile (and /apply-local-only refuses).
+  // Changing this string requires re-running /auth so Shopify re-grants the scopes —
+  // and the callback only holds the new token IN MEMORY: paste it into Render's
+  // SHOPIFY_TOKEN or it's lost on the next restart/deploy.
+  const scopes = 'read_products,write_products,read_inventory,write_inventory,read_orders,read_customers,read_shipping,write_shipping';
   const authUrl = `https://${SHOPIFY_STORE}/admin/oauth/authorize?client_id=${SHOPIFY_API_KEY}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
   res.redirect(authUrl);
 });
