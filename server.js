@@ -343,6 +343,40 @@ async function airtableReq(tablePath, opts = {}) {
 // "Shipping Profile Map" table so a future profile rebuild is a one-cell edit, no redeploy.
 const SHIP_LB_TO_TIER = { 5: 'T1', 15: 'T2', 28: 'T3', 45: 'T4' };
 
+// ── Local-only pieces (pickup / local delivery, cannot ship) ──────────────────
+// The "Shipping Profile Map" row with Tier = LOCAL holds the GID of a Shopify delivery
+// profile that has NO shipping zones/rates. With local pickup / local delivery enabled on the
+// Omaha location, a variant in that profile can only be picked up or delivered locally —
+// checkout shows "no shipping available" for an out-of-area address.
+//
+// NOTE: requires_shipping:false is NOT "local only". It tells Shopify the item isn't
+// physical (like a gift card): checkout skips delivery entirely, charges $0 shipping, and
+// accepts any buyer anywhere. That's how a Georgia buyer checked out a porch-planter set
+// (order #1002). Local-only pieces must stay requires_shipping:true + the LOCAL profile.
+const LOCAL_ONLY_TIER = 'LOCAL';
+const LOCAL_ONLY_TAG = 'local-only';
+const LOCAL_ONLY_NOTICE_HTML = '<p class="eb-local-only"><strong>Local pickup or delivery only (Omaha area).</strong> This piece is too large to ship, so it can’t be sent by mail or carrier. Please order only if you can pick it up or receive local delivery.</p>';
+
+function withLocalOnlyNotice(html) {
+  const s = html || '';
+  return s.includes('eb-local-only') ? s : LOCAL_ONLY_NOTICE_HTML + s;
+}
+function withLocalOnlyTag(tags) {
+  const list = (Array.isArray(tags) ? tags : String(tags || '').split(',')).map(t => String(t).trim()).filter(Boolean);
+  if (!list.some(t => t.toLowerCase() === LOCAL_ONLY_TAG)) list.push(LOCAL_ONLY_TAG);
+  return list.join(', ');
+}
+// Same rule as the client: explicit Airtable "Delivery option" wins; blank defaults from Type.
+function isLocalOnlyRecord(f) {
+  const opt = (f && f['Delivery option']) || '';
+  if (opt) return opt === 'Local only';
+  return !!f && f['Type'] === 'Outdoor planter';
+}
+async function getLocalOnlyProfileGid() {
+  try { return (await getShippingProfileMap())[LOCAL_ONLY_TIER] || null; }
+  catch (e) { console.warn('LOCAL profile lookup failed:', e.message); return null; }
+}
+
 // Cache the tiny tier→GID crosswalk briefly so we don't re-fetch on every publish, while
 // still picking up an Airtable edit within the TTL (that's the whole point of not hardcoding).
 let _shipProfileCache = { at: 0, map: null };
@@ -363,31 +397,28 @@ async function getShippingProfileMap() {
 // Associate a freshly-created variant with its weight-tier delivery profile. Associating a
 // variant with a profile auto-dissociates it from its previous one, so this is idempotent —
 // re-publishing or fixing a mis-tiered piece is just the same call again, no cleanup step.
-// Fully non-fatal: any miss (non-shippable item, blank/unknown weight, missing crosswalk row,
-// Shopify error) logs and leaves the variant on the General profile — it never blocks a publish.
-async function assignShippingProfile(sku, variantGid, shipWeightLb, requiresShipping) {
-  // Shippability branch FIRST. Outdoor planters / local-delivery-only pieces publish with
-  // requires_shipping:false — they must NEVER get a US tier profile, or they'd quote a
-  // national carrier rate on an item that can't ship. Leave them off tier profiles entirely.
-  if (requiresShipping === false) {
-    console.log(`ship profile: ${sku} is non-shippable (local delivery only) — no tier profile assigned.`);
-    return;
-  }
-  const tier = SHIP_LB_TO_TIER[Number(shipWeightLb)];
+// Fully non-fatal: any miss (blank/unknown weight, missing crosswalk row, Shopify error) logs
+// and leaves the variant on the General profile — it never blocks a publish.
+//
+// Local-only pieces (outdoor planters, anything too big to ship) go to the LOCAL profile
+// instead of a weight tier: a Shopify profile with NO shipping rates, so checkout only offers
+// local pickup / local delivery from the Omaha location and refuses any ship-to address.
+async function assignShippingProfile(sku, variantGid, shipWeightLb, localOnly) {
+  const tier = localOnly ? LOCAL_ONLY_TIER : SHIP_LB_TO_TIER[Number(shipWeightLb)];
   if (!tier) {
     console.warn(`ship profile: ${sku} has no recognized ship weight (${shipWeightLb}) — no tier profile assigned (stays on General; piece needs a shipping estimate).`);
-    return;
+    return false;
   }
   let profileGid;
   try {
     profileGid = (await getShippingProfileMap())[tier];
   } catch (e) {
     console.warn(`ship profile: crosswalk lookup failed for ${sku} (${e.message}) — stays on General.`);
-    return;
+    return false;
   }
   if (!profileGid) {
     console.warn(`ship profile: no Delivery Profile GID for tier ${tier} in Shipping Profile Map — ${sku} stays on General.`);
-    return;
+    return false;
   }
   try {
     const mutation = `mutation AssignVariantToProfile($profileId: ID!, $variantId: ID!) {
@@ -397,12 +428,14 @@ async function assignShippingProfile(sku, variantGid, shipWeightLb, requiresShip
   }
 }`;
     const data = await shopifyGraphql(mutation, { profileId: profileGid, variantId: variantGid });
-    if (data?.errors) { console.warn(`ship profile GraphQL error for ${sku}:`, JSON.stringify(data.errors)); return; }
+    if (data?.errors) { console.warn(`ship profile GraphQL error for ${sku}:`, JSON.stringify(data.errors)); return false; }
     const errs = data?.data?.deliveryProfileUpdate?.userErrors || [];
-    if (errs.length) { console.warn(`ship profile assign failed for ${sku}:`, errs.map(e => e.message).join(', ')); return; }
+    if (errs.length) { console.warn(`ship profile assign failed for ${sku}:`, errs.map(e => e.message).join(', ')); return false; }
     console.log(`ship profile: ${sku} → ${tier} (${profileGid})`);
+    return true;
   } catch (e) {
     console.warn(`ship profile assign error for ${sku} (non-fatal):`, e.message);
+    return false;
   }
 }
 
@@ -1438,6 +1471,48 @@ app.post('/webhooks/products-update', async (req, res) => {
   }
 });
 
+// ── Make an existing listing local-only (backfill / fix) ──────────────────────
+// POST { sku }. Converts a live product to local-only, the same as publishing it fresh:
+// LOCAL delivery profile, requires_shipping back ON (so checkout offers pickup / local
+// delivery instead of skipping delivery), the local-only notice at the top of the description,
+// and the local-only tag. Idempotent — safe to run again on a piece that's already converted.
+app.post('/apply-local-only', async (req, res) => {
+  if (!shopifyAccessToken) return res.status(401).json({ error: 'Shopify is not connected on the server yet — open /auth once to connect.' });
+  const sku = String((req.body || {}).sku || '').trim();
+  if (!sku) return res.status(400).json({ error: 'sku is required' });
+  if (!(await getLocalOnlyProfileGid())) return res.status(400).json({ error: 'No LOCAL row in the Airtable "Shipping Profile Map" table — create the "Local only" delivery profile in Shopify and add its GID there first.' });
+  try {
+    const look = await shopifyGraphql(`query($q:String!){ productVariants(first:10, query:$q){ nodes { id sku inventoryItem { id } product { id descriptionHtml } } } }`, { q: `sku:${JSON.stringify(sku)}` });
+    // Exact match only — variant search tokenizes on hyphens.
+    const v = (look?.data?.productVariants?.nodes || []).find(n => n && n.sku === sku);
+    if (!v) return res.status(404).json({ error: `No Shopify variant with SKU ${sku}` });
+    const steps = {};
+    // Profile first, then flip requires_shipping on — so the variant is never shippable on General.
+    if (!(await assignShippingProfile(sku, v.id, null, true))) {
+      return res.status(502).json({ success: false, sku, error: 'Could not assign the LOCAL delivery profile (see server log) — nothing else was changed.' });
+    }
+    steps.profile = 'LOCAL';
+    const inv = await shopifyGraphql(`mutation($id:ID!,$input:InventoryItemInput!){ inventoryItemUpdate(id:$id, input:$input){ userErrors { message } } }`, { id: v.inventoryItem.id, input: { requiresShipping: true } });
+    const invErrs = inv?.errors || inv?.data?.inventoryItemUpdate?.userErrors || [];
+    steps.requiresShipping = invErrs.length ? 'failed: ' + invErrs.map(e => e.message).join(', ') : 'true';
+    const html = v.product.descriptionHtml || '';
+    if (html.includes('eb-local-only')) steps.notice = 'already present';
+    else {
+      const pu = await shopifyGraphql(`mutation($product:ProductUpdateInput!){ productUpdate(product:$product){ userErrors { message } } }`, { product: { id: v.product.id, descriptionHtml: withLocalOnlyNotice(html) } });
+      const puErrs = pu?.errors || pu?.data?.productUpdate?.userErrors || [];
+      steps.notice = puErrs.length ? 'failed: ' + puErrs.map(e => e.message).join(', ') : 'added';
+    }
+    const tg = await shopifyGraphql(`mutation($id:ID!,$tags:[String!]!){ tagsAdd(id:$id, tags:$tags){ userErrors { message } } }`, { id: v.product.id, tags: [LOCAL_ONLY_TAG] });
+    const tgErrs = tg?.errors || tg?.data?.tagsAdd?.userErrors || [];
+    steps.tag = tgErrs.length ? 'failed: ' + tgErrs.map(e => e.message).join(', ') : 'added';
+    const ok = !Object.values(steps).some(s => String(s).startsWith('failed'));
+    console.log(`apply-local-only ${sku}:`, JSON.stringify(steps));
+    res.status(ok ? 200 : 207).json({ success: ok, sku, steps });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Order fulfillment: open Shopify orders → packing reference ────────────────
 // Pulls OPEN + UNFULFILLED orders straight from Shopify and joins each line item
 // to its Airtable record so the app can show a quick PACKING REFERENCE: the real
@@ -1472,7 +1547,7 @@ app.get('/orders/open', async (req, res) => {
       const s = (li.sku || '').trim();
       if (s) skuSet.add(s);
     }
-    const WANT = ['EB Number', 'Reference name', 'Normal Shipping', 'Item weight (oz)', 'Width (in)', 'Height (in)', 'Depth (in)'];
+    const WANT = ['EB Number', 'Reference name', 'Normal Shipping', 'Item weight (oz)', 'Width (in)', 'Height (in)', 'Depth (in)', 'Type', 'Delivery option'];
     const fieldQS = WANT.map(f => `&fields%5B%5D=${encodeURIComponent(f)}`).join('');
     const shipBySku = {};
     const skus = [...skuSet];
@@ -1493,13 +1568,14 @@ app.get('/orders/open', async (req, res) => {
     const out = orders.map(o => {
       const sa = o.shipping_address || {};
       const orderWarnings = [];
-      if (!o.shipping_address) orderWarnings.push('No shipping address on this order');
+      // Local-only line items are KEPT (they used to be filtered out with requires_shipping:false,
+      // which hid order #1002 from this list) and flagged so they're never boxed and shipped.
       const items = (o.line_items || [])
-        .filter(li => li.requires_shipping !== false)
         .map(li => {
           const sku = (li.sku || '').trim();
           const rec = shipBySku[sku];
           const warnings = [];
+          const localOnly = li.requires_shipping === false || (!!rec && isLocalOnlyRecord(rec));
           let normalShipping = null, itemWeightOz = null, pounds = null, actualDims = null;
           if (!sku) {
             warnings.push('Line item has no SKU — add one in Shopify so it can match Airtable');
@@ -1519,9 +1595,12 @@ app.get('/orders/open', async (req, res) => {
             sku, title: li.name || li.title || '', quantity: li.quantity || 1,
             reference: rec ? (rec['Reference name'] || null) : null,
             itemWeightOz, pounds, actualDims, normalShipping,
-            found: !!rec, warnings
+            found: !!rec, localOnly, warnings
           };
         });
+      const localCount = items.filter(it => it.localOnly).length;
+      if (localCount) orderWarnings.push(`LOCAL ONLY — do not ship. Arrange pickup or local delivery with the buyer${o.shipping_address ? ' (this order has a ship-to address — confirm they can pick up, or refund)' : ''}.`);
+      if (!o.shipping_address && localCount < items.length) orderWarnings.push('No shipping address on this order');
       return {
         orderId: o.name || String(o.id),
         createdAt: o.created_at || null,
@@ -1538,6 +1617,7 @@ app.get('/orders/open', async (req, res) => {
           phone: sa.phone || ''
         },
         multiItem: items.length > 1,
+        localOnly: localCount > 0,
         items,
         warnings: orderWarnings
       };
@@ -1549,7 +1629,7 @@ app.get('/orders/open', async (req, res) => {
 });
 
 // ── Version / health (verify what's actually deployed) ────────
-app.get('/version', (req, res) => res.json({ version: '2026-07-03-fixpack9', features: ['create-product idempotent by SKU (returns existing product instead of duplicating on retry/timeout)','drive-move-folder: publish→Published, sold→Sold (idempotent bucket move)','custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions', 'indoor_outdoor->custom.indoor_outdoor (universal multi-select; wreaths also get native suitable-space)', 'suggested_display->custom.suggested_display (multi-select surface/spot)', 'mark-sale: Sale/Clearance markdown (compare-at strikethrough + Sale/Clearance tag → tag-driven collections), apply/remove', 'webhooks/products-update: mirror Sale/Clearance markdowns made directly in Shopify back into Airtable (change-only reconcile)'] }));
+app.get('/version', (req, res) => res.json({ version: '2026-07-03-fixpack9', features: ['create-product idempotent by SKU (returns existing product instead of duplicating on retry/timeout)','drive-move-folder: publish→Published, sold→Sold (idempotent bucket move)','custom metaobjects for collapsed decoration/planter values (Grapevine/Pine/Candle/Lights/Galvanized Steel/Basket)', 'wreath material reuse-by-taxonomy-reference', 'plant-name + season + suitable-space on wreaths', 'inventory-set: @idempotent+changeFromQuantity (2026-04 fix)', 'wreath category fix', 'lighting GID swap fixed', 'resync-attributes(add-only+inventory)', 'plant-material=Artificial', 'care_instructions->custom.care_instructions', 'indoor_outdoor->custom.indoor_outdoor (universal multi-select; wreaths also get native suitable-space)', 'suggested_display->custom.suggested_display (multi-select surface/spot)', 'mark-sale: Sale/Clearance markdown (compare-at strikethrough + Sale/Clearance tag → tag-driven collections), apply/remove', 'webhooks/products-update: mirror Sale/Clearance markdowns made directly in Shopify back into Airtable (change-only reconcile)', 'local-only pieces: LOCAL delivery profile + requires_shipping kept on + auto notice/tag; /apply-local-only backfill; local-only items shown in /orders/open'] }));
 
 // Resolve the tool-owned taxonomy metafield GIDs for a product, category-gated.
 // Shared by /create-product (replace) and /resync-attributes (merge) so the value→GID
@@ -1582,8 +1662,16 @@ function buildToolMetafieldGids(product_category, body){
 // ── Create product ────────────────────────────────────────────
 app.post('/create-product', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized. Visit ' + SERVER_URL + '/auth to complete Shopify OAuth first.' });
-  const { title, body_html, sku, price, tags, product_type, collections, ship_weight_lb, dimensions, meta_description, requires_shipping, images, quantity, product_category, colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material, celebration_type, lighting_options, shape, care_instructions, indoor_outdoor, suggested_display } = req.body;
+  const { title, body_html, sku, price, tags, product_type, collections, ship_weight_lb, dimensions, meta_description, requires_shipping, local_only, images, quantity, product_category, colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material, celebration_type, lighting_options, shape, care_instructions, indoor_outdoor, suggested_display } = req.body;
   if (!title || !sku) return res.status(400).json({ error: 'title and sku are required' });
+  // Older clients (listing.html) signal local-only with requires_shipping:false.
+  const localOnly = local_only === true || requires_shipping === false;
+  // A local-only piece MUST land in the no-rates LOCAL profile. Without it, the only
+  // alternatives are a carrier-rate profile (ships nationally) or requires_shipping:false
+  // (ships free, anywhere) — both wrong — so refuse the publish instead of listing it badly.
+  if (localOnly && !(await getLocalOnlyProfileGid())) {
+    return res.status(400).json({ error: `${sku} is local-only, but no LOCAL row is set in the Airtable "Shipping Profile Map" table. Create the "Local only" delivery profile in Shopify (no shipping rates; local pickup/delivery on), add its GID to that table with Tier = LOCAL, then publish again.` });
+  }
 
   // ── Idempotency guard: never create a second product for a SKU that already exists ──
   // Publishing isn't atomic and the client aborts slow requests, so a retry (or a
@@ -1624,7 +1712,7 @@ app.post('/create-product', async (req, res) => {
 
   // Inventory quantity — default to 1 (one-of-a-kind) when unset; clamp to a non-negative integer.
   const qty = (quantity != null && quantity !== '' && Number.isFinite(Number(quantity))) ? Math.max(0, Math.round(Number(quantity))) : 1;
-  const variant = { sku, price: price || '0.00', inventory_management: 'shopify', inventory_policy: 'deny', fulfillment_service: 'manual', requires_shipping: requires_shipping !== false };
+  const variant = { sku, price: price || '0.00', inventory_management: 'shopify', inventory_policy: 'deny', fulfillment_service: 'manual', requires_shipping: true };
   // Weight is a SYNTHETIC shipping-tier key, NOT a physical weight. It carries the Airtable
   // "Shopify Ship Weight (lb)" formula (field fldQvj1c5tZBVDRAe) — always one of 5 / 15 / 28 / 45 lb —
   // which snaps each piece to the mid-band weight of its flat-rate shipping tier. The tier is
@@ -1638,14 +1726,15 @@ app.post('/create-product', async (req, res) => {
   } else {
     console.warn(`create-product: SKU ${sku} has no Shopify Ship Weight (lb) — variant weight left unset (piece needs a shipping estimate before it goes live).`);
   }
-  let fullDescription = body_html || '';
+  // Local-only notice is added here (not left to the description writer) so it can't be skipped.
+  let fullDescription = localOnly ? withLocalOnlyNotice(body_html) : (body_html || '');
   if (dimensions) {
     fullDescription += '<p><strong>Dimensions:</strong> ' + dimensions + '</p>';
     fullDescription += '<p><em>Product dimensions are measured from tip to tip of leaves or flowers.</em></p>';
   }
   const productPayload = {
     product: {
-      title, body_html: fullDescription, vendor: 'Eternal Blooms Designs', product_type: product_type || '', tags: tags || '',
+      title, body_html: fullDescription, vendor: 'Eternal Blooms Designs', product_type: product_type || '', tags: localOnly ? withLocalOnlyTag(tags) : (tags || ''),
       variants: [variant],
       images: (images || []).map((img, i) => ({ attachment: img.data, filename: img.filename, position: i + 1 }))
     }
@@ -1700,8 +1789,17 @@ app.post('/create-product', async (req, res) => {
     }
     // Assign the variant to its weight-tier delivery profile so multi-box carts price
     // additively (rates from different profiles SUM at checkout). Non-fatal + idempotent;
-    // outdoor planters (requires_shipping:false) are skipped and stay off tier profiles.
-    await assignShippingProfile(sku, `gid://shopify/ProductVariant/${variantRestId}`, ship_weight_lb, requires_shipping);
+    // local-only pieces go to the no-rates LOCAL profile (pickup / local delivery only).
+    const profileOk = await assignShippingProfile(sku, `gid://shopify/ProductVariant/${variantRestId}`, ship_weight_lb, localOnly);
+    // A local-only piece that missed the LOCAL profile would sit on General and quote carrier
+    // rates nationwide — pull it back to draft so it can't sell until it's fixed.
+    let localOnlyWarning = null;
+    if (localOnly && !profileOk) {
+      localOnlyWarning = 'Local-only profile could not be assigned — listing set to DRAFT so it cannot be bought with shipping. Fix the LOCAL row in Shipping Profile Map, then run /apply-local-only and re-activate.';
+      try { await shopifyGraphql(`mutation($product:ProductUpdateInput!){ productUpdate(product:$product){ userErrors { message } } }`, { product: { id: `gid://shopify/Product/${productId}`, status: 'DRAFT' } }); }
+      catch (e) { console.warn('local-only draft fallback failed:', e.message); }
+      console.warn(`create-product: ${sku} ${localOnlyWarning}`);
+    }
     // Set the Shopify standard product category (taxonomy) AND the native
     // "Color" attribute (shopify.color-pattern) — REST can set neither, so use a
     // productUpdate GraphQL mutation. Category is skipped for Add-ons (no mapping).
@@ -1808,7 +1906,7 @@ app.post('/create-product', async (req, res) => {
     const productUrl = `https://eternalbloomsbypatti.com/products/${data.product.handle}`;
     const heroImageUrl = data.product.images && data.product.images.length > 0 ? data.product.images[0].src : null;
     const metafieldsSet = mf.reduce((acc, m) => { acc[m.key] = JSON.parse(m.value).length; return acc; }, {});
-    res.json({ success: true, product_id: productId, handle: data.product.handle, shopify_url: productUrl, admin_url: `https://admin.shopify.com/store/zdzva0-tj/products/${productId}`, hero_image_url: heroImageUrl, collections_assigned: collectionResults, quantity: qty, category: (categoryGid ? product_category : null), colors_set: colorGids.length, pattern_set: patternGids.length, metafields_set: metafieldsSet });
+    res.json({ success: true, product_id: productId, handle: data.product.handle, shopify_url: productUrl, admin_url: `https://admin.shopify.com/store/zdzva0-tj/products/${productId}`, hero_image_url: heroImageUrl, collections_assigned: collectionResults, quantity: qty, category: (categoryGid ? product_category : null), colors_set: colorGids.length, pattern_set: patternGids.length, metafields_set: metafieldsSet, local_only: localOnly, ...(localOnlyWarning ? { warning: localOnlyWarning } : {}) });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
