@@ -729,6 +729,13 @@ button:active{transform:scale(.97)}
           <div class="field"><label>Item weight — lb</label><input type="number" min="0" step="1" id="lp-edit-weight-lb" placeholder="3"></div>
           <div class="field"><label>oz</label><input type="number" min="0" max="15" step="1" id="lp-edit-weight-oz" placeholder="8"></div>
         </div>
+        <div class="section-label" style="margin-top:4px">Normal shipping size <span style="font-weight:400;font-size:11px;color:var(--text-muted)">&mdash; packed box, not display (sets the shipping estimate)</span></div>
+        <div class="grid-3">
+          <div class="field"><label>Width (in)</label><input type="number" id="lp-edit-ship-l" placeholder="17" oninput="lpShipHint()"></div>
+          <div class="field"><label>Height (in)</label><input type="number" id="lp-edit-ship-w" placeholder="17" oninput="lpShipHint()"></div>
+          <div class="field"><label>Depth (in)</label><input type="number" id="lp-edit-ship-h" placeholder="21" oninput="lpShipHint()"></div>
+        </div>
+        <div class="dim-hint" id="lp-edit-ship-hint"></div>
         <div id="lp-dims-save-status" style="display:none;font-size:12px;margin-bottom:8px"></div>
         <div class="btn-row"><button class="btn-primary btn-full" onclick="lpSaveDimsInline()">💾 Save to Airtable</button></div>
       </div>
@@ -1882,6 +1889,7 @@ function readinessRender() {
   const INCOMPLETE = [
     { key:'dims',   label:'Dimensions',     fn: f => !!(f['Width (in)']||f['Height (in)']||f['Depth (in)']) },
     { key:'weight', label:'Weight',         fn: f => f['Item weight (oz)'] != null },
+    { key:'ship',   label:'Shipping box',   fn: f => f['Shopify Ship Weight (lb)'] != null && f['Shopify Ship Weight (lb)'] !== '' },
     { key:'photos', label:'Photos',         fn: f => !!(f['Photo URL']||['Photographed','Ready to list'].includes(f['Status'])) },
   ];
   const ALL_FIELDS = [...BLOCKING, ...INCOMPLETE];
@@ -1979,7 +1987,7 @@ function rdRenderList(cards) {
 // workflow sequence that can resolve an outstanding gap (or null when there's nothing to do):
 //   • Missing publish-blocking basics (Price / Type / Season / Reference name) or an
 //     unlistable Status → those are Step 1 fields → open the piece in New Piece / edit.
-//   • Missing physical details (Dimensions / Weight) → List & Publish Step 2.1 backfill editor.
+//   • Missing physical details (Dimensions / Weight / Shipping box) → List & Publish Step 2.1 backfill editor.
 //   • Only photos left → List & Publish Photos step (2.3).
 //   • Everything present → List & Publish details (2.2).
 function rdGetTarget(card) {
@@ -1987,8 +1995,8 @@ function rdGetTarget(card) {
   if (card.missingBlocking.length > 0 || !card.inDropdown)
     return { mode:'edit', title:'Edit piece details (Step 1)' };
   const inc = card.missingIncomplete;
-  if (inc.includes('Dimensions') || inc.includes('Weight'))
-    return { mode:'lp', step:1, title:'Add weight & dimensions (Step 2.1)' };
+  if (inc.includes('Dimensions') || inc.includes('Weight') || inc.includes('Shipping box'))
+    return { mode:'lp', step:1, title:'Add weight, dimensions & shipping box (Step 2.1)' };
   if (inc.includes('Photos'))
     return { mode:'lp', step:3, title:'Add photos (Step 2.3)' };
   return { mode:'lp', step:2, title:'Open in List & Publish' };
@@ -3179,11 +3187,15 @@ function lpRenderLPPreview(f) {
   document.getElementById('lp-at-preview').innerHTML='<div class="at-preview"><div class="at-preview-title">Pulled from Airtable</div><div class="at-grid">'+previewFields.map(fld=>'<div class="at-field"><div class="at-label">'+fld.l+'</div><div class="at-value'+(fld.v?'':' empty')+'">'+escHtml(fld.v||'not set')+'</div></div>').join('')+'</div></div>';
   const _doP=document.getElementById('lp-delivery-option'); if(_doP) delete _doP.dataset.loaded; // new piece → record rule until Step 2 loads it
   lpRenderLocalOnlyWarning(f);
-  // Inline backfill editor: show when dimensions OR weight are missing; prefill whatever exists.
-  const missingDims=(!dimW&&!dimH&&!dimD), missingWeight=(oz==null);
+  // Inline backfill editor: show when anything the publish check needs is missing — all three
+  // dimensions, weight, or the shipping estimate (set from the packed box) — and prefill what exists.
+  const missingDims=!(dimW&&dimH&&dimD), missingWeight=(oz==null), missingShip=(lpShipWeightLbFromRecord(f)==null);
   const editor=document.getElementById('lp-dims-editor');
   if(editor){
-    editor.style.display=(missingDims||missingWeight)?'block':'none';
+    editor.style.display=(missingDims||missingWeight||missingShip)?'block':'none';
+    const box=(f['Normal Shipping']||'').split('×');
+    ['lp-edit-ship-l','lp-edit-ship-w','lp-edit-ship-h'].forEach((id,i)=>{document.getElementById(id).value=box[i]||'';});
+    lpShipHint();
     document.getElementById('lp-edit-width').value=dimW!=null?dimW:'';
     document.getElementById('lp-edit-height').value=dimH!=null?dimH:'';
     document.getElementById('lp-edit-depth').value=dimD!=null?dimD:'';
@@ -3191,6 +3203,16 @@ function lpRenderLPPreview(f) {
     document.getElementById('lp-edit-weight-oz').value=oz!=null?oz%16:'';
     const ss=document.getElementById('lp-dims-save-status'); if(ss)ss.style.display='none';
   }
+}
+
+// Packed-box hint for the Step 2.1 editor (same estimate as Step 1's npDimHint('ship')).
+function lpShipHint(){
+  const el=document.getElementById('lp-edit-ship-hint'); if(!el) return;
+  const v=['lp-edit-ship-l','lp-edit-ship-w','lp-edit-ship-h'].map(id=>document.getElementById(id).value.trim());
+  const est=(v[0]&&v[1]&&v[2])?estimateShipping(v[0],v[1],v[2]):null;
+  if(!est){el.style.display='none';return;}
+  el.style.display='block';el.className='dim-hint dh-ok';
+  el.innerHTML='&#128230; Ships in '+est.box+' box &middot; ~$'+est.cost.toFixed(2)+' est. &middot; net ~$'+(est.cost/2).toFixed(2)+' @50%';
 }
 
 async function lpSaveDimsInline(){
@@ -3204,10 +3226,18 @@ async function lpSaveDimsInline(){
   if(h)dimFields['Height (in)']=parseInt(h);
   if(d)dimFields['Depth (in)']=parseInt(d);
   const totalOz=wtInputsToOz('lp-edit-weight-lb','lp-edit-weight-oz');
+  const sl=document.getElementById('lp-edit-ship-l').value.trim();
+  const sw=document.getElementById('lp-edit-ship-w').value.trim();
+  const sh=document.getElementById('lp-edit-ship-h').value.trim();
   if(ss){ss.style.display='block';ss.style.color='var(--text-muted)';ss.textContent='Saving to Airtable...';}
-  // Dimensions + weight in ONE PATCH (was two back-to-back calls to the same record).
+  // Dimensions + weight + packed box in ONE PATCH. The box sets Shipping estimate ($), which
+  // Airtable turns into the Shipping Tier / Shopify Ship Weight the publish check needs.
   const fields=Object.assign({},dimFields);
   if(totalOz!==null) fields['Item weight (oz)']=totalOz;
+  if(sl&&sw&&sh){
+    fields['Normal Shipping']=sl+'×'+sw+'×'+sh;
+    const est=estimateShipping(sl,sw,sh); if(est) fields['Shipping estimate ($)']=est.cost;
+  }
   let ok=true;
   if(Object.keys(fields).length){
     queueFieldWrite(lpSelectedRecord.id, fields);
@@ -3226,7 +3256,7 @@ async function lpSaveDimsInline(){
 async function lpContinueFromStep1(){
   const editor=document.getElementById('lp-dims-editor');
   if(editor && editor.style.display!=='none'){
-    const hasInput=['lp-edit-width','lp-edit-height','lp-edit-depth','lp-edit-weight-lb','lp-edit-weight-oz']
+    const hasInput=['lp-edit-width','lp-edit-height','lp-edit-depth','lp-edit-weight-lb','lp-edit-weight-oz','lp-edit-ship-l','lp-edit-ship-w','lp-edit-ship-h']
       .some(id=>{const el=document.getElementById(id);return el && el.value.trim()!=='';});
     if(hasInput){ try{ await lpSaveDimsInline(); }catch(e){ console.warn('Dimension flush on Continue failed:',e.message); } }
   }
