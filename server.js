@@ -1,6 +1,7 @@
 const express = require('express');
 const cors    = require('cors');
 const crypto  = require('crypto');
+const { AsyncLocalStorage } = require('async_hooks');
 const fetch   = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 const FormData = require('form-data'); // streaming multipart for staged video uploads
  
@@ -19,6 +20,10 @@ app.use(cors({
     'null'
   ]
 }));
+// Tag every request so each Airtable call made while serving it is counted against its
+// route (see airtableReq / GET /airtable-usage). Record ids are folded to :id.
+const atCallCtx = new AsyncLocalStorage();
+app.use((req, res, next) => atCallCtx.run({ source: req.method + ' ' + req.path.replace(/rec[A-Za-z0-9]{14}/g, ':id') }, next));
  
 const SHOPIFY_API_KEY    = process.env.SHOPIFY_API_KEY;
 const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET;
@@ -310,25 +315,108 @@ let googleRefreshToken = process.env.GOOGLE_REFRESH_TOKEN || null;
 let googleTokenExpiry  = 0;
 
 // ── Airtable helper ───────────────────────────────────────────
+// Every call is counted by source (the route that triggered it, or opts.source) so real
+// usage is visible at GET /airtable-usage and in the Render logs ("[airtable] ..." lines).
+// Counts live in memory, so they reset when the server restarts or sleeps.
+const atUsage = { since: new Date().toISOString(), total: 0, rejected: 0, bySource: {}, byDay: {} };
 async function airtableReq(tablePath, opts = {}) {
   if (!AIRTABLE_TOKEN) throw new Error('AIRTABLE_TOKEN not configured on server');
+  const { source: srcOpt, ...fetchOpts } = opts;
+  const method = (fetchOpts.method || 'GET').toUpperCase();
+  const source = srcOpt || (atCallCtx.getStore() || {}).source || 'background';
+  const day = new Date().toISOString().slice(0, 10);
+  atUsage.total++;
+  atUsage.bySource[source] = (atUsage.bySource[source] || 0) + 1;
+  atUsage.byDay[day] = (atUsage.byDay[day] || 0) + 1;
+  console.log(`[airtable] ${method} via ${source} — #${atUsage.total} since ${atUsage.since}`);
   const url = tablePath.startsWith('https://')
     ? tablePath
     : `https://api.airtable.com/v0/${AT_BASE_ID}/${tablePath}`;
   const res = await fetch(url, {
-    ...opts,
+    ...fetchOpts,
     headers: {
       'Authorization': 'Bearer ' + AIRTABLE_TOKEN,
       'Content-Type': 'application/json',
-      ...(opts.headers || {})
+      ...(fetchOpts.headers || {})
     }
   });
   if (!res.ok) {
+    if (res.status === 429) atUsage.rejected++;
     const err = await res.json().catch(() => ({}));
     throw new Error('Airtable error ' + res.status + ': ' + JSON.stringify(err));
   }
-  return res.json();
+  const data = await res.json();
+  // Any inventory write that returns records refreshes the server's copy of them.
+  if (method !== 'GET' && tablePath.startsWith(AT_INVENTORY_TBL)) invCacheUpsert(data);
+  return data;
 }
+const isBillingLimitError = e => /PUBLIC_API_BILLING_LIMIT_EXCEEDED/.test(String((e && e.message) || ''));
+
+// ── Inventory cache ───────────────────────────────────────────
+// The app re-downloads the whole inventory (3 calls at ~240 records) on every open,
+// refresh and bin QR scan, and the webhooks looked records up one call at a time. The
+// server now keeps one copy in memory instead:
+//   • served without calling Airtable for INV_FRESH_MS after the last sync;
+//   • after that, a DELTA sync fetches only records modified since (usually 1 call),
+//     which picks up edits made directly in Airtable;
+//   • a FULL reload every INV_FULL_MS (and on cold start) also drops deleted records;
+//   • every inventory write that goes through this server updates the copy in place.
+const INV_FRESH_MS = 10 * 60 * 1000;
+const INV_FULL_MS  = 6 * 60 * 60 * 1000;
+const invCache = { byId: new Map(), syncedAt: 0, fullAt: 0, loading: null };
+function invCacheUpsert(data) {
+  const recs = (data && Array.isArray(data.records)) ? data.records : [data];
+  for (const r of recs) if (r && r.id && r.fields) invCache.byId.set(r.id, { id: r.id, createdTime: r.createdTime, fields: r.fields });
+}
+async function invFetchAll(formula, source) {
+  let out = [], offset = null;
+  do {
+    let path = `${AT_INVENTORY_TBL}?pageSize=100`;
+    if (formula) path += '&filterByFormula=' + encodeURIComponent(formula);
+    if (offset) path += '&offset=' + encodeURIComponent(offset);
+    const data = await airtableReq(path, { source });
+    out = out.concat(data.records || []);
+    offset = data.offset || null;
+  } while (offset);
+  return out;
+}
+// force: sync now even if fresh (delta unless a full reload is due); full: full reload now.
+function invEnsure({ force = false, full = false } = {}) {
+  const now = Date.now();
+  if (!force && !full && invCache.fullAt && now - invCache.syncedAt < INV_FRESH_MS) return Promise.resolve();
+  if (invCache.loading) return invCache.loading;
+  invCache.loading = (async () => {
+    const started = Date.now();
+    let doFull = full || !invCache.fullAt || started - invCache.fullAt > INV_FULL_MS;
+    if (!doFull) {
+      try {
+        // 1-minute overlap covers clock skew between this server and Airtable.
+        const since = new Date(invCache.syncedAt - 60 * 1000).toISOString();
+        invCacheUpsert({ records: await invFetchAll(`IS_AFTER(LAST_MODIFIED_TIME(), DATETIME_PARSE('${since}'))`, 'cache:delta') });
+      } catch (e) {
+        if (isBillingLimitError(e)) throw e;
+        console.warn('Inventory delta sync failed — falling back to a full reload:', e.message);
+        doFull = true;
+      }
+    }
+    if (doFull) {
+      const recs = await invFetchAll(null, 'cache:full');
+      invCache.byId = new Map();
+      invCacheUpsert({ records: recs });
+      invCache.fullAt = started;
+    }
+    invCache.syncedAt = started;
+  })().catch(e => {
+    // Airtable unreachable / over its monthly cap: if we already hold a copy, keep serving
+    // it (the app stays browsable) and wait 2 minutes before trying again.
+    if (!invCache.fullAt) throw e;
+    console.warn('Inventory sync failed — serving the cached copy, retrying in 2 min:', e.message);
+    invCache.syncedAt = Date.now() - INV_FRESH_MS + 2 * 60 * 1000;
+  }).finally(() => { invCache.loading = null; });
+  return invCache.loading;
+}
+function invRecords() { return Array.from(invCache.byId.values()); }
+function invFindBySku(sku) { return invRecords().filter(r => String((r.fields || {})['EB Number'] || '').trim() === sku); }
 
 // ── Shipping delivery profiles ────────────────────────────────
 // Shopify's weight-based rate engine collapses a multi-item cart into ONE rate, so a
@@ -890,13 +978,12 @@ app.post('/drive-upload-image', async (req, res) => {
 // ── Airtable: inventory endpoints ────────────────────────────
 
 // GET /airtable/inventory — fetch all inventory records (paginated)
+// Served from the inventory cache as ONE response (no offset, so the app's paging loop
+// ends after one request). ?refresh=1 syncs changes first; ?refresh=full reloads all.
 app.get('/airtable/inventory', async (req, res) => {
-  const { offset } = req.query;
   try {
-    let path = `${AT_INVENTORY_TBL}?pageSize=100`;
-    if (offset) path += '&offset=' + encodeURIComponent(offset);
-    const data = await airtableReq(path);
-    res.json(data);
+    await invEnsure({ force: req.query.refresh === '1', full: req.query.refresh === 'full' });
+    res.json({ records: invRecords() });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -904,9 +991,21 @@ app.get('/airtable/inventory', async (req, res) => {
 app.get('/airtable/inventory/:id', async (req, res) => {
   const { id } = req.params;
   try {
+    await invEnsure();
+    const cached = invCache.byId.get(id);
+    if (cached) return res.json(cached);
     const data = await airtableReq(`${AT_INVENTORY_TBL}/${id}`);
+    invCacheUpsert(data);
     res.json(data);
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Airtable call counts since the server last started, by source and by day, plus the
+// inventory cache's state. Free plan: 1,000 calls/workspace/month.
+app.get('/airtable-usage', (req, res) => {
+  res.json({ ...atUsage, cache: { records: invCache.byId.size,
+    lastSync: invCache.syncedAt ? new Date(invCache.syncedAt).toISOString() : null,
+    lastFullReload: invCache.fullAt ? new Date(invCache.fullAt).toISOString() : null } });
 });
 
 // POST /airtable/inventory — create (or upsert) an inventory record.
@@ -1370,12 +1469,11 @@ app.post('/webhooks/orders-create', async (req, res) => {
 
   if (!skus.length) { console.log(`orders-create ${orderRef}: no EB SKUs on order — nothing to sync`); return res.status(200).send('ok'); }
 
-  let transientError = false;
+  let transientError = false, billingLimited = false;
   for (const sku of skus) {
     try {
-      const formula = encodeURIComponent(`{EB Number}='${sku}'`);
-      const found = await airtableReq(`${AT_INVENTORY_TBL}?filterByFormula=${formula}&maxRecords=2`);
-      const recs = (found && found.records) || [];
+      await invEnsure();
+      const recs = invFindBySku(sku);
       if (!recs.length) { console.warn(`orders-create ${orderRef}: SKU ${sku} sold online but not found in Airtable — skipped`); continue; }
       if (recs.length > 1) console.warn(`orders-create ${orderRef}: SKU ${sku} matches ${recs.length} Airtable records — updating the first (${recs[0].id}); resolve the duplicate`);
       const fields = { 'Status': 'Sold', 'Sales channel': 'Shopify' };
@@ -1384,9 +1482,13 @@ app.post('/webhooks/orders-create', async (req, res) => {
       console.log(`orders-create ${orderRef}: marked ${sku} as Sold (Shopify) in Airtable`);
     } catch (e) {
       transientError = true;
+      if (isBillingLimitError(e)) billingLimited = true;
       console.warn(`orders-create ${orderRef}: failed to update ${sku} in Airtable — ${e.message}`);
     }
   }
+  // Over the monthly API cap, Shopify's retries (8 over ~4 h) can't succeed and each one
+  // is another rejected call — acknowledge instead; the sale must be marked by hand.
+  if (billingLimited) { console.warn(`orders-create ${orderRef}: Airtable monthly API limit reached — NOT retrying; mark the sale as Sold manually`); return res.status(200).send('ok'); }
   if (transientError) return res.status(500).send('airtable error — retry');
   res.status(200).send('ok');
 });
@@ -1436,11 +1538,12 @@ app.post('/webhooks/products-update', async (req, res) => {
   // Can't determine a sale price (bad/blank price on a supposedly-on-sale item) — don't guess.
   if (onSale && desiredSalePrice == null) { console.warn(`products-update: SKU ${sku} looks on sale but has no usable price — skipped`); return res.status(200).send('ok'); }
 
-  // 3) Reconcile into Airtable, but only when the sale state actually changed.
+  // 3) Reconcile into Airtable, but only when the sale state actually changed. The
+  //    comparison uses the server's inventory cache, so the usual case (nothing changed
+  //    — a photo, inventory, metafield or publish update) costs no Airtable call at all.
   try {
-    const formula = encodeURIComponent(`{EB Number}='${sku}'`);
-    const found = await airtableReq(`${AT_INVENTORY_TBL}?filterByFormula=${formula}&maxRecords=2`);
-    const recs = (found && found.records) || [];
+    await invEnsure();
+    const recs = invFindBySku(sku);
     if (!recs.length) { console.log(`products-update: SKU ${sku} not in Airtable — skipped`); return res.status(200).send('ok'); }
     if (recs.length > 1) console.warn(`products-update: SKU ${sku} matches ${recs.length} Airtable records — updating the first (${recs[0].id}); resolve the duplicate`);
     const rec = recs[0];
@@ -1472,6 +1575,9 @@ app.post('/webhooks/products-update', async (req, res) => {
     res.status(200).send('ok');
   } catch (e) {
     console.warn(`products-update: failed to reconcile ${sku} — ${e.message}`);
+    // Over the monthly API cap a retry can't succeed (it would just be another rejected
+    // call) — acknowledge; the sale state re-syncs on the product's next update.
+    if (isBillingLimitError(e)) return res.status(200).send('ok');
     return res.status(500).send('airtable error — retry');
   }
 });
@@ -1553,16 +1659,12 @@ app.get('/orders/open', async (req, res) => {
       if (s) skuSet.add(s);
     }
     const WANT = ['EB Number', 'Reference name', 'Normal Shipping', 'Item weight (oz)', 'Width (in)', 'Height (in)', 'Depth (in)', 'Type', 'Delivery option'];
-    const fieldQS = WANT.map(f => `&fields%5B%5D=${encodeURIComponent(f)}`).join('');
     const shipBySku = {};
-    const skus = [...skuSet];
-    for (let i = 0; i < skus.length; i += 40) {
-      const batch = skus.slice(i, i + 40);
-      const formula = 'OR(' + batch.map(s => `{EB Number}='${s.replace(/'/g, "\\'")}'`).join(',') + ')';
-      const data = await airtableReq(`${AT_INVENTORY_TBL}?filterByFormula=${encodeURIComponent(formula)}&maxRecords=100${fieldQS}`);
-      for (const r of (data.records || [])) {
-        const f = r.fields || {};
-        if (f['EB Number']) shipBySku[String(f['EB Number']).trim()] = f;
+    if (skuSet.size) {
+      await invEnsure();
+      for (const r of invRecords()) {
+        const f = r.fields || {}, eb = String(f['EB Number'] || '').trim();
+        if (eb && skuSet.has(eb)) shipBySku[eb] = Object.fromEntries(WANT.map(k => [k, f[k]]).filter(([, v]) => v !== undefined));
       }
     }
 
