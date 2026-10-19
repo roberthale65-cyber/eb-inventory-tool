@@ -428,7 +428,7 @@ button:active{transform:scale(.97)}
     </div>
   </div>
   <div class="home-grid">
-    <div class="mode-card new-piece" onclick="goTo('screen-new-piece')"><span class="mode-icon">🌸</span><div class="mode-title">Step 1 — Add or edit inventory</div><div class="mode-desc">Add a new piece or edit an existing one — log details, generate QR tag</div><div class="mode-arrow">→</div></div>
+    <div class="mode-card new-piece" onclick="npOpenFromHome()"><span class="mode-icon">🌸</span><div class="mode-title">Step 1 — Add or edit inventory</div><div class="mode-desc">Add a new piece or edit an existing one — log details, generate QR tag</div><div class="mode-arrow">→</div></div>
     <div class="mode-card list-publish" onclick="goTo('screen-list')"><span class="mode-icon">📋</span><div class="mode-title">Step 2 — List & publish</div><div class="mode-desc">Photos &amp; video, AI description, publish to Shopify</div><div class="mode-arrow">→</div></div>
     <div class="mode-card mark-sold" onclick="goTo('screen-sold')"><span class="mode-icon">✅</span><div class="mode-title">Mark as sold</div><div class="mode-desc">Record a sale, update Shopify and Airtable instantly</div><div class="mode-arrow">→</div></div>
     <div class="mode-card sale-clearance" onclick="saOpen()"><span class="mode-icon">🏷️</span><div class="mode-title">Sale &amp; Clearance</div><div class="mode-desc">Mark a piece Sale or Clearance — discounts Shopify, records it in Airtable</div><div class="mode-arrow">→</div></div>
@@ -1350,7 +1350,7 @@ button:active{transform:scale(.97)}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px" id="bl-stat-grid"></div>
     <div id="bl-results-breakdown" style="margin-bottom:20px"></div>
     <div class="btn-row"><button class="btn-primary btn-full" onclick="blContinueSorting()">← Keep sorting</button></div>
-    <div class="btn-row"><button class="btn btn-full" onclick="goTo('screen-new-piece')">🌸 Start listing a piece →</button></div>
+    <div class="btn-row"><button class="btn btn-full" onclick="npOpenFromHome()">🌸 Start listing a piece →</button></div>
   </div>
 </div>
 
@@ -1450,6 +1450,7 @@ function estimateShipping(l, w, h){
   return {box, cost:Math.round(cost*100)/100};
 }
 let npMode = 'add';
+let npEditLoaded = false; // true once an existing piece's details are loaded into the form
 let npSelectedFolder = null;   // { id, name } chosen in the Step 1.1 Drive folder picker
 let npFolderList = [];         // cached subfolders of the product-media folder
 let npFolderImages = [];       // cached thumbnails of the selected folder (carried across 1.2–1.4)
@@ -2583,7 +2584,15 @@ function npFolderBigPreview(imgEl){
 }
 
 // ── ADD / EDIT MODE ──
+// Entering from Home always starts in Add mode. Edit mode used to persist after editing a
+// piece (or opening one from Readiness), so the next new piece reached 1.5 with a greyed
+// "Save changes" button that only enables once an existing piece is picked.
+function npOpenFromHome(){
+  goTo('screen-new-piece');
+  if(npMode==='edit'){ npSetMode('add'); npStep(1); }
+}
 function npSetMode(mode){
+  const prevMode=npMode;
   npMode=mode;
   document.getElementById('np-mode-add-btn').classList.toggle('active',mode==='add');
   document.getElementById('np-mode-edit-btn').classList.toggle('active',mode==='edit');
@@ -2592,10 +2601,24 @@ function npSetMode(mode){
   document.getElementById('np-edit-hint').style.display=mode==='edit'?'block':'none';
   document.getElementById('np-step1-label').textContent=mode==='edit'?'Edit piece details':'Assign EB number';
   const sub5h=document.getElementById('np-sub5-head'); if(sub5h) sub5h.textContent=mode==='edit'?'Save changes':'Assign EB number';
-  const sub5hint=document.getElementById('np-sub5-hint'); if(sub5hint) sub5hint.textContent=mode==='edit'?"Save your changes — this piece's EB number stays the same.":"Everything's captured. Assign the next EB number to this piece — it stays with the piece for good.";
   const btn=document.getElementById('np-primary-btn');
-  if(mode==='edit'){ btn.textContent='💾 Save changes →'; btn.disabled=true; npPopulateEditSelect(); }
-  else { btn.textContent='✨ Assign EB number →'; btn.disabled=false; npClearForm(); npCurrentRecordId=null; npCurrentEB=''; npAssignedEB=''; const es=document.getElementById('np-edit-select'); if(es)es.value=''; _clearEbSearch('np-edit-search','np-edit-results'); }
+  if(mode==='edit'){ btn.textContent='💾 Save changes →'; btn.disabled=true; npEditLoaded=false; npPopulateEditSelect(); }
+  else {
+    btn.textContent='✨ Assign EB number →'; btn.disabled=false;
+    // Switching Edit → Add with no piece loaded keeps what was typed (it's a new piece);
+    // otherwise clear the form so a loaded piece's details aren't reused.
+    if(!(prevMode==='edit' && !npEditLoaded)) npClearForm();
+    npEditLoaded=false; npCurrentRecordId=null; npCurrentEB=''; npAssignedEB=''; const es=document.getElementById('np-edit-select'); if(es)es.value=''; _clearEbSearch('np-edit-search','np-edit-results'); }
+  npUpdateSub5Hint();
+}
+// 1.5 hint. In Edit mode with no piece picked, say why the button is greyed out.
+function npUpdateSub5Hint(){
+  const el=document.getElementById('np-sub5-hint'); if(!el) return;
+  el.textContent = npMode!=='edit'
+    ? "Everything's captured. Assign the next EB number to this piece — it stays with the piece for good."
+    : npEditLoaded
+      ? "Save your changes — this piece's EB number stays the same."
+      : "You're in Edit mode, so this saves changes to an existing piece. Pick the piece at the top of Step 1 — or, for a new piece, tap ➕ Add new at the top of Step 1 (what you've entered is kept).";
 }
 // Shared label for all "pick a piece" dropdowns: EB number · Reference name.
 function pieceLabel(f){const eb=f['EB Number']||'';const ref=(f['Reference name']||'').trim();return eb+(ref?' · '+ref:'');}
@@ -2668,8 +2691,9 @@ function npAutoFillCost(){
 function npLoadRecordForEdit(){
   const sel=document.getElementById('np-edit-select'), btn=document.getElementById('np-primary-btn');
   const recId=sel.value;
-  if(!recId){ npCurrentRecordId=null; btn.disabled=true; return; }
+  if(!recId){ npCurrentRecordId=null; btn.disabled=true; npEditLoaded=false; npUpdateSub5Hint(); return; }
   const rec=allRecords.find(r=>r.id===recId); if(!rec)return;
+  npEditLoaded=true; npUpdateSub5Hint();
   const f=rec.fields;
   npCurrentRecordId=rec.id; npCurrentEB=f['EB Number']||''; npAssignedEB=npCurrentEB;
   document.getElementById('np-ref-name').value=f['Reference name']||'';
