@@ -1513,17 +1513,22 @@ function npSaveAndGoHome() {
 // CHANGE: removed promptToken() entirely — no token prompt, no localStorage token
 
 // CHANGE: connectAirtable no longer needs silent param or token error fallback
-async function connectAirtable() {
-  setServerStatus('loading','Connecting...');
+// The server keeps a cached copy of the inventory (synced from Airtable every ~10 min),
+// so opening the app no longer costs Airtable calls. Tapping the status pill asks the
+// server to pull any changes made directly in Airtable right now.
+async function connectAirtable(refresh) {
+  setServerStatus('loading', refresh ? 'Refreshing from Airtable...' : 'Connecting...');
   try {
-    await loadAllRecords();
+    await loadAllRecords(refresh);
     atRestorePending(); // re-apply + retry any edits that didn't reach Airtable last session
     setServerStatus('ok', allRecords.length + ' pieces loaded');
+    const pill = document.getElementById('server-status');
+    pill.onclick = () => connectAirtable(true); pill.title = 'Tap to refresh from Airtable';
     populateHomeStats(); populateLPSelect(); populateMSSelect(); populateSASelect(); populateCFInventory();
     reconcileDriveFolders(); // background: tidy published/sold folders out of "Listing media sorted"
   } catch(e) {
     setServerStatus('error','Connection failed — tap to retry');
-    document.getElementById('server-status').onclick = connectAirtable;
+    document.getElementById('server-status').onclick = () => connectAirtable();
   }
 }
 
@@ -1682,11 +1687,12 @@ function atWriteNow(id, fields, opts={}){
 }
 
 // CHANGE: loadAllRecords fetches directly from Render — no field filter params needed
-async function loadAllRecords() {
+async function loadAllRecords(refresh) {
   let records = [], offset = null;
   do {
     let url = SERVER_URL + '/airtable/inventory';
     if (offset) url += '?offset=' + encodeURIComponent(offset);
+    else if (refresh) url += '?refresh=1';
     const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to load inventory');
     const data = await res.json();
