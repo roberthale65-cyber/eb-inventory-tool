@@ -278,6 +278,13 @@ button:active{transform:scale(.97)}
 .mode-card.bin-mgmt{border-top:3px solid var(--teal)}
 .mode-card.readiness{border-top:3px solid var(--purple)}
 .mode-card.raw-label{border-top:3px solid var(--gold)}
+.mode-card.craft-tag{border-top:3px solid var(--rose)}
+#cst-preview{width:100%;max-width:360px;aspect-ratio:3/2;margin:4px auto 16px;background:#fff;border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-sm);padding:4% 5%;display:flex;flex-direction:column;justify-content:center;gap:4px;font-family:Arial,Helvetica,sans-serif;overflow:hidden}
+#cst-preview .t-brand{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:#bb8588}
+#cst-preview .t-eb{font-size:13px;font-weight:800;color:#2b2622;letter-spacing:.03em}
+#cst-preview .t-price{font-size:24px;font-weight:800;color:#bb8588}
+#cst-preview .t-sub{font-size:17px;color:#bb8588;line-height:1.2}
+#cst-preview .t-empty{color:var(--text-muted);font-style:italic;font-size:14px;text-align:center}
 .mode-card.fulfillment{border-top:3px solid var(--amber-border)}
 .mode-card.sale-clearance{border-top:3px solid var(--amber-border)}
 #rl-preview-frame{width:100%;display:flex;justify-content:center;margin:4px 0 16px}
@@ -436,6 +443,7 @@ button:active{transform:scale(.97)}
     <div class="mode-card craft-fair" onclick="goTo('screen-craft-fair')"><span class="mode-icon">🛍️</span><div class="mode-title">Craft fair</div><div class="mode-desc">Mobile-optimized selling at shows and events</div><div class="mode-arrow">→</div></div>
     <div class="mode-card bin-mgmt" onclick="goTo('screen-bin-mgmt')"><span class="mode-icon">📦</span><div class="mode-title">Bin management</div><div class="mode-desc">Print bin, bar &amp; shelf labels, scan to assign pieces, update anytime</div><div class="mode-arrow">→</div></div>
     <div class="mode-card raw-label" onclick="goTo('screen-raw-label')"><span class="mode-icon">🧵</span><div class="mode-title">Raw material label</div><div class="mode-desc">Free-form 4×6 bin label — type up to 4 lines, big auto-sized text, print one off</div><div class="mode-arrow">→</div></div>
+    <div class="mode-card craft-tag" onclick="goTo('screen-craft-tag')"><span class="mode-icon">🎪</span><div class="mode-title">Craft show tag</div><div class="mode-desc">Temporary 3×2 price tag for a show — enter an EB number, set the show price, print (no QR)</div><div class="mode-arrow">→</div></div>
     <div class="mode-card readiness" onclick="goTo('screen-readiness')"><span class="mode-icon">&#x1F4CB;</span><div class="mode-title">Listing readiness</div><div class="mode-desc">See what each piece is missing before it can publish to Shopify</div><div class="mode-arrow">→</div></div>
     <div class="mode-card log-cost" onclick="goTo('screen-costs')"><span class="mode-icon">&#x1F9FE;</span><div class="mode-title">Log a cost</div><div class="mode-desc">Snap a receipt, log mileage, or enter manually — saved to Airtable</div><div class="mode-arrow">→</div></div>
     <div class="mode-card resync" onclick="goTo('screen-resync')"><span class="mode-icon">&#x21BB;</span><div class="mode-title">Re-sync to Shopify</div><div class="mode-desc">Push attribute &amp; inventory updates to an already-published piece — keeps title, photos &amp; price</div><div class="mode-arrow">→</div></div>
@@ -490,6 +498,22 @@ button:active{transform:scale(.97)}
     <div id="rl-preview-frame"><div id="rl-preview"></div></div>
     <button class="btn-primary btn-full" onclick="rlPrint()">🖨 Print label</button>
     <button class="btn btn-full" style="margin-top:8px" onclick="rlClear()">Clear</button>
+  </div>
+</div>
+
+<!-- CRAFT SHOW TAG SCREEN -->
+<div id="screen-craft-tag" class="screen">
+  <div class="wizard-header"><button class="hdr-nav-btn home-btn" onclick="goHome()" title="Home screen">⌂ Home</button><div class="wizard-title">Craft show tag</div><div class="wizard-step-pill">3 × 2</div></div>
+  <div class="wizard-body">
+    <div class="info-card sage"><strong>🎪 Temporary tag for a craft show.</strong> Enter the EB number, set the show price, then Print — select your Phomemo printer from the print dialog. The show price is saved to Airtable; the Shopify price doesn't change.</div>
+    <div class="field" style="margin-top:12px"><label>EB number</label><div style="position:relative"><input type="text" id="cst-eb" placeholder="e.g. EB-26FA-WR-013 or just 013" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" oninput="cstSearch(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();cstPickTyped();}" onblur="setTimeout(()=>{const r=document.getElementById('cst-results');if(r)r.style.display='none';},220)"><div id="cst-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);max-height:260px;overflow-y:auto;z-index:500"></div></div></div>
+    <div id="cst-piece" style="display:none">
+      <div class="field"><label>Craft show price ($)</label><input type="text" id="cst-price" inputmode="decimal" placeholder="e.g. 75.00" autocomplete="off" oninput="cstPreview()"><div id="cst-listed" style="font-size:11px;color:var(--text-muted);margin-top:3px"></div></div>
+    </div>
+    <div class="section-label">Preview</div>
+    <div id="cst-preview"><div class="t-empty">Enter an EB number to preview the tag</div></div>
+    <button class="btn-primary btn-full" id="cst-print-btn" onclick="cstPrint()" disabled>🖨 Save price &amp; print tag</button>
+    <div id="cst-status" style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:8px;min-height:16px"></div>
   </div>
 </div>
 
@@ -1064,6 +1088,18 @@ button:active{transform:scale(.97)}
       <button class="btn btn-full" style="margin-top:16px" onclick="bmStep('overview')">← Back to all locations</button>
     </div>
 
+  </div>
+</div>
+
+<!-- SOLD MODAL -->
+<div class="modal-overlay" id="sold-modal" onclick="closeSoldModal(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-piece-title">Mark as sold</div>
+    <div class="modal-sub" id="modal-piece-sub">Confirm the sale details below</div>
+    <div class="section-label">How did it sell?</div>
+    <div class="channel-grid">
+      <div class="channel-btn" onclick="modalSelectChannel(this,'Shopify')"><span class="channel-icon">🛒</span><div class="channel-label">Shopify</div></div>
       <div class="channel-btn" onclick="modalSelectChannel(this,'Etsy')"><span class="channel-icon">🧡</span><div class="channel-label">Etsy</div></div>
       <div class="channel-btn" onclick="modalSelectChannel(this,'Craft fair')"><span class="channel-icon">🛍️</span><div class="channel-label">Craft fair</div></div>
       <div class="channel-btn" onclick="modalSelectChannel(this,'Hair Salon')"><span class="channel-icon">💇</span><div class="channel-label">Hair Salon</div></div>
@@ -1773,6 +1809,7 @@ function goTo(screenId) {
   if(screenId==='screen-resync') rsScreenInit();
   if(screenId==='screen-print-tag') ptInit();
   if(screenId==='screen-raw-label') rlInit();
+  if(screenId==='screen-craft-tag') cstInit();
   if(screenId==='screen-backlog') blOnScreenEnter();
   if(screenId==='screen-readiness') readinessRender();
   if(screenId==='screen-bin-mgmt') bmOnScreenEnter();
@@ -4247,10 +4284,11 @@ function lpReset(){lpSelectedRecord=null;lpPhotoItems=[];lpDriveImages=[];lpDriv
 
 // ── MARK AS SOLD ──
 function msStep(n){stepBackFn=n>1?()=>msStep(n-1):null;updateHeaderBackBtn();document.querySelectorAll('#screen-sold .step-block').forEach(s=>s.classList.remove('active'));document.getElementById('ms-step-'+n).classList.add('active');document.getElementById('ms-step-pill').textContent='Step '+n+' of 2';document.getElementById('ms-progress').style.width=(n===1?50:100)+'%';window.scrollTo({top:0,behavior:'smooth'});}
-function populateMSSelect(){const listed=sortPiecesByEB(allRecords.filter(r=>r.fields['Status']==='Listed'||r.fields['Status']==='In stock'));msAllOpts=listed.map(r=>({value:r.id,label:pieceLabel(r.fields)||r.id}));const sel=document.getElementById('ms-eb-select');if(listed.length===0){sel.innerHTML='<option value="">— no listed pieces —</option>';return;}sel.innerHTML='<option value="">— pick a piece —</option>'+msAllOpts.map(o=>'<option value="'+escHtml(o.value)+'">'+escHtml(o.label)+'</option>').join('');_clearEbSearch('ms-eb-search','ms-eb-results');sel.onchange=()=>{const recId=sel.value;document.getElementById('ms-next-btn').disabled=!recId;if(!recId){msSelectedRecord=null;document.getElementById('ms-piece-preview').style.display='none';return;}msSelectedRecord=allRecords.find(r=>r.id===recId);if(!msSelectedRecord)return;const f=msSelectedRecord.fields;document.getElementById('ms-piece-preview').style.display='block';document.getElementById('ms-piece-preview').innerHTML='<div class="at-preview"><div class="at-preview-title">Selected piece</div><div class="at-grid"><div class="at-field"><div class="at-label">EB Number</div><div class="at-value">'+escHtml(f['EB Number'])+'</div></div><div class="at-field"><div class="at-label">Type</div><div class="at-value">'+escHtml(f['Type']||'—')+'</div></div><div class="at-field"><div class="at-label">Price</div><div class="at-value">'+(f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—')+'</div></div></div></div>';};}
+function populateMSSelect(){const listed=sortPiecesByEB(allRecords.filter(r=>r.fields['Status']==='Listed'||r.fields['Status']==='In stock'));msAllOpts=listed.map(r=>({value:r.id,label:pieceLabel(r.fields)||r.id}));const sel=document.getElementById('ms-eb-select');if(listed.length===0){sel.innerHTML='<option value="">— no listed pieces —</option>';return;}sel.innerHTML='<option value="">— pick a piece —</option>'+msAllOpts.map(o=>'<option value="'+escHtml(o.value)+'">'+escHtml(o.label)+'</option>').join('');_clearEbSearch('ms-eb-search','ms-eb-results');sel.onchange=()=>{const recId=sel.value;document.getElementById('ms-next-btn').disabled=!recId;if(!recId){msSelectedRecord=null;document.getElementById('ms-piece-preview').style.display='none';return;}msSelectedRecord=allRecords.find(r=>r.id===recId);if(!msSelectedRecord)return;const f=msSelectedRecord.fields;const msp=cfShowPrice(f);document.getElementById('ms-sale-price').value=msp!=null?msp.toFixed(2):'';document.getElementById('ms-piece-preview').style.display='block';document.getElementById('ms-piece-preview').innerHTML='<div class="at-preview"><div class="at-preview-title">Selected piece</div><div class="at-grid"><div class="at-field"><div class="at-label">EB Number</div><div class="at-value">'+escHtml(f['EB Number'])+'</div></div><div class="at-field"><div class="at-label">Type</div><div class="at-value">'+escHtml(f['Type']||'—')+'</div></div><div class="at-field"><div class="at-label">Price</div><div class="at-value">'+(f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—')+'</div></div></div></div>';};}
 function msSelectChannel(el,channel){document.querySelectorAll('#screen-sold .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');msSelectedChannel=channel;}
 async function msConfirmSale(){if(!msSelectedRecord||!msSelectedChannel){alert('Select a piece and sale channel.');return;}const salePrice=document.getElementById('ms-sale-price').value.trim();const saleDate=document.getElementById('ms-sale-date').value;const btn=document.getElementById('ms-confirm-btn');btn.disabled=true;btn.textContent='⏳ Recording...';setStatus('ms','Marking as sold...','loading');try{await markSold(msSelectedRecord,msSelectedChannel,salePrice,saleDate);const result=document.getElementById('ms-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(msSelectedRecord.fields['EB Number'])+'</strong> marked as sold via '+msSelectedChannel+'.';btn.textContent='✓ Done!';setStatus('ms','Sale recorded ✓','success');populateHomeStats();populateMSSelect();populateLPSelect();populateCFInventory();setTimeout(()=>hideStatus('ms'),4000);}catch(e){setStatus('ms','Error: '+e.message,'error');btn.disabled=false;btn.textContent='✓ Mark as sold';}}
-async function markSold(record,channel,salePrice,saleDate){const f=record.fields;const atFields={'Status':'Sold','Sales channel':channel};if(salePrice)atFields['Price ($)']=parseFloat(salePrice);if(saleDate)atFields['Date sold']=saleDate;await atWriteNow(record.id,atFields);Object.assign(f,atFields);try{await fetch(SERVER_URL+'/mark-sold',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shopify_url:f['Shopify URL'],eb_number:f['EB Number']})});}catch(e){console.warn('Shopify mark sold failed:',e.message);}
+// What the buyer paid goes to Gross sale amount ($); the listed Price ($) is left as-is.
+async function markSold(record,channel,salePrice,saleDate){const f=record.fields;const atFields={'Status':'Sold','Sales channel':channel};if(salePrice)atFields['Gross sale amount ($)']=parseFloat(salePrice);if(saleDate)atFields['Date sold']=saleDate;await atWriteNow(record.id,atFields);Object.assign(f,atFields);try{await fetch(SERVER_URL+'/mark-sold',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shopify_url:f['Shopify URL'],eb_number:f['EB Number']})});}catch(e){console.warn('Shopify mark sold failed:',e.message);}
   // Sold → move this piece's Drive folder into "Sold" (non-fatal, background).
   driveMoveFolder(f['Drive Folder ID'],'sold');}
 
@@ -4281,10 +4319,12 @@ async function saApply(){if(!saSelectedRecord||!saType)return;const {op,price}=s
 async function saRemove(){if(!saSelectedRecord)return;const f=saSelectedRecord.fields;const eb=f['EB Number'];const op=saOrigPrice();const btn=document.getElementById('sa-remove-btn');btn.disabled=true;btn.textContent='⏳ Removing…';setStatus('sa','Restoring full price…','loading');try{const atFields={'Sale status':'None','Sale price ($)':null,'Markdown (%)':null,'Sale date':null};await atWriteNow(saSelectedRecord.id,atFields);Object.assign(f,atFields);const r=await fetch(SERVER_URL+'/mark-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:eb,action:'remove',original_price:op})});const d=await r.json().catch(()=>({}));if(!r.ok||d.error)throw new Error(d.error||('Shopify update failed ('+r.status+')'));const result=document.getElementById('sa-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(eb)+'</strong> back to full price'+(op!=null?' ($'+op.toFixed(2)+')':'')+'.';setStatus('sa','Full price restored ✓','success');document.getElementById('sa-remove-row').style.display='none';document.getElementById('sa-pct').value='';document.getElementById('sa-price').value='';document.getElementById('sa-preview-line').style.display='none';document.getElementById('sa-warn').style.display='none';document.getElementById('sa-type-sale').classList.remove('selected');document.getElementById('sa-type-clear').classList.remove('selected');saType=null;saUpdateApplyState();saRenderCard();populateSASelect();populateHomeStats();setTimeout(()=>{hideStatus('sa');btn.disabled=false;btn.textContent='↩ Remove markdown — restore full price';},4000);}catch(e){setStatus('sa','Error: '+e.message,'error');btn.disabled=false;btn.textContent='↩ Remove markdown — restore full price';}}
 
 // ── CRAFT FAIR ──
-function populateCFInventory(filter=''){const container=document.getElementById('cf-inventory');const records=cfCachedRecords.filter(r=>{const f=r.fields,status=f['Status']||'';if(status==='Archived')return false;if(!filter)return true;const q=filter.toLowerCase();return(f['EB Number']||'').toLowerCase().includes(q)||(f['Type']||'').toLowerCase().includes(q)||(f['Season']||'').toLowerCase().includes(q)||(f['Occasion']||'').toLowerCase().includes(q);});if(records.length===0){container.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:12px">🔍</div><div style="font-size:14px">No pieces found</div></div>';return;}const order={'In stock':0,'Photographed':0,'Ready to list':0,'Listed':1,'Craft fair':1,'Hair Salon':1,'Sold':2};records.sort((a,b)=>(order[a.fields['Status']]||3)-(order[b.fields['Status']]||3));container.innerHTML=records.map(r=>{const f=r.fields,isSold=f['Status']==='Sold'||f['Status']==='Archived';const price=f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—';const seasonDisplay=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||'');const tags=[seasonDisplay,f['Occasion']&&f['Occasion']!=='None'?f['Occasion']:null,f['Status']].filter(Boolean).join(' · ');return'<div class="cf-piece-card'+(isSold?' sold-out':'')+'" onclick="cfTapPiece(\''+r.id+'\')">'+'<div class="cf-piece-thumb-placeholder">'+cfTypeIcon(f['Type'])+'</div>'+'<div class="cf-piece-info"><div class="cf-piece-eb">'+escHtml(f['EB Number']||'—')+'</div>'+'<div class="cf-piece-type">'+escHtml(f['Type']||'Arrangement')+'</div>'+'<div class="cf-piece-tags">'+escHtml(tags)+'</div></div>'+(isSold?'<div class="cf-sold-badge">SOLD</div>':'<div class="cf-piece-price">'+price+'</div>')+'</div>';}).join('');}
+// Selling price at a show: the Craft show price ($) on the piece's tag when one was set, else the listed Price ($).
+function cfShowPrice(f){const v=f['Craft show price ($)']!=null?f['Craft show price ($)']:f['Price ($)'];return v!=null?Number(v):null;}
+function populateCFInventory(filter=''){const container=document.getElementById('cf-inventory');const records=cfCachedRecords.filter(r=>{const f=r.fields,status=f['Status']||'';if(status==='Archived')return false;if(!filter)return true;const q=filter.toLowerCase();return(f['EB Number']||'').toLowerCase().includes(q)||(f['Type']||'').toLowerCase().includes(q)||[].concat(f['Season']||[]).join(' ').toLowerCase().includes(q)||[].concat(f['Occasion']||[]).join(' ').toLowerCase().includes(q)||(f['Reference name']||'').toLowerCase().includes(q);});if(records.length===0){container.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:12px">🔍</div><div style="font-size:14px">No pieces found</div></div>';return;}const order={'In stock':0,'Photographed':0,'Ready to list':0,'Listed':1,'Craft fair':1,'Hair Salon':1,'Sold':2};records.sort((a,b)=>(order[a.fields['Status']]||3)-(order[b.fields['Status']]||3));container.innerHTML=records.map(r=>{const f=r.fields,isSold=f['Status']==='Sold'||f['Status']==='Archived';const sp=cfShowPrice(f),price=sp!=null?'$'+sp.toFixed(2):'—';const seasonDisplay=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||'');const tags=[seasonDisplay,f['Occasion']&&f['Occasion']!=='None'?f['Occasion']:null,f['Status']].filter(Boolean).join(' · ');return'<div class="cf-piece-card'+(isSold?' sold-out':'')+'" onclick="cfTapPiece(\''+r.id+'\')">'+'<div class="cf-piece-thumb-placeholder">'+cfTypeIcon(f['Type'])+'</div>'+'<div class="cf-piece-info"><div class="cf-piece-eb">'+escHtml(f['EB Number']||'—')+'</div>'+'<div class="cf-piece-type">'+escHtml(f['Type']||'Arrangement')+'</div>'+'<div class="cf-piece-tags">'+escHtml(tags)+'</div></div>'+(isSold?'<div class="cf-sold-badge">SOLD</div>':'<div class="cf-piece-price">'+price+'</div>')+'</div>';}).join('');}
 function cfTypeIcon(type){const icons={'Wreath':'🌿','Home decor':'🌸','Outdoor planter':'🪴','Centerpiece':'💐','Wall decor':'🖼','Swag':'🌾','Custom order':'✨','Add-on':'➕'};return icons[type]||'🌺';}
 function cfFilter(){populateCFInventory(document.getElementById('cf-search').value.trim());}
-function cfTapPiece(recordId){const record=cfCachedRecords.find(r=>r.id===recordId);if(!record)return;const f=record.fields;if(f['Status']==='Sold'||f['Status']==='Archived'){alert(escHtml(f['EB Number'])+' is already sold.');return;}modalSelectedRecord=record;document.getElementById('modal-piece-title').textContent=f['EB Number']||'Mark as sold';document.getElementById('modal-piece-sub').textContent=(f['Type']||'Arrangement')+((f['Season'])?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Price ($)']!=null?' · $'+Number(f['Price ($)']).toFixed(2):'');document.getElementById('modal-price').value=f['Price ($)']!=null?Number(f['Price ($)']).toFixed(2):'';document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>{b.classList.remove('selected');if(b.querySelector('.channel-label').textContent==='Craft fair'){b.classList.add('selected');modalSelectedChannel='Craft fair';}});document.getElementById('modal-status').style.display='none';document.getElementById('modal-confirm-btn').disabled=false;document.getElementById('modal-confirm-btn').textContent='✓ Mark as sold';document.getElementById('sold-modal').classList.add('open');}
+function cfTapPiece(recordId){const record=cfCachedRecords.find(r=>r.id===recordId);if(!record)return;const f=record.fields;if(f['Status']==='Sold'||f['Status']==='Archived'){alert(escHtml(f['EB Number'])+' is already sold.');return;}modalSelectedRecord=record;document.getElementById('modal-piece-title').textContent=f['EB Number']||'Mark as sold';document.getElementById('modal-piece-sub').textContent=(f['Type']||'Arrangement')+((f['Season'])?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Price ($)']!=null?' · $'+Number(f['Price ($)']).toFixed(2):'')+(f['Craft show price ($)']!=null?' · show $'+Number(f['Craft show price ($)']).toFixed(2):'');const sp=cfShowPrice(f);document.getElementById('modal-price').value=sp!=null?sp.toFixed(2):'';document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>{b.classList.remove('selected');if(b.querySelector('.channel-label').textContent==='Craft fair'){b.classList.add('selected');modalSelectedChannel='Craft fair';}});document.getElementById('modal-status').style.display='none';document.getElementById('modal-confirm-btn').disabled=false;document.getElementById('modal-confirm-btn').textContent='✓ Mark as sold';document.getElementById('sold-modal').classList.add('open');}
 function modalSelectChannel(el,channel){document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');modalSelectedChannel=channel;}
 function closeSoldModal(e){if(e.target===document.getElementById('sold-modal'))document.getElementById('sold-modal').classList.remove('open');}
 async function modalConfirmSale(){if(!modalSelectedRecord||!modalSelectedChannel){alert('Select a sale channel.');return;}const salePrice=document.getElementById('modal-price').value.trim();const btn=document.getElementById('modal-confirm-btn');btn.disabled=true;btn.textContent='⏳ Recording...';const statusEl=document.getElementById('modal-status');statusEl.style.display='flex';statusEl.className='status-bar loading';document.getElementById('modal-status-msg').textContent='Recording sale...';try{await markSold(modalSelectedRecord,modalSelectedChannel,salePrice,new Date().toISOString().split('T')[0]);statusEl.className='status-bar success';document.getElementById('modal-status-msg').textContent='✓ Sold! Record updated.';btn.textContent='✓ Done!';populateHomeStats();populateCFInventory(document.getElementById('cf-search').value.trim());populateMSSelect();populateLPSelect();setTimeout(()=>document.getElementById('sold-modal').classList.remove('open'),1800);}catch(e){statusEl.className='status-bar error';document.getElementById('modal-status-msg').textContent='Error: '+e.message;btn.disabled=false;btn.textContent='✓ Mark as sold';}}
@@ -4528,6 +4568,91 @@ function printQRTag(ebNumber, price) {
     : '<div class="tag">' + inner + '</div>';
   var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>' + css + '</head><body>' + body + '<script>window.onload=function(){setTimeout(function(){window.print();},800);};<\/script></body></html>';
   win.document.write(html); win.document.close();
+}
+
+// ── CRAFT SHOW TAG SCREEN ──
+// Same 3×2 tag as printQRTag, minus the QR, with a show price that can differ from the
+// listed Price ($). The printed price is saved to 'Craft show price ($)'; Shopify is untouched.
+let cstRecordId = null;
+function cstInit() {
+  cstRecordId = null;
+  document.getElementById('cst-eb').value = '';
+  document.getElementById('cst-price').value = '';
+  document.getElementById('cst-piece').style.display = 'none';
+  document.getElementById('cst-status').textContent = '';
+  cstPreview();
+  setTimeout(() => document.getElementById('cst-eb').focus(), 50);
+}
+function cstMatches(q) {
+  q = (q || '').trim().toLowerCase();
+  if (!q) return [];
+  return allRecords.filter(r => r.fields['Status'] !== 'Archived' && ((r.fields['EB Number'] || '').toLowerCase().includes(q) || (r.fields['Reference name'] || '').toLowerCase().includes(q)));
+}
+function cstSearch(val) {
+  const box = document.getElementById('cst-results');
+  if (cstRecordId) { cstRecordId = null; document.getElementById('cst-piece').style.display = 'none'; cstPreview(); }
+  const hits = cstMatches(val).slice(0, 12);
+  if (!val.trim() || !hits.length) { box.style.display = 'none'; return; }
+  box.innerHTML = hits.map(r => '<div onmousedown="cstSelect(\'' + r.id + '\')" style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px"><strong>' + escHtml(r.fields['EB Number'] || '—') + '</strong>' + (r.fields['Reference name'] ? ' <span style="color:var(--text-muted)">' + escHtml(r.fields['Reference name']) + '</span>' : '') + '</div>').join('');
+  box.style.display = 'block';
+}
+function cstPickTyped() {
+  const q = document.getElementById('cst-eb').value.trim().toLowerCase();
+  const exact = allRecords.find(r => (r.fields['EB Number'] || '').toLowerCase() === q);
+  const hits = exact ? [exact] : cstMatches(q);
+  if (hits.length === 1) cstSelect(hits[0].id);
+  else document.getElementById('cst-status').textContent = hits.length ? hits.length + ' pieces match — pick one from the list.' : 'No piece found for "' + q.toUpperCase() + '".';
+}
+function cstSelect(recordId) {
+  const rec = allRecords.find(r => r.id === recordId);
+  if (!rec) return;
+  const f = rec.fields;
+  cstRecordId = recordId;
+  document.getElementById('cst-eb').value = f['EB Number'] || '';
+  document.getElementById('cst-results').style.display = 'none';
+  const listed = f['Price ($)'] != null ? Number(f['Price ($)']) : null;
+  const lastShow = f['Craft show price ($)'] != null ? Number(f['Craft show price ($)']) : null;
+  const start = lastShow != null ? lastShow : listed;
+  document.getElementById('cst-price').value = start != null ? start.toFixed(2) : '';
+  document.getElementById('cst-listed').textContent = (listed != null ? 'Listed price: $' + listed.toFixed(2) : 'No listed price') + (lastShow != null ? ' · last show price: $' + lastShow.toFixed(2) : '');
+  document.getElementById('cst-piece').style.display = 'block';
+  document.getElementById('cst-status').textContent = f['Status'] === 'Sold' ? '⚠ This piece is marked Sold.' : '';
+  cstPreview();
+  const p = document.getElementById('cst-price'); p.focus(); p.select();
+}
+function cstPrice() {
+  const v = parseFloat(String(document.getElementById('cst-price').value).replace(/[$,\s]/g, ''));
+  return isFinite(v) && v > 0 ? Math.round(v * 100) / 100 : null;
+}
+function cstTagParts() {
+  const rec = cstRecordId && allRecords.find(r => r.id === cstRecordId);
+  if (!rec) return null;
+  const price = cstPrice();
+  return { eb: rec.fields['EB Number'] || '', ref: (rec.fields['Reference name'] || '').trim(), price: price != null ? '$' + price.toFixed(2) : '' };
+}
+function cstPreview() {
+  const box = document.getElementById('cst-preview'), btn = document.getElementById('cst-print-btn');
+  const t = cstTagParts();
+  btn.disabled = !(t && t.price);
+  if (!t) { box.innerHTML = '<div class="t-empty">Enter an EB number to preview the tag</div>'; return; }
+  box.innerHTML = '<div class="t-brand">Eternal Blooms</div><div class="t-eb">' + escHtml(t.eb) + '</div>' + (t.price ? '<div class="t-price">' + t.price + '</div>' : '') + (t.ref ? '<div class="t-sub">' + escHtml(t.ref) + '</div>' : '');
+}
+function cstPrint() {
+  const t = cstTagParts(), price = cstPrice();
+  if (!t) { alert('Pick a piece first.'); return; }
+  if (price == null) { alert('Enter a craft show price.'); return; }
+  // Open the print window first, inside the click, so pop-up blockers allow it.
+  const win = window.open('', '_blank');
+  if (!win) { alert('Pop-up blocked — allow pop-ups for this site to print the tag.'); return; }
+  const inner = '<div class="brand">Eternal Blooms</div><div class="eb">' + escHtml(t.eb) + '</div><div class="price">' + t.price + '</div>' + (t.ref ? '<div class="sub">' + escHtml(t.ref) + '</div>' : '');
+  const css = ['<style>','@page { size: 3in 2in; margin: 0mm; }','@media print { @page { margin: 0mm !important; } html, body { margin: 0 !important; padding: 0 !important; } }','html, body { margin: 0 !important; padding: 0 !important; }','body { width: 3in; overflow: hidden; }','* { box-sizing: border-box; }','.tag { width: 3in; height: 2in; display: flex; flex-direction: column; justify-content: center; font-family: Arial, sans-serif; background: #fff; padding: 0.09in 0.14in; overflow: hidden; }','.brand { font-size: 10pt; font-weight: 400; letter-spacing: .1em; text-transform: uppercase; color: #bb8588; margin-bottom: 4px; white-space: nowrap; }','.eb { font-size: 10pt; font-weight: 800; letter-spacing: .03em; color: #2b2622; line-height: 1.15; margin-bottom: 4px; white-space: nowrap; }','.price { font-size: 20pt; font-weight: 800; color: #bb8588; margin-bottom: 4px; }','.sub { font-size: 14pt; color: #bb8588; letter-spacing: .02em; line-height: 1.15; }','</style>'].join('\n');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>' + css + '</head><body><div class="tag">' + inner + '</div><script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>');
+  win.document.close();
+  const status = document.getElementById('cst-status');
+  queueFieldWrite(cstRecordId, {'Craft show price ($)': price});
+  flushWrites(cstRecordId)
+    .then(() => { status.textContent = '✓ Show price $' + price.toFixed(2) + ' saved for ' + t.eb; })
+    .catch(e => { status.textContent = 'Printed — price not saved to Airtable yet (kept on this device, will retry): ' + e.message; });
 }
 
 // ── PRINT TAG SCREEN ──
@@ -5332,6 +5457,14 @@ function wipRestoreNP(saved) {
   if(saved.refName){const el=document.getElementById('np-ref-name');if(el)el.value=saved.refName;}
   if(saved.ebNumber){npAssignedEB=saved.ebNumber;npCurrentEB=saved.ebNumber;}
   if(saved.recordId){npCurrentRecordId=saved.recordId;}
+  // npSetMode('edit') disables Save changes until a piece is picked — re-select the
+  // resumed piece so the button isn't stuck greyed out.
+  if(npMode==='edit'&&npCurrentRecordId){
+    const sel=document.getElementById('np-edit-select'); if(sel) sel.value=npCurrentRecordId;
+    const rec=allRecords.find(r=>r.id===npCurrentRecordId), srch=document.getElementById('np-edit-search');
+    if(srch&&rec) srch.value=pieceLabel(rec.fields)||(rec.fields['EB Number']||'');
+    const btn=document.getElementById('np-primary-btn'); if(btn) btn.disabled=false;
+  }
   ['np-width','np-height','np-depth','np-weight-lb','np-weight-oz','np-ship-l','np-ship-w','np-ship-h','np-comp-l','np-comp-w','np-comp-h'].forEach(id=>{const el=document.getElementById(id);if(el&&saved[id])el.value=saved[id];});;
   if(saved.ebNumber&&saved.step>=2){
     const ebDisp=document.getElementById('np-eb-num');if(ebDisp)ebDisp.textContent=saved.ebNumber;
