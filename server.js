@@ -1325,6 +1325,7 @@ app.post('/mark-sold', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized — complete OAuth first.' });
   const { shopify_url, eb_number } = req.body;
   if (!shopify_url && !eb_number) return res.status(400).json({ error: 'shopify_url or eb_number required' });
+  if (eb_number) mktHandleSoldSoon(String(eb_number).trim()); // background: pins for this piece
   try {
     let productId = null;
     if (eb_number) {
@@ -1480,6 +1481,7 @@ app.post('/webhooks/orders-create', async (req, res) => {
       if (dateSold) fields['Date sold'] = dateSold;
       await airtableReq(`${AT_INVENTORY_TBL}/${recs[0].id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) });
       console.log(`orders-create ${orderRef}: marked ${sku} as Sold (Shopify) in Airtable`);
+      mktHandleSoldSoon(sku); // background: skip unposted drafts, point live pins at similar pieces
     } catch (e) {
       transientError = true;
       if (isBillingLimitError(e)) billingLimited = true;
@@ -2639,11 +2641,11 @@ async function mktFetchAll() {
   return out;
 }
 
-// Active, in-stock Shopify products with their SKU (= EB Number), tags and photos.
+// Active, in-stock Shopify products with their SKU (= EB Number), tags, photos and videos.
 async function mktShopifyCandidates() {
   const out = []; let cursor = null;
   do {
-    const d = await shopifyGraphql(`query($after:String){products(first:100,after:$after,query:"status:active inventory_total:>0"){nodes{title handle onlineStoreUrl productType tags description(truncateAt:700) variants(first:1){nodes{sku}} media(first:6){nodes{... on MediaImage{image{url width height altText}}}}} pageInfo{hasNextPage endCursor}}}`, { after: cursor });
+    const d = await shopifyGraphql(`query($after:String){products(first:100,after:$after,query:"status:active inventory_total:>0"){nodes{title handle onlineStoreUrl productType tags description(truncateAt:700) variants(first:1){nodes{sku}} media(first:10){nodes{... on MediaImage{image{url width height altText}} ... on Video{duration sources{url format width height}}}}} pageInfo{hasNextPage endCursor}}}`, { after: cursor });
     const conn = d && d.data && d.data.products;
     if (!conn) throw new Error('Shopify product query failed: ' + JSON.stringify((d && d.errors) || d));
     out.push(...conn.nodes);
@@ -2657,6 +2659,31 @@ function mktPickImage(p) {
   const imgs = ((p.media && p.media.nodes) || []).map(n => n && n.image).filter(i => i && i.url);
   if (!imgs.length) return null;
   return imgs.slice().sort((a, b) => (b.height / b.width) - (a.height / a.width))[0];
+}
+
+// Listing videos become video pins when Pinterest will show them well: at least 4 s long
+// (Pinterest's minimum) and vertical or square (landscape plays tiny in the feed). Shopify
+// keeps MP4 renditions of each .mov upload; take the largest one, up to 1080×1920.
+const PIN_VIDEO_MIN_MS = 4000;
+function mktPickVideo(p) {
+  const vids = ((p.media && p.media.nodes) || []).filter(n => n && n.sources && n.duration >= PIN_VIDEO_MIN_MS);
+  for (const v of vids) {
+    const mp4 = v.sources.filter(s => s.format === 'mp4' && s.url && s.height >= s.width && s.height <= 1920)
+      .sort((a, b) => b.height - a.height)[0];
+    if (mp4) return mp4.url;
+  }
+  return null;
+}
+
+// Where a pin points once its piece sells: the matching in-stock collection.
+const SHOP_COLLECTIONS_URL = 'https://eternalbloomsbypatti.com/collections/';
+function mktSimilarUrl(p) {
+  const t = (p.tags || []).join(' ').toLowerCase();
+  if (p.productType === 'Wreath') return SHOP_COLLECTIONS_URL + 'wreaths';
+  if (p.productType === 'Outdoor planter') return SHOP_COLLECTIONS_URL + 'outdoor-planters';
+  for (const s of ['fall', 'winter', 'spring', 'summer']) if (t.includes('season_' + s)) return SHOP_COLLECTIONS_URL + s + '-arrangements';
+  if (/season_all[_ ]?season/.test(t)) return SHOP_COLLECTIONS_URL + 'all-season-arrangements';
+  return SHOP_COLLECTIONS_URL + 'shop-all';
 }
 
 function mktSeasonScore(tags, month) {
@@ -2704,51 +2731,88 @@ Return ONLY valid JSON, no code fences: {"title": "...", "description": "...", "
   };
 }
 
+// Draft pins for in-stock pieces not yet in the queue, favoring the seasons shoppers are
+// planning for. Nothing is posted; rows land as Draft. Used by the button and the weekly run.
+async function mktDraftBatch(count) {
+  const [queue, products] = await Promise.all([mktRecords(), mktShopifyCandidates(), invEnsure()]);
+  const queued = new Set(queue.map(r => String((r.fields || {})['EB Number'] || '').trim()).filter(Boolean));
+  const month = new Date().getMonth();
+  const eligible = products
+    .map(p => ({ p, sku: String((p.variants.nodes[0] || {}).sku || '').trim(), img: mktPickImage(p), video: mktPickVideo(p) }))
+    .filter(c => c.sku && c.img && c.p.onlineStoreUrl && !queued.has(c.sku))
+    .map(c => ({ ...c, score: mktSeasonScore(c.p.tags, month) + Math.random() }))
+    .sort((a, b) => b.score - a.score);
+  const pool = eligible.slice(0, count);
+  const created = [], failed = [];
+  for (const c of pool) {
+    try {
+      const pin = await mktDraftPin(c.p, c.img);
+      const inv = invFindBySku(c.sku)[0];
+      const now = new Date().toISOString();
+      const fields = {
+        'Pin Title': pin.title, 'EB Number': c.sku, 'Channel': 'Pinterest', 'Status': 'Draft',
+        'Description': pin.description, 'Board': pin.board, 'Alt Text': pin.alt_text,
+        'Product URL': c.p.onlineStoreUrl, 'Image URL': c.img.url, 'Similar URL': mktSimilarUrl(c.p),
+        'Media': c.video ? 'Video' : 'Photo', 'Drafted': now, 'Status changed': now
+      };
+      if (c.video) fields['Video URL'] = c.video;
+      if (inv) fields['Inventory'] = [inv.id];
+      created.push({ fields });
+    } catch (e) { failed.push({ sku: c.sku, error: e.message }); }
+  }
+  const records = [];
+  for (let i = 0; i < created.length; i += 10) {
+    const data = await airtableReq(AT_MARKETING_TBL, { method: 'POST', body: JSON.stringify({ records: created.slice(i, i + 10), typecast: true }) });
+    records.push(...(data.records || []));
+  }
+  mktCacheUpsert(records);
+  return { records, failed, remaining: eligible.length - pool.length };
+}
+
+// Weekly drafts without anyone tapping a button. Render's free tier sleeps, so instead of a
+// timer this rides on the app's daily open: the queue read kicks off a background batch when
+// nothing was drafted in the last 7 days and fewer than 5 drafts are waiting. The same pass
+// re-points pins for pieces that sold through a path that didn't call mktHandleSold.
+const MKT_AUTO_EVERY_MS = 7 * 24 * 60 * 60 * 1000;
+const MKT_AUTO_BATCH = 5;
+let mktAutoBusy = false, mktSweepAt = 0;
+function mktMaybeAutoRun(records) {
+  if (mktAutoBusy || !shopifyAccessToken || !ANTHROPIC_API_KEY) return;
+  const lastDrafted = Math.max(0, ...records.map(r => Date.parse((r.fields || {})['Drafted'] || '') || 0));
+  const waiting = records.filter(r => (r.fields || {})['Status'] === 'Draft').length;
+  const draftDue = Date.now() - lastDrafted > MKT_AUTO_EVERY_MS && waiting < MKT_AUTO_BATCH;
+  const sweepDue = Date.now() - mktSweepAt > 24 * 60 * 60 * 1000;
+  if (!draftDue && !sweepDue) return;
+  mktAutoBusy = true;
+  (async () => {
+    if (sweepDue) { mktSweepAt = Date.now(); await mktSoldSweep(); }
+    if (draftDue) {
+      const out = await mktDraftBatch(MKT_AUTO_BATCH);
+      console.log(`marketing: weekly auto-draft created ${out.records.length} pin draft(s)` + (out.failed.length ? `, ${out.failed.length} failed` : ''));
+    }
+  })().catch(e => console.warn('marketing: auto run failed —', e.message)).finally(() => { mktAutoBusy = false; });
+}
+
 // GET /marketing/queue — every queue row, newest draft first.
 app.get('/marketing/queue', async (req, res) => {
-  try { res.json({ records: await mktRecords({ force: req.query.refresh === '1' }) }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const records = await mktRecords({ force: req.query.refresh === '1' });
+    mktMaybeAutoRun(records);
+    res.json({ records, autoDrafting: mktAutoBusy });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /marketing/draft-pins { count } — draft pins for in-stock pieces not yet in the queue,
-// favoring the seasons shoppers are planning for. Nothing is posted; rows land as Draft.
+// POST /marketing/draft-pins { count } — draft a batch now (the Marketing screen's button).
 app.post('/marketing/draft-pins', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Shopify not authorized — visit /auth' });
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server.' });
   const count = Math.max(1, Math.min(10, parseInt((req.body && req.body.count) || 5, 10) || 5));
-  try {
-    const [queue, products] = await Promise.all([mktRecords(), mktShopifyCandidates(), invEnsure()]);
-    const queued = new Set(queue.map(r => String((r.fields || {})['EB Number'] || '').trim()).filter(Boolean));
-    const month = new Date().getMonth();
-    const eligible = products
-      .map(p => ({ p, sku: String((p.variants.nodes[0] || {}).sku || '').trim(), img: mktPickImage(p) }))
-      .filter(c => c.sku && c.img && c.p.onlineStoreUrl && !queued.has(c.sku))
-      .map(c => ({ ...c, score: mktSeasonScore(c.p.tags, month) + Math.random() }))
-      .sort((a, b) => b.score - a.score);
-    const pool = eligible.slice(0, count);
-    const created = [], failed = [];
-    for (const c of pool) {
-      try {
-        const pin = await mktDraftPin(c.p, c.img);
-        const inv = invFindBySku(c.sku)[0];
-        const now = new Date().toISOString();
-        const fields = {
-          'Pin Title': pin.title, 'EB Number': c.sku, 'Channel': 'Pinterest', 'Status': 'Draft',
-          'Description': pin.description, 'Board': pin.board, 'Alt Text': pin.alt_text,
-          'Product URL': c.p.onlineStoreUrl, 'Image URL': c.img.url, 'Drafted': now, 'Status changed': now
-        };
-        if (inv) fields['Inventory'] = [inv.id];
-        created.push({ fields });
-      } catch (e) { failed.push({ sku: c.sku, error: e.message }); }
-    }
-    const records = [];
-    for (let i = 0; i < created.length; i += 10) {
-      const data = await airtableReq(AT_MARKETING_TBL, { method: 'POST', body: JSON.stringify({ records: created.slice(i, i + 10), typecast: true }) });
-      records.push(...(data.records || []));
-    }
-    mktCacheUpsert(records);
-    res.json({ success: true, records, failed, remaining: eligible.length - pool.length });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  // One batch at a time — the weekly run and the button would otherwise draft the same pieces.
+  if (mktAutoBusy) return res.status(409).json({ error: 'Pins are already being drafted — check back in a minute.' });
+  mktAutoBusy = true;
+  try { res.json({ success: true, ...(await mktDraftBatch(count)) }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+  finally { mktAutoBusy = false; }
 });
 
 // PATCH /marketing/queue/:id { fields } — edit a draft or move it along Draft → Approved → Posted / Skipped.
@@ -2764,12 +2828,254 @@ app.patch('/marketing/queue/:id', async (req, res) => {
   try {
     const data = await airtableReq(`${AT_MARKETING_TBL}/${req.params.id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) });
     mktCacheUpsert([data]);
+    // Approving is the go-ahead: once Pinterest is connected the pin posts itself.
+    if (fields['Status'] === 'Approved' && pinConnected()) mktPostPin(req.params.id);
     res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// POST /marketing/queue/:id/post — retry posting an approved pin after an error.
+app.post('/marketing/queue/:id/post', async (req, res) => {
+  if (!pinConnected()) return res.status(409).json({ error: 'Pinterest is not connected yet.' });
+  mktPostPin(req.params.id);
+  res.status(202).json({ success: true, posting: true });
+});
+
+// ── Pinterest connection (phase 2) ────────────────────────────
+// OAuth once at /pinterest-auth. Pinterest rotates refresh tokens, so a one-time paste
+// into Render (the Shopify/Drive pattern) would go stale. The tokens are saved instead
+// in the Airtable "Server State" table, AES-256-GCM encrypted with a key derived from
+// PINTEREST_APP_SECRET, so they survive restarts and are unreadable in Airtable.
+const PINTEREST_APP_ID     = process.env.PINTEREST_APP_ID;
+const PINTEREST_APP_SECRET = process.env.PINTEREST_APP_SECRET;
+// Trial-access apps may only be allowed to write to Pinterest's sandbox; set
+// PINTEREST_API_BASE=https://api-sandbox.pinterest.com/v5 in Render to test there.
+const PINTEREST_API_BASE = (process.env.PINTEREST_API_BASE || 'https://api.pinterest.com/v5').replace(/\/$/, '');
+const PINTEREST_SCOPES = 'boards:read,boards:write,pins:read,pins:write,user_accounts:read';
+const AT_STATE_TBL = 'tbljykqkWi9metp4c';
+const PIN_STATE_KEY = 'pinterest_auth';
+const pinAuth = { loaded: false, accessToken: null, refreshToken: null, expiresAt: 0, username: null };
+const pinOauthStates = new Map(); // state → issued-at, for CSRF protection on the callback
+
+function pinCipherKey() { return crypto.createHash('sha256').update('eb-pinterest-auth:' + PINTEREST_APP_SECRET).digest(); }
+function pinEncrypt(obj) {
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', pinCipherKey(), iv);
+  const ct = Buffer.concat([c.update(JSON.stringify(obj), 'utf8'), c.final()]);
+  return 'enc:' + Buffer.concat([iv, c.getAuthTag(), ct]).toString('base64');
+}
+function pinDecrypt(s) {
+  const b = Buffer.from(String(s).replace(/^enc:/, ''), 'base64');
+  const d = crypto.createDecipheriv('aes-256-gcm', pinCipherKey(), b.subarray(0, 12));
+  d.setAuthTag(b.subarray(12, 28));
+  return JSON.parse(Buffer.concat([d.update(b.subarray(28)), d.final()]).toString('utf8'));
+}
+function pinConnected() { return !!(PINTEREST_APP_SECRET && (pinAuth.refreshToken || pinAuth.accessToken)); }
+
+async function pinLoadAuth() {
+  if (pinAuth.loaded || !PINTEREST_APP_SECRET) return;
+  const data = await airtableReq(`${AT_STATE_TBL}?maxRecords=1&filterByFormula=${encodeURIComponent(`{Key}='${PIN_STATE_KEY}'`)}`, { source: 'pinterest:load' });
+  const rec = (data.records || [])[0];
+  if (rec && rec.fields['Value']) {
+    try { Object.assign(pinAuth, pinDecrypt(rec.fields['Value'])); }
+    catch (e) { console.warn('Pinterest: saved connection could not be decrypted (app secret changed?) — reconnect at /pinterest-auth'); }
+  }
+  pinAuth.loaded = true;
+}
+async function pinSaveAuth() {
+  const { accessToken, refreshToken, expiresAt, username } = pinAuth;
+  await airtableReq(AT_STATE_TBL, { method: 'PATCH', source: 'pinterest:save', body: JSON.stringify({
+    performUpsert: { fieldsToMergeOn: ['Key'] },
+    records: [{ fields: { 'Key': PIN_STATE_KEY, 'Value': pinEncrypt({ accessToken, refreshToken, expiresAt, username }), 'Updated': new Date().toISOString() } }]
+  }) });
+}
+async function pinTokenRequest(params) {
+  const r = await fetch(`${PINTEREST_API_BASE}/oauth/token`, {
+    method: 'POST',
+    headers: { 'Authorization': 'Basic ' + Buffer.from(`${PINTEREST_APP_ID}:${PINTEREST_APP_SECRET}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(params)
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.access_token) throw new Error('Pinterest token error: ' + (d.message || JSON.stringify(d)));
+  pinAuth.accessToken = d.access_token;
+  if (d.refresh_token) pinAuth.refreshToken = d.refresh_token;
+  pinAuth.expiresAt = Date.now() + (d.expires_in || 2592000) * 1000;
+}
+// A valid access token, refreshed when it's within a day of expiring.
+async function pinAccessToken() {
+  await pinLoadAuth();
+  if (!pinConnected()) throw new Error('Pinterest is not connected — visit /pinterest-auth');
+  if (!pinAuth.accessToken || Date.now() > pinAuth.expiresAt - 24 * 60 * 60 * 1000) {
+    await pinTokenRequest({ grant_type: 'refresh_token', refresh_token: pinAuth.refreshToken });
+    await pinSaveAuth();
+  }
+  return pinAuth.accessToken;
+}
+async function pinApi(path, opts = {}) {
+  const r = await fetch(PINTEREST_API_BASE + path, {
+    method: opts.method || 'GET',
+    headers: { 'Authorization': 'Bearer ' + await pinAccessToken(), 'Content-Type': 'application/json' },
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  const d = r.status === 204 ? {} : await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`Pinterest ${opts.method || 'GET'} ${path} failed (${r.status}): ${d.message || JSON.stringify(d)}`);
+  return d;
+}
+
+const PIN_PAGE = (title, body) => `<html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Poppins:wght@300;400;500&display=swap" rel="stylesheet"><style>body{font-family:'Poppins',system-ui,sans-serif;background:#fbfaf9;color:#2b2622;padding:48px 40px;max-width:560px;margin:0 auto;line-height:1.7}h2{font-family:'DM Serif Display',Georgia,serif;font-weight:400;color:#bb8588;font-size:28px;margin-bottom:10px}p{color:#5b5248;font-size:14px}</style></head><body><h2>${title}</h2>${body}</body></html>`;
+
+app.get('/pinterest-auth', (req, res) => {
+  if (!PINTEREST_APP_ID || !PINTEREST_APP_SECRET) return res.status(500).send(PIN_PAGE('Pinterest isn’t set up yet', '<p>Add PINTEREST_APP_ID and PINTEREST_APP_SECRET to the server’s environment in Render, then try again.</p>'));
+  const state = crypto.randomBytes(16).toString('hex');
+  pinOauthStates.set(state, Date.now());
+  const authUrl = 'https://www.pinterest.com/oauth/?client_id=' + encodeURIComponent(PINTEREST_APP_ID)
+    + '&redirect_uri=' + encodeURIComponent(`${SERVER_URL}/pinterest-auth/callback`)
+    + '&response_type=code&scope=' + encodeURIComponent(PINTEREST_SCOPES) + '&state=' + state;
+  res.redirect(authUrl);
+});
+
+app.get('/pinterest-auth/callback', async (req, res) => {
+  const { code, state, error } = req.query;
+  if (error) return res.status(400).send(PIN_PAGE('Pinterest didn’t connect', `<p>Pinterest said: ${String(error).replace(/[<>&]/g, '')}. Close this tab and try Connect Pinterest again.</p>`));
+  const issued = pinOauthStates.get(state);
+  pinOauthStates.delete(state);
+  if (!issued || Date.now() - issued > 15 * 60 * 1000) return res.status(400).send(PIN_PAGE('Link expired', '<p>This connect link is old or was already used. Close this tab and tap Connect Pinterest again.</p>'));
+  try {
+    await pinTokenRequest({ grant_type: 'authorization_code', code, redirect_uri: `${SERVER_URL}/pinterest-auth/callback`, continuous_refresh: 'true' });
+    pinAuth.loaded = true;
+    const me = await pinApi('/user_account');
+    pinAuth.username = me.username || null;
+    await pinSaveAuth();
+    console.log(`✓ Pinterest connected as @${pinAuth.username}`);
+    res.send(PIN_PAGE('✓ Pinterest connected', `<p>EB Master can now post approved pins to <strong>@${pinAuth.username || 'your account'}</strong>. This stays connected across server restarts — nothing to copy into Render.</p><p>You can close this tab and return to the Studio.</p>`));
+  } catch (e) { res.status(500).send(PIN_PAGE('Pinterest didn’t connect', `<p>${String(e.message).replace(/[<>&]/g, '')}</p>`)); }
+});
+
+// GET /pinterest/status — what the Marketing screen shows about the connection.
+app.get('/pinterest/status', async (req, res) => {
+  try { await pinLoadAuth(); } catch (e) { /* Airtable hiccup: report what we know */ }
+  res.json({ configured: !!(PINTEREST_APP_ID && PINTEREST_APP_SECRET), connected: pinConnected(), username: pinAuth.username, sandbox: /sandbox/.test(PINTEREST_API_BASE) });
+});
+
+// Boards are created the first time a pin needs them, so the profile never shows empty boards.
+const PIN_BOARD_DESCRIPTION = name => `${name}: handcrafted, one-of-a-kind faux floral arrangements by Eternal Blooms by Patti. Florals that bloom forever.`;
+let pinBoards = null; // name (lowercase) → board id
+async function pinBoardId(name) {
+  if (!pinBoards) {
+    pinBoards = new Map(); let bookmark = null;
+    do {
+      const d = await pinApi('/boards?page_size=100' + (bookmark ? '&bookmark=' + encodeURIComponent(bookmark) : ''));
+      for (const b of (d.items || [])) pinBoards.set(String(b.name).toLowerCase(), b.id);
+      bookmark = d.bookmark || null;
+    } while (bookmark);
+  }
+  const key = String(name).toLowerCase();
+  if (!pinBoards.has(key)) {
+    const b = await pinApi('/boards', { method: 'POST', body: { name, description: PIN_BOARD_DESCRIPTION(name), privacy: 'PUBLIC' } });
+    pinBoards.set(key, b.id);
+  }
+  return pinBoards.get(key);
+}
+
+// Upload a Shopify video to Pinterest and wait until it's processed. The MP4 is streamed
+// straight from Shopify's CDN into Pinterest's upload target (same form-data pattern as
+// /shopify-add-video), so memory stays flat whatever the file size.
+async function pinUploadVideo(videoUrl) {
+  const reg = await pinApi('/media', { method: 'POST', body: { media_type: 'video' } });
+  const vres = await fetch(videoUrl);
+  if (!vres.ok) throw new Error('Video download from Shopify failed: ' + vres.status);
+  if (!Number(vres.headers.get('content-length'))) throw new Error('Shopify did not report the video size');
+  const form = new FormData();
+  for (const [k, v] of Object.entries(reg.upload_parameters || {})) form.append(k, v);
+  form.append('file', vres.body, { knownLength: Number(vres.headers.get('content-length')), contentType: 'video/mp4', filename: 'pin.mp4' });
+  await new Promise((resolve, reject) => {
+    form.submit(reg.upload_url, (err, up) => {
+      if (err) return reject(err);
+      let errText = '';
+      up.on('data', c => { if (up.statusCode >= 300 && errText.length < 300) errText += c.toString(); });
+      up.on('end', () => up.statusCode < 300 ? resolve() : reject(new Error(`Pinterest video upload failed (${up.statusCode}): ${errText.slice(0, 300)}`)));
+      up.on('error', reject);
+    });
+  });
+  for (let i = 0; i < 60; i++) { // up to ~5 minutes
+    await new Promise(r => setTimeout(r, 5000));
+    const m = await pinApi('/media/' + reg.media_id);
+    if (m.status === 'succeeded') return reg.media_id;
+    if (m.status === 'failed') throw new Error('Pinterest could not process the video');
+  }
+  throw new Error('Pinterest is still processing the video — tap Retry in a few minutes');
+}
+
+// Post one approved queue row. A video that fails to upload falls back to a photo pin so
+// an approved pin always goes out; the reason is kept in Notes.
+const mktPosting = new Set();
+async function mktPostPin(id) {
+  if (mktPosting.has(id)) return;
+  mktPosting.add(id);
+  const save = async fields => { const d = await airtableReq(`${AT_MARKETING_TBL}/${id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) }); mktCacheUpsert([d]); return d; };
+  try {
+    const rec = (await mktRecords()).find(r => r.id === id) || await airtableReq(`${AT_MARKETING_TBL}/${id}`);
+    const f = rec.fields || {};
+    if (f['Status'] !== 'Approved' || f['Pin ID']) return;
+    const body = {
+      board_id: await pinBoardId(f['Board'] || 'Everyday Faux Florals'),
+      title: f['Pin Title'], description: f['Description'], link: f['Product URL'], alt_text: f['Alt Text'] || undefined,
+      media_source: { source_type: 'image_url', url: f['Image URL'] }
+    };
+    let note = null;
+    if (f['Media'] === 'Video' && f['Video URL']) {
+      try { body.media_source = { source_type: 'video_id', media_id: await pinUploadVideo(f['Video URL']), cover_image_url: f['Image URL'] }; }
+      catch (e) { note = 'Posted as a photo pin — the video failed: ' + e.message; }
+    }
+    const pin = await pinApi('/pins', { method: 'POST', body });
+    const fields = { 'Status': 'Posted', 'Status changed': new Date().toISOString(), 'Pin ID': pin.id, 'Pin URL': `https://www.pinterest.com/pin/${pin.id}/`, 'Post error': '' };
+    if (note) fields['Notes'] = [f['Notes'], note].filter(Boolean).join('\n');
+    await save(fields);
+    console.log(`marketing: posted ${f['EB Number']} to Pinterest as pin ${pin.id}${note ? ' (photo fallback)' : ''}`);
+  } catch (e) {
+    console.warn(`marketing: posting ${id} failed —`, e.message);
+    await save({ 'Post error': e.message.slice(0, 1000) }).catch(() => {});
+  } finally { mktPosting.delete(id); }
+}
+
+// When a piece sells: drafts that never went out are skipped, and live pins are pointed
+// at similar in-stock pieces instead of a sold-out page. Manually posted pins are handled
+// too when their Pin URL was pasted in (the id is read from it).
+const PIN_SOLD_LEAD = 'This piece has found its home. Explore similar arrangements, handmade by Patti. ';
+async function mktHandleSold(sku) {
+  const rows = (await mktRecords()).filter(r => String((r.fields || {})['EB Number'] || '').trim() === sku);
+  for (const r of rows) {
+    const f = r.fields, now = new Date().toISOString();
+    const patch = async fields => mktCacheUpsert([await airtableReq(`${AT_MARKETING_TBL}/${r.id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) })]);
+    if ((f['Status'] === 'Draft' || f['Status'] === 'Approved') && !mktPosting.has(r.id)) {
+      await patch({ 'Status': 'Skipped', 'Status changed': now, 'Notes': [f['Notes'], 'Skipped automatically: the piece sold before this pin was posted.'].filter(Boolean).join('\n') });
+      continue;
+    }
+    const pinId = f['Pin ID'] || ((String(f['Pin URL'] || '').match(/\/pin\/(\d+)/) || [])[1]);
+    if (f['Status'] !== 'Posted' || f['Sold redirect'] || !pinId || !pinConnected()) continue;
+    await pinApi('/pins/' + pinId, { method: 'PATCH', body: {
+      link: f['Similar URL'] || SHOP_COLLECTIONS_URL + 'shop-all',
+      description: (PIN_SOLD_LEAD + (f['Description'] || '')).slice(0, 500)
+    } });
+    await patch({ 'Sold redirect': now });
+    console.log(`marketing: ${sku} sold — pin ${pinId} now points to similar pieces`);
+  }
+}
+function mktHandleSoldSoon(sku) { mktHandleSold(sku).catch(e => console.warn(`marketing: sold handling for ${sku} failed —`, e.message)); }
+// Catch-up for sales recorded only in Airtable (craft fairs, manual edits).
+async function mktSoldSweep() {
+  await invEnsure();
+  const skus = new Set((await mktRecords()).filter(r => {
+    const f = r.fields || {};
+    return (f['Status'] === 'Draft' || f['Status'] === 'Approved' || (f['Status'] === 'Posted' && !f['Sold redirect']))
+      && invFindBySku(String(f['EB Number'] || '').trim()).some(i => i.fields['Status'] === 'Sold');
+  }).map(r => String(r.fields['EB Number']).trim()));
+  for (const sku of skus) await mktHandleSold(sku).catch(e => console.warn(`marketing: sold sweep for ${sku} failed —`, e.message));
+}
 
 app.listen(PORT, () => {
   console.log(`EB server running on port ${PORT}`);
   ensureOrderWebhook();
   ensureProductWebhook();
+  pinLoadAuth().catch(e => console.warn('Pinterest: could not load the saved connection —', e.message));
 });
