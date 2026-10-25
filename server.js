@@ -460,6 +460,35 @@ function isLocalOnlyRecord(f) {
   if (opt) return opt === 'Local only';
   return !!f && f['Type'] === 'Outdoor planter';
 }
+// Sales channels beyond Online Store and POS. The REST product create only publishes to those
+// two, and each of these channels was filled once in bulk when it was set up, so every piece
+// listed afterwards was missing from Google until it's published here. Local-only pieces stay
+// off them: Google, Facebook and Shop shoppers expect shipping. Needs the write_publications scope.
+const EXTRA_SALES_CHANNELS = [
+  { name: 'Google & YouTube',     id: 'gid://shopify/Publication/203911430279' },
+  { name: 'Facebook & Instagram', id: 'gid://shopify/Publication/198815481991' },
+  { name: 'Shop',                 id: 'gid://shopify/Publication/189332422791' }
+];
+// publish = true adds the product to every extra channel, false removes it. Non-fatal: returns
+// 'published' / 'unpublished' or 'failed: …' for the caller's response and logs the reason.
+async function setExtraSalesChannels(productGid, sku, publish) {
+  const op = publish ? 'publishablePublish' : 'publishableUnpublish';
+  try {
+    const data = await shopifyGraphql(`mutation($id:ID!,$input:[PublicationInput!]!){ ${op}(id:$id, input:$input){ userErrors { message } } }`,
+      { id: productGid, input: EXTRA_SALES_CHANNELS.map(c => ({ publicationId: c.id })) });
+    const errs = (data?.errors || data?.data?.[op]?.userErrors || []).map(e => e.message);
+    if (errs.length) {
+      const hint = errs.some(m => /access denied|write_publications/i.test(m)) ? ' (the Shopify app needs the write_publications scope)' : '';
+      console.warn(`sales channels: ${op} for ${sku} failed — ${errs.join(', ')}${hint}`);
+      return 'failed: ' + errs.join(', ') + hint;
+    }
+    console.log(`sales channels: ${sku} ${publish ? 'published to' : 'removed from'} ${EXTRA_SALES_CHANNELS.map(c => c.name).join(', ')}`);
+    return publish ? 'published' : 'unpublished';
+  } catch (e) {
+    console.warn(`sales channels: ${op} for ${sku} failed —`, e.message);
+    return 'failed: ' + e.message;
+  }
+}
 async function getLocalOnlyProfileGid() {
   try { return (await getShippingProfileMap())[LOCAL_ONLY_TIER] || null; }
   catch (e) { console.warn('LOCAL profile lookup failed:', e.message); return null; }
@@ -597,6 +626,7 @@ app.get('/health', async (req, res) => {
         const sd = await sr.json();
         checks.granted_scopes = (sd.access_scopes || []).map(s => s.handle).sort();
         checks.write_inventory_granted = checks.granted_scopes.includes('write_inventory');
+        checks.write_publications_granted = checks.granted_scopes.includes('write_publications');
       }
     } catch(e) { checks.shopify = 'error: ' + e.message; }
   } else {
@@ -621,7 +651,8 @@ app.get('/auth', (req, res) => {
   // Changing this string requires re-running /auth so Shopify re-grants the scopes —
   // and the callback only holds the new token IN MEMORY: paste it into Render's
   // SHOPIFY_TOKEN or it's lost on the next restart/deploy.
-  const scopes = 'read_products,write_products,read_inventory,write_inventory,read_orders,read_customers,read_shipping,write_shipping';
+  // write_publications lets a new listing publish itself to Google, Facebook and Shop.
+  const scopes = 'read_products,write_products,read_inventory,write_inventory,read_orders,read_customers,read_shipping,write_shipping,read_publications,write_publications';
   const authUrl = `https://${SHOPIFY_STORE}/admin/oauth/authorize?client_id=${SHOPIFY_API_KEY}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
   res.redirect(authUrl);
 });
@@ -1618,7 +1649,8 @@ app.post('/apply-local-only', async (req, res) => {
     const tg = await shopifyGraphql(`mutation($id:ID!,$tags:[String!]!){ tagsAdd(id:$id, tags:$tags){ userErrors { message } } }`, { id: v.product.id, tags: [LOCAL_ONLY_TAG] });
     const tgErrs = tg?.errors || tg?.data?.tagsAdd?.userErrors || [];
     steps.tag = tgErrs.length ? 'failed: ' + tgErrs.map(e => e.message).join(', ') : 'added';
-    const ok = !Object.values(steps).some(s => String(s).startsWith('failed'));
+    steps.salesChannels = await setExtraSalesChannels(v.product.id, sku, false);
+    const ok =!Object.values(steps).some(s => String(s).startsWith('failed'));
     console.log(`apply-local-only ${sku}:`, JSON.stringify(steps));
     res.status(ok ? 200 : 207).json({ success: ok, sku, steps });
   } catch (e) {
@@ -1909,6 +1941,8 @@ app.post('/create-product', async (req, res) => {
       catch (e) { console.warn('local-only draft fallback failed:', e.message); }
       console.warn(`create-product: ${sku} ${localOnlyWarning}`);
     }
+    // Google & YouTube, Facebook & Instagram and Shop — shippable pieces only.
+    const salesChannels = localOnly ? 'skipped (local-only)' : await setExtraSalesChannels(`gid://shopify/Product/${productId}`, sku, true);
     // Set the Shopify standard product category (taxonomy) AND the native
     // "Color" attribute (shopify.color-pattern) — REST can set neither, so use a
     // productUpdate GraphQL mutation. Category is skipped for Add-ons (no mapping).
@@ -2015,7 +2049,7 @@ app.post('/create-product', async (req, res) => {
     const productUrl = `https://eternalbloomsbypatti.com/products/${data.product.handle}`;
     const heroImageUrl = data.product.images && data.product.images.length > 0 ? data.product.images[0].src : null;
     const metafieldsSet = mf.reduce((acc, m) => { acc[m.key] = JSON.parse(m.value).length; return acc; }, {});
-    res.json({ success: true, product_id: productId, handle: data.product.handle, shopify_url: productUrl, admin_url: `https://admin.shopify.com/store/zdzva0-tj/products/${productId}`, hero_image_url: heroImageUrl, collections_assigned: collectionResults, quantity: qty, category: (categoryGid ? product_category : null), colors_set: colorGids.length, pattern_set: patternGids.length, metafields_set: metafieldsSet, local_only: localOnly, ...(localOnlyWarning ? { warning: localOnlyWarning } : {}) });
+    res.json({ success: true, product_id: productId, handle: data.product.handle, shopify_url: productUrl, admin_url: `https://admin.shopify.com/store/zdzva0-tj/products/${productId}`, hero_image_url: heroImageUrl, collections_assigned: collectionResults, quantity: qty, category: (categoryGid ? product_category : null), colors_set: colorGids.length, pattern_set: patternGids.length, metafields_set: metafieldsSet, local_only: localOnly, sales_channels: salesChannels, ...(localOnlyWarning ? { warning: localOnlyWarning } : {}) });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
