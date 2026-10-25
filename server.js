@@ -2777,6 +2777,7 @@ const MKT_AUTO_EVERY_MS = 7 * 24 * 60 * 60 * 1000;
 const MKT_AUTO_BATCH = 5;
 let mktAutoBusy = false, mktSweepAt = 0;
 function mktMaybeAutoRun(records) {
+  if (PINTEREST_APP_SECRET) pinLoadAuth().then(() => mktPostPending(records, { skipErrored: true })).catch(e => console.warn('marketing: posting approved pins failed —', e.message));
   if (mktAutoBusy || !shopifyAccessToken || !ANTHROPIC_API_KEY) return;
   const lastDrafted = Math.max(0, ...records.map(r => Date.parse((r.fields || {})['Drafted'] || '') || 0));
   const waiting = records.filter(r => (r.fields || {})['Status'] === 'Draft').length;
@@ -2947,6 +2948,8 @@ app.get('/pinterest-auth/callback', async (req, res) => {
     pinAuth.username = me.username || null;
     await pinSaveAuth();
     console.log(`✓ Pinterest connected as @${pinAuth.username}`);
+    // Pins approved while Pinterest wasn't connected go out now.
+    mktRecords().then(records => mktPostPending(records)).catch(e => console.warn('marketing: posting approved pins failed —', e.message));
     res.send(PIN_PAGE('✓ Pinterest connected', `<p>EB Master can now post approved pins to <strong>@${pinAuth.username || 'your account'}</strong>. This stays connected across server restarts — nothing to copy into Render.</p><p>You can close this tab and return to the Studio.</p>`));
   } catch (e) { res.status(500).send(PIN_PAGE('Pinterest didn’t connect', `<p>${String(e.message).replace(/[<>&]/g, '')}</p>`)); }
 });
@@ -3036,6 +3039,25 @@ async function mktPostPin(id) {
     console.warn(`marketing: posting ${id} failed —`, e.message);
     await save({ 'Post error': e.message.slice(0, 1000) }).catch(() => {});
   } finally { mktPosting.delete(id); }
+}
+
+// Approved rows that never went out: approved before Pinterest was connected, or cut off
+// by a restart mid-post. Posted one at a time so two pins can't both create a missing board.
+// The background pass skips rows with a Post error so a failing pin waits for Retry
+// instead of being retried on every app open.
+let mktPendingBusy = false;
+async function mktPostPending(records, { skipErrored = false } = {}) {
+  if (mktPendingBusy || !pinConnected()) return;
+  const ids = records.filter(r => {
+    const f = r.fields || {};
+    return f['Status'] === 'Approved' && !f['Pin ID'] && !(skipErrored && f['Post error']) && !mktPosting.has(r.id);
+  }).map(r => r.id);
+  if (!ids.length) return;
+  mktPendingBusy = true;
+  try {
+    console.log(`marketing: posting ${ids.length} approved pin(s) that were waiting`);
+    for (const id of ids) await mktPostPin(id);
+  } finally { mktPendingBusy = false; }
 }
 
 // When a piece sells: drafts that never went out are skipped, and live pins are pointed
