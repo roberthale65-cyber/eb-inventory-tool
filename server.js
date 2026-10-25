@@ -2629,7 +2629,7 @@ const AT_MARKETING_TBL = 'tblUeywr9I8jflj0O';
 // pin description, Instagram caption or Facebook post, and Pin ID / Pin URL hold the live post.
 const MKT_CHANNELS = ['Pinterest', 'Instagram', 'Facebook'];
 const mktChannel = f => (f && f['Channel']) || 'Pinterest';
-const MKT_EDITABLE_FIELDS = ['Pin Title', 'Description', 'Board', 'Alt Text', 'Status', 'Pin URL', 'Notes'];
+const MKT_EDITABLE_FIELDS = ['Pin Title', 'Description', 'Board', 'Alt Text', 'Status', 'Pin URL', 'Notes', 'Scheduled for'];
 const MKT_STATUSES = ['Draft', 'Approved', 'Posted', 'Skipped'];
 // Starter boards — the AI must pick one so boards stay few and searchable.
 const PIN_BOARDS = [
@@ -2637,12 +2637,82 @@ const PIN_BOARDS = [
   'Winter Home Decor', 'Spring Wreaths & Florals', 'Summer Porch & Patio Florals', 'Patriotic & Summer Wreaths',
   'Dining Table Centerpieces', 'Entryway & Console Florals', 'Wall Decor & Swags', 'Everyday Faux Florals'
 ];
-// Pinterest users plan 1–3 months ahead, so each month favors the seasons coming up.
-const PIN_SEASONS_BY_MONTH = [
-  ['winter', 'valentine'], ['spring', 'easter', 'valentine'], ['spring', 'easter'], ['spring', 'summer', 'mother'],
-  ['summer', 'fourth'], ['summer', 'fourth'], ['summer', 'fall'], ['fall', 'halloween'],
-  ['fall', 'halloween', 'thanksgiving'], ['fall', 'thanksgiving', 'christmas', 'winter'], ['christmas', 'winter'], ['christmas', 'winter']
+// Seasonal calendar, timed to when stores set out seasonal displays and Pinterest shoppers start
+// planning (about 6–10 weeks ahead). A theme is promoted from start to end (month, day); Easter
+// moves, so its window is days relative to Easter Sunday. Product tags pick a theme's pieces.
+const MKT_THEMES = [
+  { name: "Valentine's Day", start: [12, 26], end: [2, 10], tags: /valentine/ },
+  { name: 'Winter', start: [12, 1], end: [2, 15], tags: /season_winter/ },
+  { name: 'Spring', start: [2, 15], end: [5, 15], tags: /season_spring/ },
+  { name: 'Easter', easter: [-56, 0], tags: /easter/ },
+  { name: "Mother's Day", start: [3, 25], end: [5, 8], tags: /mother/ },
+  { name: 'Fourth of July', start: [5, 15], end: [7, 3], tags: /fourth|memorial/ },
+  { name: 'Summer', start: [5, 1], end: [8, 15], tags: /season_summer/ },
+  { name: 'Fall', start: [8, 1], end: [10, 31], tags: /season_fall/ },
+  { name: 'Halloween', start: [8, 15], end: [10, 25], tags: /halloween/ },
+  { name: 'Thanksgiving', start: [9, 15], end: [11, 20], tags: /thanksgiving/ },
+  { name: 'Christmas', start: [9, 15], end: [12, 18], tags: /christmas/ }
 ];
+// Year-round angles Patti can pick by hand; not on the calendar.
+const MKT_EXTRA_THEMES = [
+  { name: 'Everyday', tags: /all[_ ]?season|everyday/ },
+  { name: 'Sympathy & memorial', tags: /sympathy|funeral|memorial/ },
+  { name: 'Weddings & showers', tags: /wedding|bridal|baby_shower/ }
+];
+const MKT_ALL_THEMES = [...MKT_THEMES, ...MKT_EXTRA_THEMES];
+const MKT_DAY_MS = 24 * 60 * 60 * 1000;
+const mktTagText = p => (p.tags || []).join(' ').toLowerCase();
+const mktTheme = name => MKT_ALL_THEMES.find(t => t.name === name) || null;
+function mktEaster(y) { // Gregorian computus
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  return new Date(Date.UTC(y, Math.floor((h + l - 7 * m + 114) / 31) - 1, ((h + l - 7 * m + 114) % 31) + 1));
+}
+function mktThemeWindows(t, y) {
+  if (t.easter) { const e = mktEaster(y).getTime(); return [{ start: new Date(e + t.easter[0] * MKT_DAY_MS), end: new Date(e + t.easter[1] * MKT_DAY_MS + MKT_DAY_MS - 1) }]; }
+  const at = (yr, [mo, da], endOfDay) => new Date(Date.UTC(yr, mo - 1, da) + (endOfDay ? MKT_DAY_MS - 1 : 0));
+  return t.start[0] > t.end[0]
+    ? [{ start: at(y - 1, t.start), end: at(y, t.end, true) }, { start: at(y, t.start), end: at(y + 1, t.end, true) }]
+    : [{ start: at(y, t.start), end: at(y, t.end, true) }];
+}
+// Themes in season now (soonest-ending first), then those starting within the next 3 weeks.
+function mktCalendar(now = new Date()) {
+  const out = [];
+  for (const t of MKT_THEMES) {
+    const wins = [...mktThemeWindows(t, now.getUTCFullYear()), ...mktThemeWindows(t, now.getUTCFullYear() + 1)];
+    const w = wins.find(w => w.end >= now && w.start - now <= 21 * MKT_DAY_MS);
+    if (w) out.push({ name: t.name, start: w.start.toISOString().slice(0, 10), end: w.end.toISOString().slice(0, 10), active: w.start <= now });
+  }
+  return out.sort((a, b) => (b.active - a.active) || a.end.localeCompare(b.end) || a.start.localeCompare(b.start));
+}
+// The angle a piece gets by default: the first in-season theme its tags match.
+function mktAutoTheme(p, now = new Date()) {
+  const t = mktTagText(p);
+  const hit = mktCalendar(now).find(c => c.active && mktTheme(c.name).tags.test(t));
+  return hit ? hit.name : '';
+}
+
+// Posting history per piece and channel, from the queue itself. A piece can be drafted again on a
+// channel once nothing is open there and its last post (or skip) is MKT_COOLDOWN_MS old; Patti can
+// pick a piece by hand any time.
+const MKT_COOLDOWN_MS = 30 * MKT_DAY_MS;
+function mktHistory(records) {
+  const out = {}; // sku → channel → { open, last, posts: [fields, newest first] }
+  for (const r of records) {
+    const f = r.fields || {}, sku = String(f['EB Number'] || '').trim();
+    if (!sku) continue;
+    const h = ((out[sku] = out[sku] || {})[mktChannel(f)] = (out[sku] || {})[mktChannel(f)] || { open: null, last: 0, posts: [] });
+    if (f['Status'] === 'Draft' || f['Status'] === 'Approved') h.open = r;
+    else {
+      h.last = Math.max(h.last, Date.parse(f['Status changed'] || f['Drafted'] || '') || 0);
+      if (f['Status'] === 'Posted') h.posts.push(f);
+    }
+  }
+  for (const chans of Object.values(out)) for (const h of Object.values(chans)) h.posts.sort((a, b) => String(b['Status changed'] || '').localeCompare(String(a['Status changed'] || '')));
+  return out;
+}
+const mktEverPosted = (hist, sku) => Object.values(hist[sku] || {}).some(h => h.posts.length);
+const mktLastPosted = (hist, sku) => Math.max(0, ...Object.values(hist[sku] || {}).map(h => h.last));
 // Condensed from the approved "Eternal Blooms Brand Voice Guide" (Claude Doc, 2026-10-25).
 const PIN_VOICE_RULES = `Brand: Eternal Blooms by Patti — handcrafted, one-of-a-kind faux floral arrangements "for hearts & homes". Tagline: "Florals that bloom forever." Tone: warm, not gushing; specific over generic (name colors, flowers, textures, where it looks best); calm confidence, no hard sell or urgency tricks; helpful about placement (entryway, dining table, mantel, covered porch).
 Pins describe the PIECE, with a light "handmade by Patti" touch (once, naturally — e.g. "handmade by Patti"). Never mention Omaha, Nebraska, or any location.
@@ -2685,7 +2755,9 @@ async function mktFetchAll() {
 }
 
 // Active, in-stock Shopify products with their SKU (= EB Number), tags, photos and videos.
+let mktCandCache = { at: 0, list: null };
 async function mktShopifyCandidates() {
+  if (mktCandCache.list && Date.now() - mktCandCache.at < MKT_FRESH_MS) return mktCandCache.list;
   const out = []; let cursor = null;
   do {
     const d = await shopifyGraphql(`query($after:String){products(first:100,after:$after,query:"status:active inventory_total:>0"){nodes{title handle onlineStoreUrl productType tags description(truncateAt:700) variants(first:1){nodes{sku}} media(first:10){nodes{... on MediaImage{image{url width height altText}} ... on Video{duration sources{url format width height}}}}} pageInfo{hasNextPage endCursor}}}`, { after: cursor });
@@ -2694,6 +2766,7 @@ async function mktShopifyCandidates() {
     out.push(...conn.nodes);
     cursor = conn.pageInfo.hasNextPage ? conn.pageInfo.endCursor : null;
   } while (cursor);
+  mktCandCache = { at: Date.now(), list: out };
   return out;
 }
 
@@ -2729,16 +2802,24 @@ function mktSimilarUrl(p) {
   return SHOP_COLLECTIONS_URL + 'shop-all';
 }
 
-function mktSeasonScore(tags, month) {
-  const t = (tags || []).join(' ').toLowerCase();
-  const wanted = PIN_SEASONS_BY_MONTH[month];
-  if (wanted.some(w => t.includes(w))) return 2;
+function mktSeasonScore(p, now) {
+  const t = mktTagText(p);
+  if (mktAutoTheme(p, now)) return 2;
   if (/all[_ ]?season|everyday/.test(t) || !/season_|holiday_/.test(t)) return 1;
   return 0;
 }
 
-async function mktDraftPin(p, img) {
+// Extra prompt lines for a seasonal angle and for reposts (earlier text the AI must not repeat).
+function mktAngleLines(theme, previous, what) {
+  const lines = [];
+  if (theme) lines.push(`Seasonal angle: present this piece for ${theme} — how and where it fits that season or occasion. Stay truthful to what the piece is; if it only loosely fits, keep the angle light.`);
+  if (previous && previous.length) lines.push(`This piece has been posted before. Write a FRESH ${what}: a different opening, different details emphasized, and no sentence reused from these earlier versions:\n${previous.map(t => '- ' + String(t).replace(/\s+/g, ' ').slice(0, 400)).join('\n')}`);
+  return lines.join('\n');
+}
+
+async function mktDraftPin(p, img, ctx = {}) {
   const textPrompt = `${PIN_VOICE_RULES}
+${mktAngleLines(ctx.theme, ctx.previous, 'pin')}
 
 Write ONE Pinterest pin for this product.
 - title: under 100 characters, Title Case, starting with the search phrase a shopper would type (e.g. "Fall Door Wreath", "Farmhouse Dining Table Centerpiece"), then the standout detail.
@@ -2775,9 +2856,13 @@ Return ONLY valid JSON, no code fences: {"title": "...", "description": "...", "
 }
 
 // One call drafts both the Instagram caption and the Facebook post for a piece.
-async function mktDraftSocial(p, img) {
+async function mktDraftSocial(p, img, ctx = {}) {
+  const prev = ctx.previous || {};
   const textPrompt = `${PIN_VOICE_RULES}
 ${SOCIAL_VOICE_RULES}
+${mktAngleLines(ctx.theme, [], '')}
+${(prev.Instagram || []).length ? mktAngleLines('', prev.Instagram, 'Instagram caption') : ''}
+${(prev.Facebook || []).length ? mktAngleLines('', prev.Facebook, 'Facebook post') : ''}
 
 Write an Instagram caption and a Facebook post for this product.
 - instagram: 2–4 short sentences, under 600 characters before any hashtags. What it is, the standout details, where it looks best. End with a soft call to action like "Shop this one-of-a-kind piece at the link in bio."
@@ -2809,40 +2894,64 @@ Return ONLY valid JSON, no code fences: {"instagram": "...", "facebook": "..."}`
   };
 }
 
-// Draft posts for in-stock pieces, favoring the seasons shoppers are planning for. Each piece
-// gets a row for every channel it doesn't have yet (pieces pinned before Instagram and Facebook
-// were added pick those up too). Nothing is posted; rows land as Draft. Used by the button and
-// the weekly run; `count` is the number of pieces.
-async function mktDraftBatch(count) {
+// Draft posts. Nothing is posted; rows land as Draft. `count` is the number of pieces.
+//   mode 'auto'     — the button and the weekly run: never-posted pieces first (in-season ones
+//                     ahead), then reposts of in-season pieces whose last post is oldest.
+//   theme           — only pieces tagged for that theme, never-posted first, then oldest post.
+//   mode 'surprise' — random pieces that are due.
+//   skus            — Patti's picks: drafted on every chosen channel with nothing open, even
+//                     inside the cooldown.
+// opts.theme also sets the angle; '' means no angle, undefined means the in-season default.
+async function mktDraftBatch(count, opts = {}) {
   const [queue, products] = await Promise.all([mktRecords(), mktShopifyCandidates(), invEnsure()]);
-  const queued = new Set(queue.map(r => mktChannel(r.fields) + '|' + String((r.fields || {})['EB Number'] || '').trim()));
-  const month = new Date().getMonth();
-  const eligible = products
+  const hist = mktHistory(queue), nowD = new Date(), nowMs = nowD.getTime();
+  const chans = (Array.isArray(opts.channels) && opts.channels.length ? opts.channels : MKT_CHANNELS).filter(ch => MKT_CHANNELS.includes(ch));
+  const h = (sku, ch) => (hist[sku] || {})[ch];
+  const due = (sku, ch) => !h(sku, ch) || (!h(sku, ch).open && nowMs - h(sku, ch).last >= MKT_COOLDOWN_MS);
+  const cands = products
     .map(p => ({ p, sku: String((p.variants.nodes[0] || {}).sku || '').trim(), img: mktPickImage(p), video: mktPickVideo(p) }))
-    .map(c => ({ ...c, missing: MKT_CHANNELS.filter(ch => !queued.has(ch + '|' + c.sku)) }))
-    .filter(c => c.sku && c.img && c.p.onlineStoreUrl && c.missing.length)
-    .map(c => ({ ...c, score: mktSeasonScore(c.p.tags, month) + Math.random() }))
-    .sort((a, b) => b.score - a.score);
+    .filter(c => c.sku && c.img && c.p.onlineStoreUrl);
+  let eligible;
+  if (Array.isArray(opts.skus) && opts.skus.length) {
+    eligible = cands.filter(c => opts.skus.includes(c.sku)).map(c => ({ ...c, channels: chans.filter(ch => !(h(c.sku, ch) || {}).open) }));
+  } else {
+    let list = cands.map(c => ({ ...c, channels: chans.filter(ch => due(c.sku, ch)) })).filter(c => c.channels.length);
+    const theme = opts.theme ? mktTheme(opts.theme) : null;
+    if (theme) list = list.filter(c => theme.tags.test(mktTagText(c.p)));
+    const fresh = list.filter(c => !mktEverPosted(hist, c.sku)), seen = list.filter(c => mktEverPosted(hist, c.sku));
+    const byOldest = (a, b) => mktLastPosted(hist, a.sku) - mktLastPosted(hist, b.sku);
+    if (opts.mode === 'surprise') list = list.map(c => ({ c, k: Math.random() })).sort((a, b) => a.k - b.k).map(x => x.c);
+    else if (theme) list = [...fresh.sort(() => Math.random() - 0.5), ...seen.sort(byOldest)];
+    else list = [
+      ...fresh.map(c => ({ ...c, score: mktSeasonScore(c.p, nowD) + Math.random() })).sort((a, b) => b.score - a.score),
+      ...seen.filter(c => mktAutoTheme(c.p, nowD)).sort(byOldest)
+    ];
+    eligible = list;
+  }
+  eligible = eligible.filter(c => c.channels.length);
   const pool = eligible.slice(0, count);
   const created = [], failed = [];
   for (const c of pool) {
     try {
       const inv = invFindBySku(c.sku)[0];
       const now = new Date().toISOString();
+      const theme = opts.theme !== undefined ? opts.theme : mktAutoTheme(c.p, nowD);
+      const prev = ch => ((h(c.sku, ch) || {}).posts || []).slice(0, 2).map(f => f['Description']);
       const base = {
         'EB Number': c.sku, 'Status': 'Draft', 'Product URL': c.p.onlineStoreUrl, 'Image URL': c.img.url,
-        'Similar URL': mktSimilarUrl(c.p), 'Media': c.video ? 'Video' : 'Photo', 'Drafted': now, 'Status changed': now
+        'Similar URL': mktSimilarUrl(c.p), 'Media': c.video ? 'Video' : 'Photo', 'Drafted': now, 'Status changed': now, 'Theme': theme || ''
       };
       if (c.video) base['Video URL'] = c.video;
       if (inv) base['Inventory'] = [inv.id];
-      if (c.missing.includes('Pinterest')) {
-        const pin = await mktDraftPin(c.p, c.img);
-        created.push({ fields: { ...base, 'Channel': 'Pinterest', 'Pin Title': pin.title, 'Description': pin.description, 'Board': pin.board, 'Alt Text': pin.alt_text } });
+      const type = ch => ((h(c.sku, ch) || {}).posts || []).length ? 'Repost' : 'New';
+      if (c.channels.includes('Pinterest')) {
+        const pin = await mktDraftPin(c.p, c.img, { theme, previous: ((h(c.sku, 'Pinterest') || {}).posts || []).slice(0, 2).map(f => (f['Pin Title'] || '') + ' — ' + (f['Description'] || '')) });
+        created.push({ fields: { ...base, 'Channel': 'Pinterest', 'Post type': type('Pinterest'), 'Pin Title': pin.title, 'Description': pin.description, 'Board': pin.board, 'Alt Text': pin.alt_text } });
       }
-      if (c.missing.includes('Instagram') || c.missing.includes('Facebook')) {
-        const social = await mktDraftSocial(c.p, c.img);
-        if (c.missing.includes('Instagram')) created.push({ fields: { ...base, 'Channel': 'Instagram', 'Pin Title': c.p.title, 'Description': social.instagram } });
-        if (c.missing.includes('Facebook')) created.push({ fields: { ...base, 'Channel': 'Facebook', 'Pin Title': c.p.title, 'Description': social.facebook + '\n\n' + c.p.onlineStoreUrl } });
+      if (c.channels.includes('Instagram') || c.channels.includes('Facebook')) {
+        const social = await mktDraftSocial(c.p, c.img, { theme, previous: { Instagram: prev('Instagram'), Facebook: prev('Facebook') } });
+        if (c.channels.includes('Instagram')) created.push({ fields: { ...base, 'Channel': 'Instagram', 'Post type': type('Instagram'), 'Pin Title': c.p.title, 'Description': social.instagram } });
+        if (c.channels.includes('Facebook')) created.push({ fields: { ...base, 'Channel': 'Facebook', 'Post type': type('Facebook'), 'Pin Title': c.p.title, 'Description': social.facebook + '\n\n' + c.p.onlineStoreUrl } });
       }
     } catch (e) { failed.push({ sku: c.sku, error: e.message }); }
   }
@@ -2875,7 +2984,7 @@ function mktMaybeAutoRun(records) {
     if (sweepDue) { mktSweepAt = Date.now(); await mktSoldSweep(); }
     if (draftDue) {
       const out = await mktDraftBatch(MKT_AUTO_BATCH);
-      console.log(`marketing: weekly auto-draft created ${out.records.length} pin draft(s)` + (out.failed.length ? `, ${out.failed.length} failed` : ''));
+      console.log(`marketing: weekly auto-draft created ${out.records.length} draft(s)` + (out.failed.length ? `, ${out.failed.length} failed` : ''));
     }
   })().catch(e => console.warn('marketing: auto run failed —', e.message)).finally(() => { mktAutoBusy = false; });
 }
@@ -2893,13 +3002,43 @@ app.get('/marketing/queue', async (req, res) => {
 app.post('/marketing/draft-pins', async (req, res) => {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Shopify not authorized — visit /auth' });
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server.' });
-  const count = Math.max(1, Math.min(10, parseInt((req.body && req.body.count) || 5, 10) || 5));
+  const b = req.body || {};
+  const count = Math.max(1, Math.min(10, parseInt(b.count || 5, 10) || 5));
+  const opts = { mode: b.mode === 'surprise' ? 'surprise' : 'auto' };
+  if (typeof b.theme === 'string') { if (b.theme && !mktTheme(b.theme)) return res.status(400).json({ error: 'unknown theme: ' + b.theme }); opts.theme = b.theme; }
+  if (Array.isArray(b.skus)) opts.skus = b.skus.map(String).slice(0, 10);
+  if (Array.isArray(b.channels)) opts.channels = b.channels;
   // One batch at a time — the weekly run and the button would otherwise draft the same pieces.
-  if (mktAutoBusy) return res.status(409).json({ error: 'Pins are already being drafted — check back in a minute.' });
+  if (mktAutoBusy) return res.status(409).json({ error: 'Posts are already being drafted — check back in a minute.' });
   mktAutoBusy = true;
-  try { res.json({ success: true, ...(await mktDraftBatch(count)) }); }
+  try { res.json({ success: true, ...(await mktDraftBatch(opts.skus ? opts.skus.length : count, opts)) }); }
   catch (e) { res.status(500).json({ error: e.message }); }
   finally { mktAutoBusy = false; }
+});
+
+// GET /marketing/plan — what the "Plan posts" section needs: the seasonal calendar with counts,
+// every in-stock piece with its themes and per-channel history, and the themes Patti can pick.
+app.get('/marketing/plan', async (req, res) => {
+  if (!shopifyAccessToken) return res.status(401).json({ error: 'Shopify not authorized — visit /auth' });
+  try {
+    const [queue, products] = await Promise.all([mktRecords(), mktShopifyCandidates()]);
+    const hist = mktHistory(queue), now = Date.now();
+    const pieces = products.map(p => {
+      const sku = String((p.variants.nodes[0] || {}).sku || '').trim(), img = mktPickImage(p), tags = mktTagText(p);
+      if (!sku || !img || !p.onlineStoreUrl) return null;
+      const channels = {};
+      for (const ch of MKT_CHANNELS) {
+        const x = (hist[sku] || {})[ch];
+        channels[ch] = { posts: x ? x.posts.length : 0, lastPosted: x && x.posts[0] ? x.posts[0]['Status changed'] : null, open: !!(x && x.open), due: !x || (!x.open && now - x.last >= MKT_COOLDOWN_MS) };
+      }
+      return { sku, title: p.title, type: p.productType || '', image: img.url, url: p.onlineStoreUrl, themes: MKT_ALL_THEMES.filter(t => t.tags.test(tags)).map(t => t.name), channels, everPosted: mktEverPosted(hist, sku) };
+    }).filter(Boolean);
+    const calendar = mktCalendar(new Date()).map(c => {
+      const mine = pieces.filter(x => x.themes.includes(c.name));
+      return { ...c, pieces: mine.length, neverPosted: mine.filter(x => !x.everPosted).length, due: mine.filter(x => x.everPosted && Object.values(x.channels).some(ch => ch.due)).length };
+    });
+    res.json({ calendar, themes: MKT_ALL_THEMES.map(t => t.name), cooldownDays: MKT_COOLDOWN_MS / MKT_DAY_MS, pieces });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // PATCH /marketing/queue/:id { fields } — edit a draft or move it along Draft → Approved → Posted / Skipped.
@@ -2913,10 +3052,17 @@ app.patch('/marketing/queue/:id', async (req, res) => {
     fields['Status changed'] = new Date().toISOString();
   }
   try {
+    // Approving books the channel's next free daily slot unless a time came with it ("Post now"
+    // sends the current time). Leaving Approved clears the slot.
+    if (fields['Status'] === 'Approved' && !fields['Scheduled for']) {
+      const records = await mktRecords();
+      const rec = records.find(r => r.id === req.params.id);
+      fields['Scheduled for'] = mktNextSlot(mktChannel(rec && rec.fields), records.filter(r => r.id !== req.params.id)).toISOString();
+    } else if ('Status' in fields && fields['Status'] !== 'Approved') fields['Scheduled for'] = null;
     const data = await airtableReq(`${AT_MARKETING_TBL}/${req.params.id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) });
     mktCacheUpsert([data]);
     // Approving is the go-ahead: once its channel is connected the post goes out by itself.
-    if (fields['Status'] === 'Approved' && mktChannelReady(mktChannel(data.fields))) mktPostPin(req.params.id);
+    if (data.fields['Status'] === 'Approved' && mktIsDue(data.fields) && mktChannelReady(mktChannel(data.fields))) mktPostPin(req.params.id);
     res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -3279,12 +3425,35 @@ async function mktPostPin(id) {
 // by a restart mid-post. Posted one at a time so two pins can't both create a missing board.
 // The background pass skips rows with a Post error so a failing post waits for Retry
 // instead of being retried on every app open.
+// Spreading posts out: about one per channel per day, at a time that suits the channel
+// (UTC hours ≈ 8 pm, noon and 2 pm Central). Approving books the first free day; if today's
+// time has passed but nothing went out today, it goes out now.
+const MKT_SLOT_UTC_HOUR = { Pinterest: 1, Instagram: 17, Facebook: 19 };
+function mktNextSlot(channel, records, now = new Date()) {
+  const taken = new Set(records.filter(r => mktChannel(r.fields) === channel).map(r => {
+    const f = r.fields || {};
+    if (f['Status'] === 'Posted') return String(f['Status changed'] || '').slice(0, 10);
+    if (f['Status'] === 'Approved' && f['Scheduled for']) return new Date(f['Scheduled for']).toISOString().slice(0, 10);
+    return null;
+  }).filter(Boolean));
+  for (let i = 0; i < 366; i++) {
+    let slot = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + i, MKT_SLOT_UTC_HOUR[channel] ?? 18));
+    if (slot <= now) { if (i > 0) continue; slot = now; }
+    if (!taken.has(slot.toISOString().slice(0, 10))) return slot;
+  }
+  return now;
+}
+const mktIsDue = f => !f['Scheduled for'] || Date.parse(f['Scheduled for']) <= Date.now();
+// Posts whose slot has arrived go out on a 5-minute tick. It reads only the in-memory queue
+// (every write goes through this server), so it costs no Airtable calls.
+setInterval(() => { if (mktCache.records) mktPostPending(mktCache.records, { skipErrored: true }).catch(e => console.warn('marketing: scheduled posting failed —', e.message)); }, 5 * 60 * 1000);
+
 let mktPendingBusy = false;
 async function mktPostPending(records, { skipErrored = false } = {}) {
   if (mktPendingBusy) return;
   const ids = records.filter(r => {
     const f = r.fields || {};
-    return f['Status'] === 'Approved' && !f['Pin ID'] && !(skipErrored && f['Post error']) && !mktPosting.has(r.id) && mktChannelReady(mktChannel(f));
+    return f['Status'] === 'Approved' && !f['Pin ID'] && mktIsDue(f) && !(skipErrored && f['Post error']) && !mktPosting.has(r.id) && mktChannelReady(mktChannel(f));
   }).map(r => r.id);
   if (!ids.length) return;
   mktPendingBusy = true;
@@ -3350,4 +3519,5 @@ app.listen(PORT, () => {
   ensureProductWebhook();
   pinLoadAuth().catch(e => console.warn('Pinterest: could not load the saved connection —', e.message));
   metaLoadAuth().catch(e => console.warn('Meta: could not load the saved connection —', e.message));
+  if (AIRTABLE_TOKEN) mktRecords().catch(e => console.warn('marketing: could not load the queue —', e.message));
 });

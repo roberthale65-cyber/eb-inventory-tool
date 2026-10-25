@@ -315,6 +315,22 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 .mk-ch-off{font-size:10px;font-weight:700;color:var(--text-muted);background:var(--ivory-dark);border-radius:99px;padding:1px 7px;margin-left:4px}
 .mk-actions .btn.mk-small{flex:0 0 auto;min-width:0;font-size:12px;padding:6px 12px}
 .mk-group{border-top:1px solid var(--border);padding-top:12px}
+.mk-plan-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px}
+.mk-plan-title{font-family:var(--font-display,inherit);font-size:16px;font-weight:700;margin-bottom:6px}
+.mk-theme{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid var(--border);font-size:13px}
+.mk-theme .btn{flex:0 0 auto;min-width:96px}
+.mk-muted{font-size:12px;color:var(--text-muted)}
+.mk-pick-filters{display:flex;gap:8px;flex-wrap:wrap}
+.mk-pick-filters .mk-input{flex:1;min-width:140px}
+.mk-pick-list{max-height:420px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px}
+.mk-pick-row{display:flex;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer}
+.mk-pick-row.on{background:var(--rose-bg)}
+.mk-pick-row img{width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0}
+.mk-pick-title{font-size:13px;font-weight:700}
+.mk-chk{font-size:13px;display:flex;align-items:center;gap:6px}
+.mk-history{font-size:12px;color:var(--text-muted);margin:2px 0 8px}
+.mk-chip{display:inline-block;font-family:var(--font-body);font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;background:var(--ivory-dark);color:var(--text-mid);margin-left:6px;vertical-align:middle}
+.mk-chip.repost{background:#ece4f4;color:#6b4f8a}.mk-chip.theme{background:var(--rose-bg);color:var(--rose)}
 @media (max-width:480px){.mk-card{flex-direction:column}.mk-img{width:100%;height:240px}}
 #rl-preview-frame{width:100%;display:flex;justify-content:center;margin:4px 0 16px}
 #rl-preview{width:min(340px,80%);aspect-ratio:4/6;background:#fff;border:1.5px solid var(--border-strong);border-radius:8px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.5%;padding:6% 7%;overflow:hidden}
@@ -1445,6 +1461,8 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
     <div class="info-card rose" style="margin-bottom:12px"><strong>How this works:</strong> Every week the AI drafts a Pinterest pin, an Instagram post and a Facebook post for in-stock pieces, using the listing video when there is one and favoring the seasons shoppers are planning for. Nothing goes live until you approve it — one tap approves all three. When a piece sells, unposted drafts are skipped and live pins and Facebook posts point to similar pieces.</div>
     <div id="mk-connect"></div>
     <div class="btn-row" style="margin-bottom:14px"><button class="btn btn-primary btn-full" id="mk-draft-btn" onclick="mkDraft()">✨ Draft 5 new pieces</button></div>
+    <div id="mk-plan"></div>
+    <div id="mk-picker" style="display:none"></div>
     <div id="mk-status" class="info-card teal" style="display:none"></div>
     <div class="mk-tabs" id="mk-tabs"></div>
     <div id="mk-list"></div>
@@ -1882,6 +1900,8 @@ const MK_CHANNELS = ['Pinterest','Instagram','Facebook'];
 const MK_CH_ICON = { Pinterest:'📌', Instagram:'📷', Facebook:'👍' };
 const MK_TITLE_MAX = 100, MK_DESC_MAX = { Pinterest: 500, Instagram: 2200, Facebook: 2000 };
 const mkChannel = f => f['Channel'] || 'Pinterest';
+const mkDue = f => !f['Scheduled for'] || Date.parse(f['Scheduled for']) <= Date.now();
+const mkWhen = iso => new Date(iso).toLocaleString(undefined, { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
 function mkConnected(ch){
   if(ch === 'Instagram') return mkMeta.connected && mkMeta.instagram;
   if(ch === 'Facebook') return mkMeta.connected;
@@ -1917,8 +1937,79 @@ async function mkInit(){
   const host = document.getElementById('mk-list');
   host.innerHTML = '<div style="text-align:center;padding:36px 20px;color:var(--text-muted)">Loading drafts…</div>';
   mkLoadStatus();
+  mkLoadPlan();
   try { await mkLoad(); mkRender(); }
   catch(e){ host.innerHTML = '<div class="info-card rose"><strong>Couldn\'t load the marketing queue</strong>' + escHtml(e.message) + '</div>'; }
+}
+
+// ── Plan posts: seasonal suggestions, Patti's own picks, and a surprise mix ──
+// Reposts are fine: the server rewrites the text for the chosen season and avoids the wording of
+// earlier posts. A piece is "due" on a channel once its last post there is past the cooldown.
+let mkPlan = null, mkPick = { open:false, theme:'', type:'', show:'all', q:'', angle:'auto', selected:new Set(), channels:new Set(['Pinterest','Instagram','Facebook']) };
+const MK_PICK_MAX = 10;
+async function mkLoadPlan(){
+  const el = document.getElementById('mk-plan');
+  try {
+    const r = await fetch(SERVER_URL + '/marketing/plan');
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+    mkPlan = d;
+  } catch(e){ el.innerHTML = '<div class="mk-plan-card"><div class="mk-plan-title">Plan posts</div><div class="mk-note">Couldn\'t load suggestions: ' + escHtml(e.message) + '</div></div>'; return; }
+  mkRenderPlan();
+}
+const mkDate = iso => iso ? new Date(iso).toLocaleDateString(undefined, { month:'short', day:'numeric' }) : '';
+function mkRenderPlan(){
+  if(!mkPlan) return;
+  const cal = mkPlan.calendar.map(c => {
+    const when = c.active ? 'in season until ' + mkDate(c.end + 'T12:00:00') : 'starts ' + mkDate(c.start + 'T12:00:00');
+    const n = c.neverPosted + c.due;
+    return '<div class="mk-theme"><div><b>' + escHtml(c.name) + '</b> <span class="mk-muted">' + when + '</span><div class="mk-muted">' + c.pieces + ' in stock · ' + c.neverPosted + ' never posted · ' + c.due + ' ready to repost</div></div>' +
+      '<button class="btn" ' + (n ? '' : 'disabled ') + 'onclick="mkDraft({ theme:\'' + escHtml(c.name).replace(/'/g, '\\\'') + '\', count:' + Math.min(5, n || 1) + ' })">Draft ' + Math.min(5, n) + '</button></div>';
+  }).join('') || '<div class="mk-muted">No seasonal themes in the next 3 weeks — everyday pieces fill the weekly batch.</div>';
+  document.getElementById('mk-plan').innerHTML = '<div class="mk-plan-card"><div class="mk-plan-title">Plan posts</div>' +
+    '<div class="mk-note" style="margin-top:0">Coming up, timed to when stores and Pinterest shoppers start on each season. Reposts are rewritten for the season, not repeated. A piece can repost on a channel ' + mkPlan.cooldownDays + ' days after its last post there.</div>' +
+    cal + '<div class="mk-actions"><button class="btn" onclick="mkTogglePicker()">' + (mkPick.open ? 'Close picker' : '☑ Pick pieces…') + '</button><button class="btn" onclick="mkDraft({ mode:\'surprise\', count:5 })">🎲 Surprise me (5)</button></div></div>';
+  mkRenderPicker();
+}
+function mkTogglePicker(){ mkPick.open = !mkPick.open; mkRenderPlan(); }
+function mkPickSet(key, val){ mkPick[key] = val; mkRenderPicker(); }
+function mkPickToggle(sku){ if(mkPick.selected.has(sku)) mkPick.selected.delete(sku); else if(mkPick.selected.size < MK_PICK_MAX) mkPick.selected.add(sku); else return mkStatusMsg('Up to ' + MK_PICK_MAX + ' pieces at a time.', 'amber'); mkRenderPicker(); }
+function mkPickChannel(ch){ if(mkPick.channels.has(ch)) mkPick.channels.delete(ch); else mkPick.channels.add(ch); mkRenderPicker(); }
+function mkPickHistory(x){
+  return MK_CHANNELS.map(ch => { const c = x.channels[ch]; return MK_CH_ICON[ch] + ' ' + (c.open ? 'in queue' : c.lastPosted ? mkDate(c.lastPosted) + (c.posts > 1 ? ' (' + c.posts + '×)' : '') : '—'); }).join(' · ');
+}
+function mkRenderPicker(){
+  const el = document.getElementById('mk-picker');
+  if(!mkPick.open || !mkPlan){ el.style.display = 'none'; return; }
+  el.style.display = '';
+  const q = mkPick.q.toLowerCase();
+  const list = mkPlan.pieces.filter(x =>
+    (!mkPick.theme || x.themes.includes(mkPick.theme)) && (!mkPick.type || x.type === mkPick.type) &&
+    (mkPick.show === 'all' || (mkPick.show === 'never' ? !x.everPosted : x.everPosted && MK_CHANNELS.some(ch => x.channels[ch].due))) &&
+    (!q || (x.title + ' ' + x.sku).toLowerCase().includes(q)));
+  const types = [...new Set(mkPlan.pieces.map(x => x.type).filter(Boolean))].sort();
+  const opt = (val, label, cur) => '<option value="' + escHtml(val) + '"' + (val === cur ? ' selected' : '') + '>' + escHtml(label) + '</option>';
+  el.innerHTML = '<div class="mk-plan-card">' +
+    '<div class="mk-pick-filters">' +
+      '<select class="mk-input" onchange="mkPickSet(\'theme\', this.value)">' + opt('', 'Any theme', mkPick.theme) + mkPlan.themes.map(t => opt(t, t, mkPick.theme)).join('') + '</select>' +
+      '<select class="mk-input" onchange="mkPickSet(\'type\', this.value)">' + opt('', 'Any type', mkPick.type) + types.map(t => opt(t, t, mkPick.type)).join('') + '</select>' +
+      '<select class="mk-input" onchange="mkPickSet(\'show\', this.value)">' + opt('all', 'All in stock', mkPick.show) + opt('never', 'Never posted', mkPick.show) + opt('due', 'Ready to repost', mkPick.show) + '</select>' +
+      '<input class="mk-input" placeholder="Search title or EB number" value="' + escHtml(mkPick.q) + '" oninput="mkPick.q=this.value;clearTimeout(window._mkQ);window._mkQ=setTimeout(mkRenderPicker,300)">' +
+    '</div>' +
+    '<div class="mk-muted" style="margin:6px 0">' + list.length + ' piece' + (list.length === 1 ? '' : 's') + ' · ' + mkPick.selected.size + ' selected</div>' +
+    '<div class="mk-pick-list">' + list.slice(0, 120).map(x =>
+      '<label class="mk-pick-row' + (mkPick.selected.has(x.sku) ? ' on' : '') + '"><input type="checkbox"' + (mkPick.selected.has(x.sku) ? ' checked' : '') + ' onchange="mkPickToggle(\'' + escHtml(x.sku) + '\')">' +
+      '<img src="' + escHtml(x.image) + '" loading="lazy" alt=""><div><div class="mk-pick-title">' + escHtml(x.title) + '</div><div class="mk-muted">' + escHtml(x.sku) + (x.themes.length ? ' · ' + escHtml(x.themes.join(', ')) : '') + '</div><div class="mk-muted">' + mkPickHistory(x) + '</div></div></label>').join('') +
+      (list.length > 120 ? '<div class="mk-muted">Showing the first 120 — narrow the filters to see more.</div>' : '') + '</div>' +
+    '<div class="mk-label"><span>Post to</span></div><div class="mk-pick-filters">' + MK_CHANNELS.map(ch => '<label class="mk-chk"><input type="checkbox"' + (mkPick.channels.has(ch) ? ' checked' : '') + ' onchange="mkPickChannel(\'' + ch + '\')"> ' + MK_CH_ICON[ch] + ' ' + ch + '</label>').join('') + '</div>' +
+    '<div class="mk-label"><span>Angle</span></div><select class="mk-input" onchange="mkPick.angle=this.value">' + opt('auto', 'Whatever season fits now', mkPick.angle) + opt('', 'No seasonal angle', mkPick.angle) + mkPlan.themes.map(t => opt(t, t, mkPick.angle)).join('') + '</select>' +
+    '<div class="mk-actions"><button class="btn btn-primary" ' + (mkPick.selected.size && mkPick.channels.size ? '' : 'disabled ') + 'onclick="mkDraftPicked()">✨ Draft ' + mkPick.selected.size + ' selected</button>' + (mkPick.selected.size ? '<button class="btn" onclick="mkPick.selected.clear();mkRenderPicker()">Clear</button>' : '') + '</div>' +
+  '</div>';
+}
+function mkDraftPicked(){
+  const opts = { skus:[...mkPick.selected], channels:[...mkPick.channels] };
+  if(mkPick.angle !== 'auto') opts.theme = mkPick.angle;
+  mkDraft(opts).then(ok => { if(ok){ mkPick.selected.clear(); mkPick.open = false; mkRenderPlan(); } });
 }
 async function mkLoadStatus(){
   const get = async path => { try { const r = await fetch(SERVER_URL + path); return r.ok ? await r.json() : null; } catch(e){ return null; } };
@@ -1939,7 +2030,7 @@ function mkSetTab(t){ mkTab = t; mkRender(); }
 // While approved posts are going out, refresh so they move to Posted (or show the error).
 function mkSchedulePoll(){
   clearTimeout(mkPollTimer);
-  const posting = mkRecords.some(r => r.fields['Status'] === 'Approved' && !r.fields['Post error'] && mkConnected(mkChannel(r.fields)));
+  const posting = mkRecords.some(r => r.fields['Status'] === 'Approved' && !r.fields['Post error'] && mkDue(r.fields) && mkConnected(mkChannel(r.fields)));
   if(!posting) return;
   mkPollTimer = setTimeout(async () => {
     if(!document.getElementById('screen-marketing').classList.contains('active')) return;
@@ -1981,10 +2072,15 @@ function mkPieceHtml(rows){
     const label = rows.length > 1 ? (any ? 'Approve & post all ' + rows.length : 'Approve all ' + rows.length) : (any ? 'Approve & post' : 'Approve');
     group = '<div class="mk-actions mk-group"><button class="btn btn-primary" onclick="mkApproveAll(\'' + escHtml(eb) + '\')">✓ ' + label + '</button><button class="btn" onclick="mkSkipAll(\'' + escHtml(eb) + '\')">Skip piece</button></div>';
   }
+  // Where and when this piece has gone out before, from every posted row in the queue.
+  const posted = mkRecords.filter(r => r.fields['EB Number'] === eb && r.fields['Status'] === 'Posted' && !rows.includes(r))
+    .sort((a, b) => String(b.fields['Status changed'] || '').localeCompare(String(a.fields['Status changed'] || '')));
+  const history = posted.length ? '<div class="mk-history">Posted before: ' + posted.slice(0, 6).map(r => MK_CH_ICON[mkChannel(r.fields)] + ' ' + mkDate(r.fields['Status changed']) + (r.fields['Theme'] ? ' (' + escHtml(r.fields['Theme']) + ')' : '')).join(' · ') + '</div>' : '';
+  const chips = [f0['Post type'] === 'Repost' ? '<span class="mk-chip repost">Repost</span>' : (f0['Post type'] === 'New' ? '<span class="mk-chip">New</span>' : ''), f0['Theme'] ? '<span class="mk-chip theme">' + escHtml(f0['Theme']) + '</span>' : ''].join('');
   return '<div class="mk-card ' + st.toLowerCase() + '">' +
     '<div class="mk-media">' + media + '</div>' +
     '<div class="mk-body">' +
-      '<div class="rd-eb">' + escHtml(eb) + '</div>' +
+      '<div class="rd-eb">' + escHtml(eb) + chips + '</div>' + history +
       rows.map(r => mkChannelHtml(r, rows.length > 1)).join('') +
       group +
     '</div></div>';
@@ -2013,6 +2109,9 @@ function mkChannelHtml(r, grouped){
     if(connected && f['Post error']){
       status = '<div class="mk-err"><b>Couldn\'t post:</b> ' + escHtml(f['Post error']) + '</div>';
       actions = '<button class="btn btn-primary" onclick="mkRetry(\'' + id + '\')">↻ Retry</button>' + back;
+    } else if(connected && !mkDue(f)){
+      status = '<div class="mk-posting">🗓 Scheduled for ' + escHtml(mkWhen(f['Scheduled for'])) + '</div>';
+      actions = '<button class="btn" onclick="mkPostNow(\'' + id + '\')">Post now</button>' + back;
     } else if(connected){
       status = '<div class="mk-posting">⏳ Posting to ' + ch + (f['Media'] === 'Video' && f['Video URL'] ? ' — videos take a minute or two to process' : '') + '…</div>';
     } else actions = manual + '<button class="btn" onclick="mkMarkPosted(\'' + id + '\')">Mark as posted</button>' + back;
@@ -2063,11 +2162,16 @@ async function mkApproveAll(eb){
   if(bad.length) return mkStatusMsg('<strong>Fix before approving</strong>' + escHtml(bad.join(' ')), 'amber');
   const edits = rows.map(r => [r, mkCardFields(r.id)]); // read inputs before the first re-render
   try {
-    for(const [r, f] of edits) await mkSave(r.id, { ...f, 'Status':'Approved' }, { render:false });
+    const saved = [];
+    for(const [r, f] of edits) saved.push(await mkSave(r.id, { ...f, 'Status':'Approved' }, { render:false }));
     mkUpdateHomeCount(); mkRender();
-    const live = rows.map(r => mkChannel(r.fields)).filter(mkConnected), wait = rows.map(r => mkChannel(r.fields)).filter(ch => !mkConnected(ch));
-    mkStatusMsg('Approved.' + (live.length ? ' Posting to ' + live.join(', ') + ' now; they move to <b>Posted</b> when live.' : '') + (wait.length ? ' ' + wait.join(', ') + ' will wait under <b>Approved</b> until connected.' : ''));
+    const parts = saved.map(d => { const ch = mkChannel(d.fields); return !mkConnected(ch) ? ch + ' waits until connected' : mkDue(d.fields) ? ch + ' now' : ch + ' ' + mkWhen(d.fields['Scheduled for']); });
+    mkStatusMsg('Approved — ' + escHtml(parts.join(', ')) + '. Posts are spread out to about one per channel per day.');
   } catch(e){ mkUpdateHomeCount(); mkRender(); mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
+}
+async function mkPostNow(id){
+  try { await mkSave(id, { 'Scheduled for': new Date().toISOString() }); mkStatusMsg('Posting now — it moves to <b>Posted</b> when it\'s live.'); }
+  catch(e){ mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
 }
 async function mkSkipAll(eb){
   const rows = mkRecords.filter(r => r.fields['EB Number'] === eb && r.fields['Status'] === 'Draft');
@@ -2130,20 +2234,24 @@ async function mkMarkPosted(id){
   try { await mkSave(id, fields); mkStatusMsg('Marked as posted.'); }
   catch(e){ mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
 }
-async function mkDraft(){
-  if(mkBusy) return; mkBusy = true;
+// opts: {} for the weekly-style mix (new pieces first, then seasonal reposts), { theme }, { mode:'surprise' },
+// or { skus, channels, theme } for Patti's picks. Resolves true when drafts were created.
+async function mkDraft(opts = {}){
+  if(mkBusy) return false; mkBusy = true;
   const btn = document.getElementById('mk-draft-btn'); btn.disabled = true; btn.textContent = 'Drafting… (a minute or two)';
-  mkStatusMsg('');
+  mkStatusMsg('Drafting' + (opts.theme ? ' ' + escHtml(opts.theme) + ' posts' : '') + '… this takes a minute or two.');
   try {
-    const r = await fetch(SERVER_URL + '/marketing/draft-pins', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ count: 5 }) });
+    const r = await fetch(SERVER_URL + '/marketing/draft-pins', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ count: 5, ...opts }) });
     const d = await r.json().catch(()=>({}));
-    if(r.status === 409) return mkStatusMsg(escHtml(d.error), 'amber'); // the weekly batch is already running
+    if(r.status === 409){ mkStatusMsg(escHtml(d.error), 'amber'); return false; } // the weekly batch is already running
     if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
-    await mkLoad(); mkTab = 'Draft'; mkRender();
+    await mkLoad(); mkTab = 'Draft'; mkRender(); mkLoadPlan();
     const n = new Set((d.records || []).map(x => x.fields['EB Number'])).size, failed = (d.failed || []).length;
-    if(!n && !failed) mkStatusMsg('<strong>Nothing new to draft</strong>Every in-stock piece with a photo already has posts in the queue.', 'amber');
-    else mkStatusMsg(n + ' piece' + (n === 1 ? '' : 's') + ' drafted and ready to review.' + (failed ? ' ' + failed + ' couldn\'t be drafted — try again later.' : ''), failed ? 'amber' : 'teal');
-  } catch(e){ mkStatusMsg('<strong>Couldn\'t draft</strong>' + escHtml(e.message), 'rose'); }
+    const reposts = (d.records || []).filter(x => x.fields['Post type'] === 'Repost').length;
+    if(!n && !failed) mkStatusMsg('<strong>Nothing to draft</strong>' + (opts.skus ? 'Those pieces already have drafts waiting on the chosen channels.' : 'Every matching piece is already in the queue or was posted in the last ' + ((mkPlan && mkPlan.cooldownDays) || 30) + ' days. Use <b>Pick pieces</b> to choose some anyway.'), 'amber');
+    else mkStatusMsg(n + ' piece' + (n === 1 ? '' : 's') + ' drafted' + (reposts ? ' (' + reposts + ' reworded repost' + (reposts === 1 ? '' : 's') + ')' : '') + ' — ready to review.' + (failed ? ' ' + failed + ' couldn\'t be drafted — try again later.' : ''), failed ? 'amber' : 'teal');
+    return n > 0;
+  } catch(e){ mkStatusMsg('<strong>Couldn\'t draft</strong>' + escHtml(e.message), 'rose'); return false; }
   finally { mkBusy = false; btn.disabled = false; btn.textContent = '✨ Draft 5 new pieces'; }
 }
 
