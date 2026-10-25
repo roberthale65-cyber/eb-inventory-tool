@@ -309,6 +309,12 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 .mk-over{color:var(--red-text)}
 .mk-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .mk-actions .btn{flex:1;min-width:120px}
+.mk-ch{border-top:1px solid var(--border);padding-top:10px;margin-top:10px}
+.rd-eb + .mk-ch{border-top:none;padding-top:0}
+.mk-ch-head{font-size:12px;font-weight:800;color:var(--text);margin-bottom:2px}
+.mk-ch-off{font-size:10px;font-weight:700;color:var(--text-muted);background:var(--ivory-dark);border-radius:99px;padding:1px 7px;margin-left:4px}
+.mk-actions .btn.mk-small{flex:0 0 auto;min-width:0;font-size:12px;padding:6px 12px}
+.mk-group{border-top:1px solid var(--border);padding-top:12px}
 @media (max-width:480px){.mk-card{flex-direction:column}.mk-img{width:100%;height:240px}}
 #rl-preview-frame{width:100%;display:flex;justify-content:center;margin:4px 0 16px}
 #rl-preview{width:min(340px,80%);aspect-ratio:4/6;background:#fff;border:1.5px solid var(--border-strong);border-radius:8px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.5%;padding:6% 7%;overflow:hidden}
@@ -467,7 +473,7 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
     <div class="mode-card bin-mgmt" onclick="goTo('screen-bin-mgmt')"><span class="mode-icon">📦</span><div class="mode-title">Bin management</div><div class="mode-desc">Print bin, bar &amp; shelf labels, scan to assign pieces, update anytime</div><div class="mode-arrow">→</div></div>
     <div class="mode-card raw-label" onclick="goTo('screen-raw-label')"><span class="mode-icon">🧵</span><div class="mode-title">Raw material label</div><div class="mode-desc">Free-form 4×6 bin label — type up to 4 lines, big auto-sized text, print one off</div><div class="mode-arrow">→</div></div>
     <div class="mode-card craft-tag" onclick="goTo('screen-craft-tag')"><span class="mode-icon">🎪</span><div class="mode-title">Craft show tag</div><div class="mode-desc">Temporary 3×2 price tag for a show — enter an EB number, set the show price, print (no QR)</div><div class="mode-arrow">→</div></div>
-    <div class="mode-card marketing" onclick="goTo('screen-marketing')"><span class="mode-icon">📌</span><div class="mode-title">Marketing<span class="mk-count" id="mk-home-count" style="display:none"></span></div><div class="mode-desc">Review Pinterest pins drafted from the shop — approve, edit, then post</div><div class="mode-arrow">→</div></div>
+    <div class="mode-card marketing" onclick="goTo('screen-marketing')"><span class="mode-icon">📌</span><div class="mode-title">Marketing<span class="mk-count" id="mk-home-count" style="display:none"></span></div><div class="mode-desc">Review Pinterest, Instagram & Facebook posts drafted from the shop — approve once, they post</div><div class="mode-arrow">→</div></div>
     <div class="mode-card readiness" onclick="goTo('screen-readiness')"><span class="mode-icon">&#x1F4CB;</span><div class="mode-title">Listing readiness</div><div class="mode-desc">See what each piece is missing before it can publish to Shopify</div><div class="mode-arrow">→</div></div>
     <div class="mode-card log-cost" onclick="goTo('screen-costs')"><span class="mode-icon">&#x1F9FE;</span><div class="mode-title">Log a cost</div><div class="mode-desc">Snap a receipt, log mileage, or enter manually — saved to Airtable</div><div class="mode-arrow">→</div></div>
     <div class="mode-card resync" onclick="goTo('screen-resync')"><span class="mode-icon">&#x21BB;</span><div class="mode-title">Re-sync to Shopify</div><div class="mode-desc">Push attribute &amp; inventory updates to an already-published piece — keeps title, photos &amp; price</div><div class="mode-arrow">→</div></div>
@@ -1433,12 +1439,12 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 <div id="screen-marketing" class="screen">
   <div class="wizard-header">
     <button class="hdr-nav-btn home-btn" onclick="goHome()" title="Home screen">⌂ Home</button>
-    <div class="wizard-title">Marketing — Pinterest</div>
+    <div class="wizard-title">Marketing</div>
   </div>
   <div class="screen-body">
-    <div class="info-card rose" style="margin-bottom:12px"><strong>How this works:</strong> Every week the AI drafts pins from in-stock pieces, using the listing video when there is one and favoring the seasons shoppers are planning for. Nothing goes live until you approve it. When a piece sells, its pins switch to similar pieces on their own.</div>
+    <div class="info-card rose" style="margin-bottom:12px"><strong>How this works:</strong> Every week the AI drafts a Pinterest pin, an Instagram post and a Facebook post for in-stock pieces, using the listing video when there is one and favoring the seasons shoppers are planning for. Nothing goes live until you approve it — one tap approves all three. When a piece sells, unposted drafts are skipped and live pins and Facebook posts point to similar pieces.</div>
     <div id="mk-connect"></div>
-    <div class="btn-row" style="margin-bottom:14px"><button class="btn btn-primary btn-full" id="mk-draft-btn" onclick="mkDraft()">✨ Draft 5 new pins</button></div>
+    <div class="btn-row" style="margin-bottom:14px"><button class="btn btn-primary btn-full" id="mk-draft-btn" onclick="mkDraft()">✨ Draft 5 new pieces</button></div>
     <div id="mk-status" class="info-card teal" style="display:none"></div>
     <div class="mk-tabs" id="mk-tabs"></div>
     <div id="mk-list"></div>
@@ -1862,17 +1868,36 @@ function goTo(screenId) {
 function goHome() { stepBackFn = null; updateHeaderBackBtn(); goTo('screen-home'); }
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-// ── Marketing: Pinterest pin drafts → Patti approves → the server posts them ──
-// Rows live in the Airtable "Marketing Queue" table, read and written via the server.
-// Once Pinterest is connected, approving a pin posts it (video pin when the listing has a
-// usable video). Until then — or if posting fails — "Post on Pinterest" is the by-hand
-// fallback: it copies the title (the pin builder can't pre-fill it) and opens the builder
-// with the photo, product link and description already filled in.
+// ── Marketing: Pinterest, Instagram & Facebook drafts → Patti approves → the server posts them ──
+// Rows live in the Airtable "Marketing Queue" table (one per piece per channel), read and written
+// via the server. The screen groups a piece's rows into one card so a single tap approves every
+// channel. Once a channel is connected, approving posts it (the listing video when there is a
+// usable one). Until then — or if posting fails — each channel has a by-hand fallback.
 let mkRecords = [], mkTab = 'Draft', mkBusy = false, mkPollTimer = null;
 let mkPin = { configured: false, connected: false, username: null };
+let mkMeta = { configured: false, connected: false, pageName: null, igUsername: null, instagram: false };
 const MK_TABS = [['Draft','To review'],['Approved','Approved'],['Posted','Posted'],['Skipped','Skipped']];
 const MK_POLL_MS = 8000;
-const MK_TITLE_MAX = 100, MK_DESC_MAX = 500;
+const MK_CHANNELS = ['Pinterest','Instagram','Facebook'];
+const MK_CH_ICON = { Pinterest:'📌', Instagram:'📷', Facebook:'👍' };
+const MK_TITLE_MAX = 100, MK_DESC_MAX = { Pinterest: 500, Instagram: 2200, Facebook: 2000 };
+const mkChannel = f => f['Channel'] || 'Pinterest';
+function mkConnected(ch){
+  if(ch === 'Instagram') return mkMeta.connected && mkMeta.instagram;
+  if(ch === 'Facebook') return mkMeta.connected;
+  return mkPin.connected;
+}
+// Rows in the current tab, grouped by piece (EB Number), newest first.
+function mkPieces(status){
+  const groups = new Map();
+  for(const r of mkRecords.filter(r => r.fields['Status'] === status)){
+    const k = r.fields['EB Number'] || r.id;
+    if(!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r);
+  }
+  for(const rows of groups.values()) rows.sort((a, b) => MK_CHANNELS.indexOf(mkChannel(a.fields)) - MK_CHANNELS.indexOf(mkChannel(b.fields)));
+  return [...groups.values()];
+}
 
 async function mkLoad(){
   const r = await fetch(SERVER_URL + '/marketing/queue');
@@ -1883,34 +1908,38 @@ async function mkLoad(){
 }
 function mkUpdateHomeCount(){
   const el = document.getElementById('mk-home-count'); if(!el) return;
-  const n = mkRecords.filter(r => r.fields['Status'] === 'Draft').length;
+  const n = mkPieces('Draft').length;
   el.textContent = n + ' to review'; el.style.display = n ? '' : 'none';
 }
 async function mkRefreshHomeCount(){ try { await mkLoad(); } catch(e){ console.warn('Marketing queue load failed:', e.message); } }
 
 async function mkInit(){
   const host = document.getElementById('mk-list');
-  host.innerHTML = '<div style="text-align:center;padding:36px 20px;color:var(--text-muted)">Loading pin drafts…</div>';
-  mkLoadPinStatus();
+  host.innerHTML = '<div style="text-align:center;padding:36px 20px;color:var(--text-muted)">Loading drafts…</div>';
+  mkLoadStatus();
   try { await mkLoad(); mkRender(); }
   catch(e){ host.innerHTML = '<div class="info-card rose"><strong>Couldn\'t load the marketing queue</strong>' + escHtml(e.message) + '</div>'; }
 }
-async function mkLoadPinStatus(){
-  try {
-    const r = await fetch(SERVER_URL + '/pinterest/status');
-    if(r.ok) mkPin = await r.json();
-  } catch(e){ /* keep the last known state */ }
-  const el = document.getElementById('mk-connect');
-  if(mkPin.connected) el.innerHTML = '<div class="info-card teal">Pinterest is connected' + (mkPin.username ? ' as <b>@' + escHtml(mkPin.username) + '</b>' : '') + (mkPin.sandbox ? ' (test mode: pins go to Pinterest\'s sandbox, not the live profile)' : '') + '. Approved pins post automatically.</div>';
-  else if(mkPin.configured) el.innerHTML = '<div class="info-card amber"><strong>Connect Pinterest once</strong>Then approved pins post by themselves. <a href="' + SERVER_URL + '/pinterest-auth" target="_blank" onclick="setTimeout(mkLoadPinStatus,15000)" style="color:inherit;font-weight:700">Connect Pinterest →</a> (sign in as Eternal Blooms by Patti, then come back here)</div>';
-  else el.innerHTML = '<div class="info-card amber"><strong>Pinterest isn\'t linked yet</strong>Until it is, approved pins wait under <b>Approved</b> for you to post them with <b>Post on Pinterest</b>.</div>';
+async function mkLoadStatus(){
+  const get = async path => { try { const r = await fetch(SERVER_URL + path); return r.ok ? await r.json() : null; } catch(e){ return null; } };
+  const [pin, meta] = await Promise.all([get('/pinterest/status'), get('/meta/status')]);
+  if(pin) mkPin = pin;
+  if(meta) mkMeta = meta;
+  const cards = [];
+  if(mkPin.connected) cards.push('<div class="info-card teal">📌 Pinterest is connected' + (mkPin.username ? ' as <b>@' + escHtml(mkPin.username) + '</b>' : '') + (mkPin.sandbox ? ' (test mode: pins go to Pinterest\'s sandbox, not the live profile)' : '') + '.</div>');
+  else if(mkPin.configured) cards.push('<div class="info-card amber"><strong>📌 Connect Pinterest once</strong>Then approved pins post by themselves. <a href="' + SERVER_URL + '/pinterest-auth" target="_blank" onclick="setTimeout(mkLoadStatus,15000)" style="color:inherit;font-weight:700">Connect Pinterest →</a> (sign in as Eternal Blooms by Patti, then come back here)</div>');
+  else cards.push('<div class="info-card amber"><strong>📌 Pinterest isn\'t linked yet</strong>Until it is, approved pins wait under <b>Approved</b> for you to post them with <b>Post on Pinterest</b>.</div>');
+  if(mkMeta.connected) cards.push('<div class="info-card teal">📷👍 Facebook' + (mkMeta.pageName ? ' (<b>' + escHtml(mkMeta.pageName) + '</b>)' : '') + (mkMeta.instagram ? ' and Instagram' + (mkMeta.igUsername ? ' (<b>@' + escHtml(mkMeta.igUsername) + '</b>)' : '') : '') + ' connected.' + (mkMeta.instagram ? '' : ' <b>No Instagram account is linked to the Page</b> — link it in the Page settings, then connect again.') + '</div>');
+  else if(mkMeta.configured) cards.push('<div class="info-card amber"><strong>📷👍 Connect Facebook & Instagram once</strong>Then approved posts go out by themselves. <a href="' + SERVER_URL + '/meta-auth" target="_blank" onclick="setTimeout(mkLoadStatus,15000)" style="color:inherit;font-weight:700">Connect Facebook & Instagram →</a> (pick the Eternal Blooms Page, then come back here)</div>');
+  else cards.push('<div class="info-card amber"><strong>📷👍 Facebook & Instagram aren\'t linked yet</strong>Until they are, approved posts wait under <b>Approved</b>; use <b>Copy text</b> to post them by hand.</div>');
+  document.getElementById('mk-connect').innerHTML = cards.join('');
   if(document.getElementById('screen-marketing').classList.contains('active') && mkRecords.length) mkRender();
 }
 function mkSetTab(t){ mkTab = t; mkRender(); }
-// While approved pins are being posted, refresh so they move to Posted (or show the error).
+// While approved posts are going out, refresh so they move to Posted (or show the error).
 function mkSchedulePoll(){
   clearTimeout(mkPollTimer);
-  const posting = mkPin.connected && mkRecords.some(r => r.fields['Status'] === 'Approved' && !r.fields['Post error']);
+  const posting = mkRecords.some(r => r.fields['Status'] === 'Approved' && !r.fields['Post error'] && mkConnected(mkChannel(r.fields)));
   if(!posting) return;
   mkPollTimer = setTimeout(async () => {
     if(!document.getElementById('screen-marketing').classList.contains('active')) return;
@@ -1925,85 +1954,126 @@ function mkStatusMsg(msg, type){
 
 function mkRender(){
   document.getElementById('mk-tabs').innerHTML = MK_TABS.map(([k,label]) => {
-    const n = mkRecords.filter(r => r.fields['Status'] === k).length;
-    return '<button class="mk-tab' + (mkTab===k?' active':'') + '" onclick="mkSetTab(\'' + k + '\')">' + label + ' (' + n + ')</button>';
+    return '<button class="mk-tab' + (mkTab===k?' active':'') + '" onclick="mkSetTab(\'' + k + '\')">' + label + ' (' + mkPieces(k).length + ')</button>';
   }).join('');
-  const rows = mkRecords.filter(r => r.fields['Status'] === mkTab);
+  const pieces = mkPieces(mkTab);
   const host = document.getElementById('mk-list');
   mkSchedulePoll();
-  if(!rows.length){
-    const empty = { Draft:'No drafts waiting. New ones arrive each week, or tap <b>Draft 5 new pins</b>.', Approved: mkPin.connected ? 'Nothing waiting — approved pins post right away.' : 'Nothing approved yet — approve a draft and it shows up here to post.', Posted:'No pins posted yet.', Skipped:'Nothing skipped.' }[mkTab];
+  if(!pieces.length){
+    const empty = { Draft:'No drafts waiting. New ones arrive each week, or tap <b>Draft 5 new pieces</b>.', Approved:'Nothing waiting — approved posts go out as soon as their channel is connected.', Posted:'Nothing posted yet.', Skipped:'Nothing skipped.' }[mkTab];
     host.innerHTML = '<div style="text-align:center;padding:30px 16px;color:var(--text-muted);font-size:14px">' + empty + '</div>';
     return;
   }
-  host.innerHTML = rows.map(mkCardHtml).join('');
+  host.innerHTML = pieces.map(mkPieceHtml).join('');
 }
 
-function mkCardHtml(r){
-  const f = r.fields, id = r.id, st = f['Status'];
+// One card per piece: shared photo/video, then a block per channel.
+function mkPieceHtml(rows){
+  const f0 = rows[0].fields, st = f0['Status'], eb = f0['EB Number'] || '';
+  const isVideo = rows.some(r => r.fields['Media'] === 'Video' && r.fields['Video URL']);
+  const vf = (rows.find(r => r.fields['Media'] === 'Video' && r.fields['Video URL']) || rows[0]).fields;
+  const media = isVideo
+    ? '<video class="mk-img" src="' + escHtml(vf['Video URL']) + '" poster="' + escHtml(vf['Image URL'] || '') + '" muted playsinline controls preload="none"></video><span class="mk-media-tag">VIDEO</span>'
+    : '<a href="' + escHtml(f0['Product URL'] || '#') + '" target="_blank" title="Open the product page"><img class="mk-img" src="' + escHtml(f0['Image URL'] || '') + '" alt="' + escHtml(f0['Alt Text'] || '') + '" loading="lazy"></a>';
+  let group = '';
+  if(st === 'Draft'){
+    const any = rows.some(r => mkConnected(mkChannel(r.fields)));
+    const label = rows.length > 1 ? (any ? 'Approve & post all ' + rows.length : 'Approve all ' + rows.length) : (any ? 'Approve & post' : 'Approve');
+    group = '<div class="mk-actions mk-group"><button class="btn btn-primary" onclick="mkApproveAll(\'' + escHtml(eb) + '\')">✓ ' + label + '</button><button class="btn" onclick="mkSkipAll(\'' + escHtml(eb) + '\')">Skip piece</button></div>';
+  }
+  return '<div class="mk-card ' + st.toLowerCase() + '">' +
+    '<div class="mk-media">' + media + '</div>' +
+    '<div class="mk-body">' +
+      '<div class="rd-eb">' + escHtml(eb) + '</div>' +
+      rows.map(r => mkChannelHtml(r, rows.length > 1)).join('') +
+      group +
+    '</div></div>';
+}
+function mkChannelHtml(r, grouped){
+  const f = r.fields, id = r.id, st = f['Status'], ch = mkChannel(f), connected = mkConnected(ch);
   const editable = st === 'Draft' || st === 'Approved';
-  const t = f['Pin Title'] || '', d = f['Description'] || '';
   const field = (label, key, val, max, area) => {
     const counter = max ? '<span id="mk-cnt-' + key + '-' + id + '"' + (val.length > max ? ' class="mk-over"' : '') + '>' + val.length + '/' + max + '</span>' : '';
     const attrs = 'class="mk-input" id="mk-' + key + '-' + id + '"' + (editable ? '' : ' readonly') + (max ? ' oninput="mkCount(\'' + key + '\',\'' + id + '\',' + max + ')"' : '');
     return '<div class="mk-label"><span>' + label + '</span>' + counter + '</div>' +
       (area ? '<textarea ' + attrs + '>' + escHtml(val) + '</textarea>' : '<input ' + attrs + ' value="' + escHtml(val) + '">');
   };
-  const isVideo = f['Media'] === 'Video' && f['Video URL'];
-  const manual = '<button class="btn btn-primary" onclick="mkPost(\'' + id + '\')">📌 Post on Pinterest</button><button class="btn" onclick="mkMarkPosted(\'' + id + '\')">Mark as posted</button>';
+  const d = f['Description'] || '';
+  const fields = ch === 'Pinterest'
+    ? field('Pin title', 'title', f['Pin Title'] || '', MK_TITLE_MAX) + field('Description', 'desc', d, MK_DESC_MAX.Pinterest, true) + field('Board', 'board', f['Board'] || '')
+    : field(ch === 'Instagram' ? 'Caption' : 'Post', 'desc', d, MK_DESC_MAX[ch], true);
+  const manual = ch === 'Pinterest'
+    ? '<button class="btn btn-primary" onclick="mkPost(\'' + id + '\')">📌 Post on Pinterest</button>'
+    : '<button class="btn btn-primary" onclick="mkCopy(\'' + id + '\')">📋 Copy text</button>';
+  const back = '<button class="btn" onclick="mkSetStatus(\'' + id + '\',\'Draft\')">Back to drafts</button>';
   let actions = '', status = '';
-  if(st === 'Draft') actions = '<button class="btn btn-primary" onclick="mkApprove(\'' + id + '\')">✓ ' + (mkPin.connected ? 'Approve & post' : 'Approve') + '</button><button class="btn" onclick="mkSetStatus(\'' + id + '\',\'Skipped\')">Skip</button>';
+  if(st === 'Draft') actions = grouped ? '<button class="btn mk-small" onclick="mkSetStatus(\'' + id + '\',\'Skipped\')">Skip ' + ch + '</button>'
+    : '';
   else if(st === 'Approved'){
-    if(mkPin.connected && f['Post error']){
+    if(connected && f['Post error']){
       status = '<div class="mk-err"><b>Couldn\'t post:</b> ' + escHtml(f['Post error']) + '</div>';
-      actions = '<button class="btn btn-primary" onclick="mkRetry(\'' + id + '\')">↻ Retry</button><button class="btn" onclick="mkSetStatus(\'' + id + '\',\'Draft\')">Back to drafts</button>';
-    } else if(mkPin.connected){
-      status = '<div class="mk-posting">⏳ Posting to Pinterest' + (isVideo ? ' — videos take a minute or two to process' : '') + '…</div>';
-    } else actions = manual + '<button class="btn" onclick="mkSetStatus(\'' + id + '\',\'Draft\')">Back to drafts</button>';
+      actions = '<button class="btn btn-primary" onclick="mkRetry(\'' + id + '\')">↻ Retry</button>' + back;
+    } else if(connected){
+      status = '<div class="mk-posting">⏳ Posting to ' + ch + (f['Media'] === 'Video' && f['Video URL'] ? ' — videos take a minute or two to process' : '') + '…</div>';
+    } else actions = manual + '<button class="btn" onclick="mkMarkPosted(\'' + id + '\')">Mark as posted</button>' + back;
   }
-  else if(st === 'Posted') actions = (f['Pin URL'] ? '<a class="btn" href="' + escHtml(f['Pin URL']) + '" target="_blank">View pin</a>' : '');
+  else if(st === 'Posted') actions = f['Pin URL'] ? '<a class="btn" href="' + escHtml(f['Pin URL']) + '" target="_blank">View on ' + ch + '</a>' : '';
   else actions = '<button class="btn" onclick="mkSetStatus(\'' + id + '\',\'Draft\')">Restore to drafts</button>';
-  const notes = [f['Sold redirect'] ? 'Sold — this pin now points to similar pieces.' : '', f['Notes'] || ''].filter(Boolean);
-  const media = isVideo
-    ? '<video class="mk-img" src="' + escHtml(f['Video URL']) + '" poster="' + escHtml(f['Image URL'] || '') + '" muted playsinline controls preload="none"></video><span class="mk-media-tag">VIDEO PIN</span>'
-    : '<a href="' + escHtml(f['Product URL'] || '#') + '" target="_blank" title="Open the product page"><img class="mk-img" src="' + escHtml(f['Image URL'] || '') + '" alt="' + escHtml(f['Alt Text'] || '') + '" loading="lazy"></a>';
-  return '<div class="mk-card ' + st.toLowerCase() + '">' +
-    '<div class="mk-media">' + media + '</div>' +
-    '<div class="mk-body">' +
-      '<div class="rd-eb">' + escHtml(f['EB Number'] || '') + '</div>' +
-      field('Pin title', 'title', t, MK_TITLE_MAX) +
-      field('Description', 'desc', d, MK_DESC_MAX, true) +
-      field('Board', 'board', f['Board'] || '') +
-      status + notes.map(n => '<div class="mk-note">' + escHtml(n).replace(/\n/g, '<br>') + '</div>').join('') +
-      (actions ? '<div class="mk-actions">' + actions + '</div>' : '') +
-    '</div></div>';
+  const soldNote = { Pinterest:'Sold — this pin now points to similar pieces.', Facebook:'Sold — this post now points to similar pieces.', Instagram:'Sold — Instagram posts can\'t be edited, so this one stays as it is.' }[ch];
+  const notes = [f['Sold redirect'] ? soldNote : '', f['Notes'] || ''].filter(Boolean);
+  return '<div class="mk-ch">' +
+    '<div class="mk-ch-head">' + MK_CH_ICON[ch] + ' ' + ch + (connected ? '' : ' <span class="mk-ch-off">not connected</span>') + '</div>' +
+    fields + status + notes.map(n => '<div class="mk-note">' + escHtml(n).replace(/\n/g, '<br>') + '</div>').join('') +
+    (actions ? '<div class="mk-actions">' + actions + '</div>' : '') +
+  '</div>';
 }
 function mkCount(key, id, max){
   const v = document.getElementById('mk-' + key + '-' + id).value, c = document.getElementById('mk-cnt-' + key + '-' + id);
   c.textContent = v.length + '/' + max; c.className = v.length > max ? 'mk-over' : '';
 }
-// The text currently in a card's inputs (Patti may have edited it).
+// The text currently in a row's inputs (Patti may have edited it). Only fields the row shows.
 function mkCardFields(id){
-  const val = k => { const el = document.getElementById('mk-' + k + '-' + id); return el ? el.value.trim() : ''; };
-  return { 'Pin Title': val('title'), 'Description': val('desc'), 'Board': val('board') };
+  const out = {};
+  for(const [k, field] of [['title','Pin Title'],['desc','Description'],['board','Board']]){
+    const el = document.getElementById('mk-' + k + '-' + id);
+    if(el) out[field] = el.value.trim();
+  }
+  return out;
 }
-async function mkSave(id, fields){
+// Why a row can't be approved yet, or '' when it's fine.
+function mkInvalid(r){
+  const ch = mkChannel(r.fields), f = mkCardFields(r.id);
+  if(!f['Description'] || (ch === 'Pinterest' && !f['Pin Title'])) return ch + ' needs ' + (ch === 'Pinterest' ? 'a title and description' : 'some text') + '.';
+  if(ch === 'Pinterest' && f['Pin Title'].length > MK_TITLE_MAX) return 'Pin titles max ' + MK_TITLE_MAX + ' characters.';
+  if(f['Description'].length > MK_DESC_MAX[ch]) return ch + ' text max ' + MK_DESC_MAX[ch] + ' characters.';
+  return '';
+}
+async function mkSave(id, fields, { render = true } = {}){
   const r = await fetch(SERVER_URL + '/marketing/queue/' + id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fields }) });
   const d = await r.json().catch(()=>({}));
   if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
   const i = mkRecords.findIndex(x => x.id === id); if(i >= 0) mkRecords[i] = d;
-  mkUpdateHomeCount(); mkRender();
+  if(render){ mkUpdateHomeCount(); mkRender(); }
   return d;
 }
-async function mkApprove(id){
-  const f = mkCardFields(id);
-  if(!f['Pin Title'] || !f['Description']) return mkStatusMsg('<strong>Title and description are needed</strong>Fill both in before approving.', 'amber');
-  if(f['Pin Title'].length > MK_TITLE_MAX || f['Description'].length > MK_DESC_MAX) return mkStatusMsg('<strong>Too long for Pinterest</strong>Titles max ' + MK_TITLE_MAX + ' characters, descriptions max ' + MK_DESC_MAX + '.', 'amber');
+// One tap approves every channel still in Draft for this piece.
+async function mkApproveAll(eb){
+  const rows = mkRecords.filter(r => r.fields['EB Number'] === eb && r.fields['Status'] === 'Draft');
+  const bad = rows.map(mkInvalid).filter(Boolean);
+  if(bad.length) return mkStatusMsg('<strong>Fix before approving</strong>' + escHtml(bad.join(' ')), 'amber');
+  const edits = rows.map(r => [r, mkCardFields(r.id)]); // read inputs before the first re-render
   try {
-    await mkSave(id, { ...f, 'Status':'Approved' });
-    mkStatusMsg(mkPin.connected ? 'Approved — posting to Pinterest now. It moves to <b>Posted</b> when it\'s live.' : 'Approved — it\'s waiting under <b>Approved</b> for you to post.');
-  }
+    for(const [r, f] of edits) await mkSave(r.id, { ...f, 'Status':'Approved' }, { render:false });
+    mkUpdateHomeCount(); mkRender();
+    const live = rows.map(r => mkChannel(r.fields)).filter(mkConnected), wait = rows.map(r => mkChannel(r.fields)).filter(ch => !mkConnected(ch));
+    mkStatusMsg('Approved.' + (live.length ? ' Posting to ' + live.join(', ') + ' now; they move to <b>Posted</b> when live.' : '') + (wait.length ? ' ' + wait.join(', ') + ' will wait under <b>Approved</b> until connected.' : ''));
+  } catch(e){ mkUpdateHomeCount(); mkRender(); mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
+}
+async function mkSkipAll(eb){
+  const rows = mkRecords.filter(r => r.fields['EB Number'] === eb && r.fields['Status'] === 'Draft');
+  try { for(const r of rows) await mkSave(r.id, { ...mkCardFields(r.id), 'Status':'Skipped' }, { render:false }); mkStatusMsg(''); }
   catch(e){ mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
+  mkUpdateHomeCount(); mkRender();
 }
 async function mkRetry(id){
   try {
@@ -2040,8 +2110,20 @@ async function mkPost(id){
     try { await mkSave(id, f); } catch(e){ mkStatusMsg('<strong>Couldn\'t save your edits</strong>' + escHtml(e.message), 'rose'); }
   }
 }
+// By-hand fallback for Instagram and Facebook: copy the text, then post it in the app with the
+// piece's photo or video.
+async function mkCopy(id){
+  const rec = mkRecords.find(x => x.id === id); if(!rec) return;
+  const f = mkCardFields(id), ch = mkChannel(rec.fields);
+  let copied;
+  try { copied = await navigator.clipboard.writeText(f['Description']).then(() => true, () => false); } catch(e){ copied = false; }
+  mkStatusMsg((copied ? '<strong>Text copied</strong>' : '<strong>Copy the text from the card</strong>') + 'Post it on ' + ch + ' with this piece\'s ' + (rec.fields['Media'] === 'Video' ? 'video' : 'photo') + ', then come back and tap <b>Mark as posted</b>.');
+  if(f['Description'] !== (rec.fields['Description']||'')){
+    try { await mkSave(id, f); } catch(e){ mkStatusMsg('<strong>Couldn\'t save your edits</strong>' + escHtml(e.message), 'rose'); }
+  }
+}
 async function mkMarkPosted(id){
-  const link = prompt('Optional: paste the link to the new pin (or leave blank).', '');
+  const link = prompt('Optional: paste the link to the new post (or leave blank).', '');
   if(link === null) return;
   const fields = { 'Status':'Posted' };
   if(link.trim()) fields['Pin URL'] = link.trim();
@@ -2050,7 +2132,7 @@ async function mkMarkPosted(id){
 }
 async function mkDraft(){
   if(mkBusy) return; mkBusy = true;
-  const btn = document.getElementById('mk-draft-btn'); btn.disabled = true; btn.textContent = 'Drafting pins… (about a minute)';
+  const btn = document.getElementById('mk-draft-btn'); btn.disabled = true; btn.textContent = 'Drafting… (a minute or two)';
   mkStatusMsg('');
   try {
     const r = await fetch(SERVER_URL + '/marketing/draft-pins', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ count: 5 }) });
@@ -2058,11 +2140,11 @@ async function mkDraft(){
     if(r.status === 409) return mkStatusMsg(escHtml(d.error), 'amber'); // the weekly batch is already running
     if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
     await mkLoad(); mkTab = 'Draft'; mkRender();
-    const n = (d.records || []).length, failed = (d.failed || []).length;
-    if(!n && !failed) mkStatusMsg('<strong>Nothing new to draft</strong>Every in-stock piece with a photo already has a pin in the queue.', 'amber');
-    else mkStatusMsg(n + ' new draft' + (n === 1 ? '' : 's') + ' ready to review.' + (failed ? ' ' + failed + ' couldn\'t be drafted — try again later.' : ''), failed ? 'amber' : 'teal');
-  } catch(e){ mkStatusMsg('<strong>Couldn\'t draft pins</strong>' + escHtml(e.message), 'rose'); }
-  finally { mkBusy = false; btn.disabled = false; btn.textContent = '✨ Draft 5 new pins'; }
+    const n = new Set((d.records || []).map(x => x.fields['EB Number'])).size, failed = (d.failed || []).length;
+    if(!n && !failed) mkStatusMsg('<strong>Nothing new to draft</strong>Every in-stock piece with a photo already has posts in the queue.', 'amber');
+    else mkStatusMsg(n + ' piece' + (n === 1 ? '' : 's') + ' drafted and ready to review.' + (failed ? ' ' + failed + ' couldn\'t be drafted — try again later.' : ''), failed ? 'amber' : 'teal');
+  } catch(e){ mkStatusMsg('<strong>Couldn\'t draft</strong>' + escHtml(e.message), 'rose'); }
+  finally { mkBusy = false; btn.disabled = false; btn.textContent = '✨ Draft 5 new pieces'; }
 }
 
 // ── Order fulfillment: open Shopify orders → packing reference ────────────────

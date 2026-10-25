@@ -2619,12 +2619,16 @@ async function ensureProductWebhook() {
   } catch (e) { console.warn('products webhook: registration error —', e.message); }
 }
 
-// ── Marketing queue: Pinterest pin drafts, approved by Patti before posting ──
-// Phase 1 posts by hand: EB Master's Marketing screen copies the approved title and opens
-// Pinterest's pin builder pre-filled. Drafts live in the Airtable "Marketing Queue" table.
+// ── Marketing queue: Pinterest, Instagram and Facebook drafts, approved by Patti before posting ──
+// Approving posts automatically once the channel is connected; until then EB Master offers a
+// by-hand fallback. Drafts live in the Airtable "Marketing Queue" table.
 // Candidates come straight from Shopify (active, in stock) because older product handles
 // don't follow the EB-number pattern; the Season_/Holiday_/Type_ tags drive seasonality.
 const AT_MARKETING_TBL = 'tblUeywr9I8jflj0O';
+// One row per piece per channel. All channels share the same columns: Description holds the
+// pin description, Instagram caption or Facebook post, and Pin ID / Pin URL hold the live post.
+const MKT_CHANNELS = ['Pinterest', 'Instagram', 'Facebook'];
+const mktChannel = f => (f && f['Channel']) || 'Pinterest';
 const MKT_EDITABLE_FIELDS = ['Pin Title', 'Description', 'Board', 'Alt Text', 'Status', 'Pin URL', 'Notes'];
 const MKT_STATUSES = ['Draft', 'Approved', 'Posted', 'Skipped'];
 // Starter boards — the AI must pick one so boards stay few and searchable.
@@ -2645,6 +2649,11 @@ Pins describe the PIECE, with a light "handmade by Patti" touch (once, naturally
 Formatting: sentence case for copy, Title Case for the pin title only. Use "&" in brand phrases. No emoji. No exclamation points. No hashtags. Numbers as digits. No price, "sale", or discount wording.
 Use: handcrafted, handmade, one-of-a-kind, faux florals, artificial flowers, lifelike, lasts for years, no watering, low-maintenance, seasonal, timeless. Say "real-touch" or "premium greenery" only if the product text says so.
 Never say: bespoke, made to order, small batches, free returns, fake, plastic, cheap, weatherproof, lasts forever outdoors, "no two are ever the same", "can never be recreated". Do not tout silk as a selling point. Outdoor pieces: "made for covered porches & sheltered spots".`;
+// Instagram and Facebook differ from pins in who speaks (voice guide section 3). Shared word
+// lists, tone and facts come from PIN_VOICE_RULES; these lines override its pin-only rules.
+const SOCIAL_VOICE_RULES = `Instagram caption: about the PIECE (national audience), with the same light "handmade by Patti" touch. Never mention Omaha, Nebraska, or any location. Links aren't clickable on Instagram, so the call to action points to the shop "link in bio".
+Facebook post: written by Patti in the first person ("I"), warm and local; mentioning Omaha is fine. At most one exclamation point. Signed "— Patti". Don't add a link; it is appended automatically.
+Both: sentence case, no emoji, no price or sale wording, 0–3 relevant hashtags at the very end (or none). These rules replace the pin rules about exclamation points and hashtags.`;
 
 // The app reads the queue on every open (for the home-screen badge), so keep a short-lived
 // copy like the inventory cache; writes through this server update it in place.
@@ -2765,33 +2774,76 @@ Return ONLY valid JSON, no code fences: {"title": "...", "description": "...", "
   };
 }
 
-// Draft pins for in-stock pieces not yet in the queue, favoring the seasons shoppers are
-// planning for. Nothing is posted; rows land as Draft. Used by the button and the weekly run.
+// One call drafts both the Instagram caption and the Facebook post for a piece.
+async function mktDraftSocial(p, img) {
+  const textPrompt = `${PIN_VOICE_RULES}
+${SOCIAL_VOICE_RULES}
+
+Write an Instagram caption and a Facebook post for this product.
+- instagram: 2–4 short sentences, under 600 characters before any hashtags. What it is, the standout details, where it looks best. End with a soft call to action like "Shop this one-of-a-kind piece at the link in bio."
+- facebook: 2–4 sentences in Patti's own voice, under 600 characters, e.g. what she loved making about it and where it would look at home. Sign off "— Patti".
+${img ? 'The product photo is attached — use what you can see.' : ''}
+
+Product title: ${p.title}
+Product type: ${p.productType || 'arrangement'}
+Tags: ${(p.tags || []).join(', ')}
+Product description: ${p.description || ''}
+
+Return ONLY valid JSON, no code fences: {"instagram": "...", "facebook": "..."}`;
+  const content = img
+    ? [{ type: 'image', source: { type: 'url', url: img.url } }, { type: 'text', text: textPrompt }]
+    : textPrompt;
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 900, messages: [{ role: 'user', content }] })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error((data.error && data.error.message) || 'Anthropic API error');
+  const raw = (data.content && data.content[0] && data.content[0].text || '').trim();
+  const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
+  const parsed = JSON.parse((s >= 0 && e > s) ? raw.slice(s, e + 1).replace(/\r?\n/g, ' ') : raw);
+  return {
+    instagram: String(parsed.instagram || '').trim().slice(0, 2200),
+    facebook: String(parsed.facebook || '').trim().slice(0, 2000)
+  };
+}
+
+// Draft posts for in-stock pieces, favoring the seasons shoppers are planning for. Each piece
+// gets a row for every channel it doesn't have yet (pieces pinned before Instagram and Facebook
+// were added pick those up too). Nothing is posted; rows land as Draft. Used by the button and
+// the weekly run; `count` is the number of pieces.
 async function mktDraftBatch(count) {
   const [queue, products] = await Promise.all([mktRecords(), mktShopifyCandidates(), invEnsure()]);
-  const queued = new Set(queue.map(r => String((r.fields || {})['EB Number'] || '').trim()).filter(Boolean));
+  const queued = new Set(queue.map(r => mktChannel(r.fields) + '|' + String((r.fields || {})['EB Number'] || '').trim()));
   const month = new Date().getMonth();
   const eligible = products
     .map(p => ({ p, sku: String((p.variants.nodes[0] || {}).sku || '').trim(), img: mktPickImage(p), video: mktPickVideo(p) }))
-    .filter(c => c.sku && c.img && c.p.onlineStoreUrl && !queued.has(c.sku))
+    .map(c => ({ ...c, missing: MKT_CHANNELS.filter(ch => !queued.has(ch + '|' + c.sku)) }))
+    .filter(c => c.sku && c.img && c.p.onlineStoreUrl && c.missing.length)
     .map(c => ({ ...c, score: mktSeasonScore(c.p.tags, month) + Math.random() }))
     .sort((a, b) => b.score - a.score);
   const pool = eligible.slice(0, count);
   const created = [], failed = [];
   for (const c of pool) {
     try {
-      const pin = await mktDraftPin(c.p, c.img);
       const inv = invFindBySku(c.sku)[0];
       const now = new Date().toISOString();
-      const fields = {
-        'Pin Title': pin.title, 'EB Number': c.sku, 'Channel': 'Pinterest', 'Status': 'Draft',
-        'Description': pin.description, 'Board': pin.board, 'Alt Text': pin.alt_text,
-        'Product URL': c.p.onlineStoreUrl, 'Image URL': c.img.url, 'Similar URL': mktSimilarUrl(c.p),
-        'Media': c.video ? 'Video' : 'Photo', 'Drafted': now, 'Status changed': now
+      const base = {
+        'EB Number': c.sku, 'Status': 'Draft', 'Product URL': c.p.onlineStoreUrl, 'Image URL': c.img.url,
+        'Similar URL': mktSimilarUrl(c.p), 'Media': c.video ? 'Video' : 'Photo', 'Drafted': now, 'Status changed': now
       };
-      if (c.video) fields['Video URL'] = c.video;
-      if (inv) fields['Inventory'] = [inv.id];
-      created.push({ fields });
+      if (c.video) base['Video URL'] = c.video;
+      if (inv) base['Inventory'] = [inv.id];
+      if (c.missing.includes('Pinterest')) {
+        const pin = await mktDraftPin(c.p, c.img);
+        created.push({ fields: { ...base, 'Channel': 'Pinterest', 'Pin Title': pin.title, 'Description': pin.description, 'Board': pin.board, 'Alt Text': pin.alt_text } });
+      }
+      if (c.missing.includes('Instagram') || c.missing.includes('Facebook')) {
+        const social = await mktDraftSocial(c.p, c.img);
+        if (c.missing.includes('Instagram')) created.push({ fields: { ...base, 'Channel': 'Instagram', 'Pin Title': c.p.title, 'Description': social.instagram } });
+        if (c.missing.includes('Facebook')) created.push({ fields: { ...base, 'Channel': 'Facebook', 'Pin Title': c.p.title, 'Description': social.facebook + '\n\n' + c.p.onlineStoreUrl } });
+      }
     } catch (e) { failed.push({ sku: c.sku, error: e.message }); }
   }
   const records = [];
@@ -2811,10 +2863,10 @@ const MKT_AUTO_EVERY_MS = 7 * 24 * 60 * 60 * 1000;
 const MKT_AUTO_BATCH = 5;
 let mktAutoBusy = false, mktSweepAt = 0;
 function mktMaybeAutoRun(records) {
-  if (PINTEREST_APP_SECRET) pinLoadAuth().then(() => mktPostPending(records, { skipErrored: true })).catch(e => console.warn('marketing: posting approved pins failed —', e.message));
+  if (PINTEREST_APP_SECRET || META_APP_SECRET) Promise.all([pinLoadAuth(), metaLoadAuth()]).then(() => mktPostPending(records, { skipErrored: true })).catch(e => console.warn('marketing: posting approved posts failed —', e.message));
   if (mktAutoBusy || !shopifyAccessToken || !ANTHROPIC_API_KEY) return;
   const lastDrafted = Math.max(0, ...records.map(r => Date.parse((r.fields || {})['Drafted'] || '') || 0));
-  const waiting = records.filter(r => (r.fields || {})['Status'] === 'Draft').length;
+  const waiting = new Set(records.filter(r => (r.fields || {})['Status'] === 'Draft').map(r => r.fields['EB Number'])).size;
   const draftDue = Date.now() - lastDrafted > MKT_AUTO_EVERY_MS && waiting < MKT_AUTO_BATCH;
   const sweepDue = Date.now() - mktSweepAt > 24 * 60 * 60 * 1000;
   if (!draftDue && !sweepDue) return;
@@ -2863,15 +2915,17 @@ app.patch('/marketing/queue/:id', async (req, res) => {
   try {
     const data = await airtableReq(`${AT_MARKETING_TBL}/${req.params.id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) });
     mktCacheUpsert([data]);
-    // Approving is the go-ahead: once Pinterest is connected the pin posts itself.
-    if (fields['Status'] === 'Approved' && pinConnected()) mktPostPin(req.params.id);
+    // Approving is the go-ahead: once its channel is connected the post goes out by itself.
+    if (fields['Status'] === 'Approved' && mktChannelReady(mktChannel(data.fields))) mktPostPin(req.params.id);
     res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /marketing/queue/:id/post — retry posting an approved pin after an error.
+// POST /marketing/queue/:id/post — retry posting an approved row after an error.
 app.post('/marketing/queue/:id/post', async (req, res) => {
-  if (!pinConnected()) return res.status(409).json({ error: 'Pinterest is not connected yet.' });
+  const rec = (await mktRecords().catch(() => [])).find(r => r.id === req.params.id);
+  const channel = mktChannel(rec && rec.fields);
+  if (!mktChannelReady(channel)) return res.status(409).json({ error: `${channel} is not connected yet.` });
   mktPostPin(req.params.id);
   res.status(202).json({ success: true, posting: true });
 });
@@ -2892,19 +2946,23 @@ const PIN_STATE_KEY = 'pinterest_auth';
 const pinAuth = { loaded: false, accessToken: null, refreshToken: null, expiresAt: 0, username: null };
 const pinOauthStates = new Map(); // state → issued-at, for CSRF protection on the callback
 
-function pinCipherKey() { return crypto.createHash('sha256').update('eb-pinterest-auth:' + PINTEREST_APP_SECRET).digest(); }
-function pinEncrypt(obj) {
+// AES-256-GCM for connection tokens saved in Server State (Pinterest and Meta each use a key
+// derived from their own app secret).
+function stateEncrypt(obj, key) {
   const iv = crypto.randomBytes(12);
-  const c = crypto.createCipheriv('aes-256-gcm', pinCipherKey(), iv);
+  const c = crypto.createCipheriv('aes-256-gcm', key, iv);
   const ct = Buffer.concat([c.update(JSON.stringify(obj), 'utf8'), c.final()]);
   return 'enc:' + Buffer.concat([iv, c.getAuthTag(), ct]).toString('base64');
 }
-function pinDecrypt(s) {
+function stateDecrypt(s, key) {
   const b = Buffer.from(String(s).replace(/^enc:/, ''), 'base64');
-  const d = crypto.createDecipheriv('aes-256-gcm', pinCipherKey(), b.subarray(0, 12));
+  const d = crypto.createDecipheriv('aes-256-gcm', key, b.subarray(0, 12));
   d.setAuthTag(b.subarray(12, 28));
   return JSON.parse(Buffer.concat([d.update(b.subarray(28)), d.final()]).toString('utf8'));
 }
+function pinCipherKey() { return crypto.createHash('sha256').update('eb-pinterest-auth:' + PINTEREST_APP_SECRET).digest(); }
+function pinEncrypt(obj) { return stateEncrypt(obj, pinCipherKey()); }
+function pinDecrypt(s) { return stateDecrypt(s, pinCipherKey()); }
 function pinConnected() { return !!(PINTEREST_APP_SECRET && (pinAuth.refreshToken || pinAuth.accessToken)); }
 
 async function pinLoadAuth() {
@@ -3043,8 +3101,159 @@ async function pinUploadVideo(videoUrl) {
   throw new Error('Pinterest is still processing the video — tap Retry in a few minutes');
 }
 
-// Post one approved queue row. A video that fails to upload falls back to a photo pin so
-// an approved pin always goes out; the reason is kept in Notes.
+// ── Meta connection: the Facebook Page and its linked Instagram business account ──
+// OAuth once at /meta-auth. The long-lived user token is exchanged for the Page's own token,
+// which doesn't expire, so unlike Pinterest there's nothing to refresh. Saved the same way:
+// encrypted in the Airtable "Server State" table with a key derived from META_APP_SECRET.
+const META_APP_ID     = process.env.META_APP_ID;
+const META_APP_SECRET = process.env.META_APP_SECRET;
+const META_GRAPH       = 'https://graph.facebook.com/' + (process.env.META_GRAPH_VERSION || 'v23.0');
+const META_GRAPH_VIDEO = META_GRAPH.replace('//graph.', '//graph-video.');
+const META_SCOPES = 'pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish,business_management';
+const META_STATE_KEY = 'meta_auth';
+const metaAuth = { loaded: false, pageId: null, pageName: null, pageToken: null, igId: null, igUsername: null };
+const metaOauthStates = new Map(); // state → issued-at, for CSRF protection on the callback
+
+function metaCipherKey() { return crypto.createHash('sha256').update('eb-meta-auth:' + META_APP_SECRET).digest(); }
+function metaConnected() { return !!(META_APP_SECRET && metaAuth.pageToken); }
+async function metaLoadAuth() {
+  if (metaAuth.loaded || !META_APP_SECRET) return;
+  const data = await airtableReq(`${AT_STATE_TBL}?maxRecords=1&filterByFormula=${encodeURIComponent(`{Key}='${META_STATE_KEY}'`)}`, { source: 'meta:load' });
+  const rec = (data.records || [])[0];
+  if (rec && rec.fields['Value']) {
+    try { Object.assign(metaAuth, stateDecrypt(rec.fields['Value'], metaCipherKey())); }
+    catch (e) { console.warn('Meta: saved connection could not be decrypted (app secret changed?) — reconnect at /meta-auth'); }
+  }
+  metaAuth.loaded = true;
+}
+async function metaSaveAuth() {
+  const { pageId, pageName, pageToken, igId, igUsername } = metaAuth;
+  await airtableReq(AT_STATE_TBL, { method: 'PATCH', source: 'meta:save', body: JSON.stringify({
+    performUpsert: { fieldsToMergeOn: ['Key'] },
+    records: [{ fields: { 'Key': META_STATE_KEY, 'Value': stateEncrypt({ pageId, pageName, pageToken, igId, igUsername }, metaCipherKey()), 'Updated': new Date().toISOString() } }]
+  }) });
+}
+// Graph API call. GET params go in the query string, POST params form-encoded. Video uploads
+// to a Page go to the graph-video host.
+async function metaApi(path, { method = 'GET', params = {}, video = false } = {}) {
+  const url = (video ? META_GRAPH_VIDEO : META_GRAPH) + path, qs = new URLSearchParams(params);
+  const r = method === 'GET' ? await fetch(url + '?' + qs)
+    : await fetch(url, { method, headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: qs });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || d.error) throw new Error(`Meta ${method} ${path} failed (${r.status}): ${(d.error && d.error.message) || JSON.stringify(d)}`);
+  return d;
+}
+
+app.get('/meta-auth', (req, res) => {
+  if (!META_APP_ID || !META_APP_SECRET) return res.status(500).send(PIN_PAGE('Facebook & Instagram aren’t set up yet', '<p>Add META_APP_ID and META_APP_SECRET to the server’s environment in Render, then try again.</p>'));
+  const state = crypto.randomBytes(16).toString('hex');
+  metaOauthStates.set(state, Date.now());
+  res.redirect(META_GRAPH.replace('//graph.', '//www.') + '/dialog/oauth?client_id=' + encodeURIComponent(META_APP_ID)
+    + '&redirect_uri=' + encodeURIComponent(`${SERVER_URL}/meta-auth/callback`)
+    + '&response_type=code&scope=' + encodeURIComponent(META_SCOPES) + '&state=' + state);
+});
+
+app.get('/meta-auth/callback', async (req, res) => {
+  const { code, state, error_description } = req.query;
+  if (!code) return res.status(400).send(PIN_PAGE('Facebook didn’t connect', `<p>${String(error_description || 'No authorization code came back.').replace(/[<>&]/g, '')} Close this tab and try Connect Facebook & Instagram again.</p>`));
+  const issued = metaOauthStates.get(state);
+  metaOauthStates.delete(state);
+  if (!issued || Date.now() - issued > 15 * 60 * 1000) return res.status(400).send(PIN_PAGE('Link expired', '<p>This connect link is old or was already used. Close this tab and tap Connect Facebook & Instagram again.</p>'));
+  try {
+    const redirect_uri = `${SERVER_URL}/meta-auth/callback`;
+    const short = await metaApi('/oauth/access_token', { params: { client_id: META_APP_ID, client_secret: META_APP_SECRET, redirect_uri, code } });
+    const long = await metaApi('/oauth/access_token', { params: { grant_type: 'fb_exchange_token', client_id: META_APP_ID, client_secret: META_APP_SECRET, fb_exchange_token: short.access_token } });
+    const pages = (await metaApi('/me/accounts', { params: { fields: 'id,name,access_token,instagram_business_account{id,username}', access_token: long.access_token } })).data || [];
+    // META_PAGE_ID picks the Page when the account manages several; otherwise the one with Instagram.
+    const page = pages.find(p => p.id === process.env.META_PAGE_ID) || pages.find(p => p.instagram_business_account) || pages[0];
+    if (!page) throw new Error('No Facebook Page came back. Connect again and tick the Eternal Blooms Page when Facebook asks which Pages to share.');
+    const ig = page.instagram_business_account || {};
+    Object.assign(metaAuth, { loaded: true, pageId: page.id, pageName: page.name, pageToken: page.access_token, igId: ig.id || null, igUsername: ig.username || null });
+    await metaSaveAuth();
+    console.log(`✓ Meta connected: Page "${page.name}"` + (ig.id ? `, Instagram @${ig.username}` : ' (no Instagram account linked)'));
+    // Posts approved while Facebook & Instagram weren't connected go out now.
+    mktRecords().then(records => mktPostPending(records)).catch(e => console.warn('marketing: posting approved posts failed —', e.message));
+    res.send(PIN_PAGE('✓ Facebook & Instagram connected', `<p>EB Master can now post approved posts to the Facebook Page <strong>${String(page.name).replace(/[<>&]/g, '')}</strong>`
+      + (ig.id ? ` and Instagram <strong>@${String(ig.username).replace(/[<>&]/g, '')}</strong>.` : '. <strong>No Instagram account is linked to this Page</strong> — link it in the Page’s settings, then connect again.')
+      + ' This stays connected across server restarts — nothing to copy into Render.</p><p>You can close this tab and return to the Studio.</p>'));
+  } catch (e) { res.status(500).send(PIN_PAGE('Facebook didn’t connect', `<p>${String(e.message).replace(/[<>&]/g, '')}</p>`)); }
+});
+
+// GET /meta/status — what the Marketing screen shows about the Facebook & Instagram connection.
+app.get('/meta/status', async (req, res) => {
+  try { await metaLoadAuth(); } catch (e) { /* Airtable hiccup: report what we know */ }
+  res.json({ configured: !!(META_APP_ID && META_APP_SECRET), connected: metaConnected(), pageName: metaAuth.pageName, igUsername: metaAuth.igUsername, instagram: !!metaAuth.igId });
+});
+
+function mktChannelReady(channel) {
+  if (channel === 'Instagram') return metaConnected() && !!metaAuth.igId;
+  if (channel === 'Facebook') return metaConnected();
+  return pinConnected();
+}
+
+// Each publisher returns { id, url, note }; note is set when a video fell back to a photo.
+async function mktPublishPinterest(f) {
+  const body = {
+    board_id: await pinBoardId(f['Board'] || 'Everyday Faux Florals'),
+    title: f['Pin Title'], description: f['Description'], link: f['Product URL'], alt_text: f['Alt Text'] || undefined,
+    media_source: { source_type: 'image_url', url: f['Image URL'] }
+  };
+  let note = null;
+  if (f['Media'] === 'Video' && f['Video URL']) {
+    try { body.media_source = { source_type: 'video_id', media_id: await pinUploadVideo(f['Video URL']), cover_image_url: f['Image URL'] }; }
+    catch (e) { note = 'Posted as a photo pin — the video failed: ' + e.message; }
+  }
+  const pin = await pinApi('/pins', { method: 'POST', body });
+  return { id: pin.id, url: `https://www.pinterest.com/pin/${pin.id}/`, note };
+}
+
+// Instagram publishes in two steps: create a media container (a Reel from the listing video,
+// or the photo), wait until Instagram has processed it, then publish it.
+async function metaWaitForContainer(id) {
+  for (let i = 0; i < 60; i++) { // up to ~5 minutes
+    const s = await metaApi('/' + id, { params: { fields: 'status_code', access_token: metaAuth.pageToken } });
+    if (s.status_code === 'FINISHED') return;
+    if (s.status_code === 'ERROR' || s.status_code === 'EXPIRED') throw new Error('Instagram could not process the media');
+    await new Promise(r => setTimeout(r, 5000));
+  }
+  throw new Error('Instagram is still processing the video — tap Retry in a few minutes');
+}
+async function mktPublishInstagram(f) {
+  const ig = metaAuth.igId, access_token = metaAuth.pageToken;
+  const container = async params => {
+    const c = await metaApi(`/${ig}/media`, { method: 'POST', params: { ...params, caption: f['Description'], access_token } });
+    await metaWaitForContainer(c.id);
+    return c.id;
+  };
+  let note = null, creation_id = null;
+  if (f['Media'] === 'Video' && f['Video URL']) {
+    try { creation_id = await container({ media_type: 'REELS', video_url: f['Video URL'], cover_url: f['Image URL'], share_to_feed: 'true' }); }
+    catch (e) { note = 'Posted as a photo — the video failed: ' + e.message; }
+  }
+  if (!creation_id) creation_id = await container({ image_url: f['Image URL'] });
+  const media = await metaApi(`/${ig}/media_publish`, { method: 'POST', params: { creation_id, access_token } });
+  const info = await metaApi('/' + media.id, { params: { fields: 'permalink', access_token } }).catch(() => ({}));
+  return { id: media.id, url: info.permalink || `https://www.instagram.com/${metaAuth.igUsername || ''}/`, note };
+}
+
+// Facebook Page post: the listing video (Facebook fetches Shopify's MP4 from its URL), or the
+// photo with the post text as its message.
+async function mktPublishFacebook(f) {
+  const page = metaAuth.pageId, access_token = metaAuth.pageToken;
+  let note = null;
+  if (f['Media'] === 'Video' && f['Video URL']) {
+    try {
+      const v = await metaApi(`/${page}/videos`, { method: 'POST', video: true, params: { file_url: f['Video URL'], description: f['Description'], access_token } });
+      return { id: v.id, url: `https://www.facebook.com/${page}/videos/${v.id}/`, note };
+    } catch (e) { note = 'Posted as a photo — the video failed: ' + e.message; }
+  }
+  const p = await metaApi(`/${page}/photos`, { method: 'POST', params: { url: f['Image URL'], message: f['Description'], access_token } });
+  const postId = p.post_id || p.id;
+  return { id: postId, url: `https://www.facebook.com/${postId}`, note };
+}
+
+// Post one approved queue row to its channel. A video that fails falls back to a photo so an
+// approved post always goes out; the reason is kept in Notes and Media switches to Photo.
 const mktPosting = new Set();
 async function mktPostPin(id) {
   if (mktPosting.has(id)) return;
@@ -3054,63 +3263,69 @@ async function mktPostPin(id) {
     const rec = (await mktRecords()).find(r => r.id === id) || await airtableReq(`${AT_MARKETING_TBL}/${id}`);
     const f = rec.fields || {};
     if (f['Status'] !== 'Approved' || f['Pin ID']) return;
-    const body = {
-      board_id: await pinBoardId(f['Board'] || 'Everyday Faux Florals'),
-      title: f['Pin Title'], description: f['Description'], link: f['Product URL'], alt_text: f['Alt Text'] || undefined,
-      media_source: { source_type: 'image_url', url: f['Image URL'] }
-    };
-    let note = null;
-    if (f['Media'] === 'Video' && f['Video URL']) {
-      try { body.media_source = { source_type: 'video_id', media_id: await pinUploadVideo(f['Video URL']), cover_image_url: f['Image URL'] }; }
-      catch (e) { note = 'Posted as a photo pin — the video failed: ' + e.message; }
-    }
-    const pin = await pinApi('/pins', { method: 'POST', body });
-    const fields = { 'Status': 'Posted', 'Status changed': new Date().toISOString(), 'Pin ID': pin.id, 'Pin URL': `https://www.pinterest.com/pin/${pin.id}/`, 'Post error': '' };
-    if (note) fields['Notes'] = [f['Notes'], note].filter(Boolean).join('\n');
+    const channel = mktChannel(f);
+    const post = await (channel === 'Instagram' ? mktPublishInstagram(f) : channel === 'Facebook' ? mktPublishFacebook(f) : mktPublishPinterest(f));
+    const fields = { 'Status': 'Posted', 'Status changed': new Date().toISOString(), 'Pin ID': post.id, 'Pin URL': post.url, 'Post error': '' };
+    if (post.note) Object.assign(fields, { 'Media': 'Photo', 'Notes': [f['Notes'], post.note].filter(Boolean).join('\n') });
     await save(fields);
-    console.log(`marketing: posted ${f['EB Number']} to Pinterest as pin ${pin.id}${note ? ' (photo fallback)' : ''}`);
+    console.log(`marketing: posted ${f['EB Number']} to ${channel} as ${post.id}${post.note ? ' (photo fallback)' : ''}`);
   } catch (e) {
     console.warn(`marketing: posting ${id} failed —`, e.message);
     await save({ 'Post error': e.message.slice(0, 1000) }).catch(() => {});
   } finally { mktPosting.delete(id); }
 }
 
-// Approved rows that never went out: approved before Pinterest was connected, or cut off
+// Approved rows that never went out: approved before their channel was connected, or cut off
 // by a restart mid-post. Posted one at a time so two pins can't both create a missing board.
-// The background pass skips rows with a Post error so a failing pin waits for Retry
+// The background pass skips rows with a Post error so a failing post waits for Retry
 // instead of being retried on every app open.
 let mktPendingBusy = false;
 async function mktPostPending(records, { skipErrored = false } = {}) {
-  if (mktPendingBusy || !pinConnected()) return;
+  if (mktPendingBusy) return;
   const ids = records.filter(r => {
     const f = r.fields || {};
-    return f['Status'] === 'Approved' && !f['Pin ID'] && !(skipErrored && f['Post error']) && !mktPosting.has(r.id);
+    return f['Status'] === 'Approved' && !f['Pin ID'] && !(skipErrored && f['Post error']) && !mktPosting.has(r.id) && mktChannelReady(mktChannel(f));
   }).map(r => r.id);
   if (!ids.length) return;
   mktPendingBusy = true;
   try {
-    console.log(`marketing: posting ${ids.length} approved pin(s) that were waiting`);
+    console.log(`marketing: posting ${ids.length} approved post(s) that were waiting`);
     for (const id of ids) await mktPostPin(id);
   } finally { mktPendingBusy = false; }
 }
 
-// When a piece sells: drafts that never went out are skipped, and live pins are pointed
-// at similar in-stock pieces instead of a sold-out page. Manually posted pins are handled
-// too when their Pin URL was pasted in (the id is read from it).
+// When a piece sells: drafts that never went out are skipped. Live pins are pointed at similar
+// in-stock pieces instead of a sold-out page (manually posted pins too, when their Pin URL was
+// pasted in), and Facebook posts get a note at the top with the similar-pieces link. Instagram
+// captions can't be edited through the API, so those posts are left as they are.
 const PIN_SOLD_LEAD = 'This piece has found its home. Explore similar arrangements, handmade by Patti. ';
 async function mktHandleSold(sku) {
   const rows = (await mktRecords()).filter(r => String((r.fields || {})['EB Number'] || '').trim() === sku);
   for (const r of rows) {
-    const f = r.fields, now = new Date().toISOString();
+    const f = r.fields, now = new Date().toISOString(), channel = mktChannel(f);
     const patch = async fields => mktCacheUpsert([await airtableReq(`${AT_MARKETING_TBL}/${r.id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) })]);
     if ((f['Status'] === 'Draft' || f['Status'] === 'Approved') && !mktPosting.has(r.id)) {
-      await patch({ 'Status': 'Skipped', 'Status changed': now, 'Notes': [f['Notes'], 'Skipped automatically: the piece sold before this pin was posted.'].filter(Boolean).join('\n') });
+      await patch({ 'Status': 'Skipped', 'Status changed': now, 'Notes': [f['Notes'], 'Skipped automatically: the piece sold before this was posted.'].filter(Boolean).join('\n') });
+      continue;
+    }
+    if (f['Status'] !== 'Posted' || f['Sold redirect']) continue;
+    const similar = f['Similar URL'] || SHOP_COLLECTIONS_URL + 'shop-all';
+    if (channel === 'Instagram') {
+      await patch({ 'Sold redirect': now }); // nothing to change; marks it handled for the daily sweep
+      continue;
+    }
+    if (channel === 'Facebook') {
+      if (!f['Pin ID'] || !metaConnected()) continue;
+      const text = `Update: this one has found its home. Similar pieces are in the shop: ${similar}\n\n${f['Description'] || ''}`;
+      await metaApi('/' + f['Pin ID'], { method: 'POST', params: { [f['Media'] === 'Video' ? 'description' : 'message']: text, access_token: metaAuth.pageToken } });
+      await patch({ 'Sold redirect': now });
+      console.log(`marketing: ${sku} sold — Facebook post ${f['Pin ID']} now points to similar pieces`);
       continue;
     }
     const pinId = f['Pin ID'] || ((String(f['Pin URL'] || '').match(/\/pin\/(\d+)/) || [])[1]);
-    if (f['Status'] !== 'Posted' || f['Sold redirect'] || !pinId || !pinConnected()) continue;
+    if (!pinId || !pinConnected()) continue;
     await pinApi('/pins/' + pinId, { method: 'PATCH', body: {
-      link: f['Similar URL'] || SHOP_COLLECTIONS_URL + 'shop-all',
+      link: similar,
       description: (PIN_SOLD_LEAD + (f['Description'] || '')).slice(0, 500)
     } });
     await patch({ 'Sold redirect': now });
@@ -3134,4 +3349,5 @@ app.listen(PORT, () => {
   ensureOrderWebhook();
   ensureProductWebhook();
   pinLoadAuth().catch(e => console.warn('Pinterest: could not load the saved connection —', e.message));
+  metaLoadAuth().catch(e => console.warn('Meta: could not load the saved connection —', e.message));
 });
