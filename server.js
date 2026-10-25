@@ -1001,7 +1001,7 @@ app.get('/airtable/inventory/:id', async (req, res) => {
 });
 
 // Airtable call counts since the server last started, by source and by day, plus the
-// inventory cache's state. Free plan: 1,000 calls/workspace/month.
+// inventory cache's state. The workspace is on the Team plan (upgraded from Free, 2026-10).
 app.get('/airtable-usage', (req, res) => {
   res.json({ ...atUsage, cache: { records: invCache.byId.size,
     lastSync: invCache.syncedAt ? new Date(invCache.syncedAt).toISOString() : null,
@@ -2582,6 +2582,191 @@ async function ensureProductWebhook() {
     console.log(`products webhook: registered (#${createData.webhook && createData.webhook.id}) → ${address}`);
   } catch (e) { console.warn('products webhook: registration error —', e.message); }
 }
+
+// ── Marketing queue: Pinterest pin drafts, approved by Patti before posting ──
+// Phase 1 posts by hand: EB Master's Marketing screen copies the approved title and opens
+// Pinterest's pin builder pre-filled. Drafts live in the Airtable "Marketing Queue" table.
+// Candidates come straight from Shopify (active, in stock) because older product handles
+// don't follow the EB-number pattern; the Season_/Holiday_/Type_ tags drive seasonality.
+const AT_MARKETING_TBL = 'tblUeywr9I8jflj0O';
+const MKT_EDITABLE_FIELDS = ['Pin Title', 'Description', 'Board', 'Alt Text', 'Status', 'Pin URL', 'Notes'];
+const MKT_STATUSES = ['Draft', 'Approved', 'Posted', 'Skipped'];
+// Starter boards — the AI must pick one so boards stay few and searchable.
+const PIN_BOARDS = [
+  'Fall Front Door Wreaths', 'Fall Home Decor', 'Christmas Wreaths & Decor', 'Christmas Centerpieces',
+  'Winter Home Decor', 'Spring Wreaths & Florals', 'Summer Porch & Patio Florals', 'Patriotic & Summer Wreaths',
+  'Dining Table Centerpieces', 'Entryway & Console Florals', 'Wall Decor & Swags', 'Everyday Faux Florals'
+];
+// Pinterest users plan 1–3 months ahead, so each month favors the seasons coming up.
+const PIN_SEASONS_BY_MONTH = [
+  ['winter', 'valentine'], ['spring', 'easter', 'valentine'], ['spring', 'easter'], ['spring', 'summer', 'mother'],
+  ['summer', 'fourth'], ['summer', 'fourth'], ['summer', 'fall'], ['fall', 'halloween'],
+  ['fall', 'halloween', 'thanksgiving'], ['fall', 'thanksgiving', 'christmas', 'winter'], ['christmas', 'winter'], ['christmas', 'winter']
+];
+// Condensed from the approved "Eternal Blooms Brand Voice Guide" (Claude Doc, 2026-10-25).
+const PIN_VOICE_RULES = `Brand: Eternal Blooms by Patti — handcrafted, one-of-a-kind faux floral arrangements "for hearts & homes". Tagline: "Florals that bloom forever." Tone: warm, not gushing; specific over generic (name colors, flowers, textures, where it looks best); calm confidence, no hard sell or urgency tricks; helpful about placement (entryway, dining table, mantel, covered porch).
+Pins describe the PIECE, with a light "handmade by Patti" touch (once, naturally — e.g. "handmade by Patti"). Never mention Omaha, Nebraska, or any location.
+Formatting: sentence case for copy, Title Case for the pin title only. Use "&" in brand phrases. No emoji. No exclamation points. No hashtags. Numbers as digits. No price, "sale", or discount wording.
+Use: handcrafted, handmade, one-of-a-kind, faux florals, artificial flowers, lifelike, lasts for years, no watering, low-maintenance, seasonal, timeless. Say "real-touch" or "premium greenery" only if the product text says so.
+Never say: bespoke, made to order, small batches, free returns, fake, plastic, cheap, weatherproof, lasts forever outdoors, "no two are ever the same", "can never be recreated". Do not tout silk as a selling point. Outdoor pieces: "made for covered porches & sheltered spots".`;
+
+// The app reads the queue on every open (for the home-screen badge), so keep a short-lived
+// copy like the inventory cache; writes through this server update it in place.
+const MKT_FRESH_MS = 5 * 60 * 1000;
+const mktCache = { records: null, at: 0 };
+async function mktRecords({ force = false } = {}) {
+  if (!force && mktCache.records && Date.now() - mktCache.at < MKT_FRESH_MS) return mktCache.records;
+  mktCache.records = await mktFetchAll();
+  mktCache.at = Date.now();
+  return mktCache.records;
+}
+function mktCacheUpsert(recs) {
+  if (!mktCache.records) return;
+  for (const r of recs) {
+    const i = mktCache.records.findIndex(x => x.id === r.id);
+    if (i >= 0) mktCache.records[i] = r; else mktCache.records.unshift(r);
+  }
+}
+async function mktFetchAll() {
+  let out = [], offset = null;
+  do {
+    let path = `${AT_MARKETING_TBL}?pageSize=100&sort%5B0%5D%5Bfield%5D=Drafted&sort%5B0%5D%5Bdirection%5D=desc`;
+    if (offset) path += '&offset=' + encodeURIComponent(offset);
+    const data = await airtableReq(path);
+    out = out.concat(data.records || []);
+    offset = data.offset || null;
+  } while (offset);
+  return out;
+}
+
+// Active, in-stock Shopify products with their SKU (= EB Number), tags and photos.
+async function mktShopifyCandidates() {
+  const out = []; let cursor = null;
+  do {
+    const d = await shopifyGraphql(`query($after:String){products(first:100,after:$after,query:"status:active inventory_total:>0"){nodes{title handle onlineStoreUrl productType tags description(truncateAt:700) variants(first:1){nodes{sku}} media(first:6){nodes{... on MediaImage{image{url width height altText}}}}} pageInfo{hasNextPage endCursor}}}`, { after: cursor });
+    const conn = d && d.data && d.data.products;
+    if (!conn) throw new Error('Shopify product query failed: ' + JSON.stringify((d && d.errors) || d));
+    out.push(...conn.nodes);
+    cursor = conn.pageInfo.hasNextPage ? conn.pageInfo.endCursor : null;
+  } while (cursor);
+  return out;
+}
+
+// Portrait photos crop best into Pinterest's 2:3 frame, so prefer the tallest image.
+function mktPickImage(p) {
+  const imgs = ((p.media && p.media.nodes) || []).map(n => n && n.image).filter(i => i && i.url);
+  if (!imgs.length) return null;
+  return imgs.slice().sort((a, b) => (b.height / b.width) - (a.height / a.width))[0];
+}
+
+function mktSeasonScore(tags, month) {
+  const t = (tags || []).join(' ').toLowerCase();
+  const wanted = PIN_SEASONS_BY_MONTH[month];
+  if (wanted.some(w => t.includes(w))) return 2;
+  if (/all[_ ]?season|everyday/.test(t) || !/season_|holiday_/.test(t)) return 1;
+  return 0;
+}
+
+async function mktDraftPin(p, img) {
+  const textPrompt = `${PIN_VOICE_RULES}
+
+Write ONE Pinterest pin for this product.
+- title: under 100 characters, Title Case, starting with the search phrase a shopper would type (e.g. "Fall Door Wreath", "Farmhouse Dining Table Centerpiece"), then the standout detail.
+- description: 2–3 sentences, under 500 characters. Sentence 1 says what it is and where it goes. Weave in 2–3 search phrases naturally. Include the light "handmade by Patti" touch. End with a soft call to action such as "Shop this one-of-a-kind piece."
+- board: EXACTLY one of: ${PIN_BOARDS.join(' | ')}
+- alt_text: one plain sentence describing what the photo shows, for screen readers.
+${img ? 'The product photo is attached — use what you can see.' : ''}
+
+Product title: ${p.title}
+Product type: ${p.productType || 'arrangement'}
+Tags: ${(p.tags || []).join(', ')}
+Product description: ${p.description || ''}
+
+Return ONLY valid JSON, no code fences: {"title": "...", "description": "...", "board": "...", "alt_text": "..."}`;
+  const content = img
+    ? [{ type: 'image', source: { type: 'url', url: img.url } }, { type: 'text', text: textPrompt }]
+    : textPrompt;
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 700, messages: [{ role: 'user', content }] })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error((data.error && data.error.message) || 'Anthropic API error');
+  const raw = (data.content && data.content[0] && data.content[0].text || '').trim();
+  const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
+  const parsed = JSON.parse((s >= 0 && e > s) ? raw.slice(s, e + 1).replace(/\r?\n/g, ' ') : raw);
+  return {
+    title: String(parsed.title || '').trim().slice(0, 100),
+    description: String(parsed.description || '').trim().slice(0, 500),
+    board: PIN_BOARDS.includes(parsed.board) ? parsed.board : 'Everyday Faux Florals',
+    alt_text: String(parsed.alt_text || '').trim().slice(0, 500)
+  };
+}
+
+// GET /marketing/queue — every queue row, newest draft first.
+app.get('/marketing/queue', async (req, res) => {
+  try { res.json({ records: await mktRecords({ force: req.query.refresh === '1' }) }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /marketing/draft-pins { count } — draft pins for in-stock pieces not yet in the queue,
+// favoring the seasons shoppers are planning for. Nothing is posted; rows land as Draft.
+app.post('/marketing/draft-pins', async (req, res) => {
+  if (!shopifyAccessToken) return res.status(401).json({ error: 'Shopify not authorized — visit /auth' });
+  if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server.' });
+  const count = Math.max(1, Math.min(10, parseInt((req.body && req.body.count) || 5, 10) || 5));
+  try {
+    const [queue, products] = await Promise.all([mktRecords(), mktShopifyCandidates(), invEnsure()]);
+    const queued = new Set(queue.map(r => String((r.fields || {})['EB Number'] || '').trim()).filter(Boolean));
+    const month = new Date().getMonth();
+    const eligible = products
+      .map(p => ({ p, sku: String((p.variants.nodes[0] || {}).sku || '').trim(), img: mktPickImage(p) }))
+      .filter(c => c.sku && c.img && c.p.onlineStoreUrl && !queued.has(c.sku))
+      .map(c => ({ ...c, score: mktSeasonScore(c.p.tags, month) + Math.random() }))
+      .sort((a, b) => b.score - a.score);
+    const pool = eligible.slice(0, count);
+    const created = [], failed = [];
+    for (const c of pool) {
+      try {
+        const pin = await mktDraftPin(c.p, c.img);
+        const inv = invFindBySku(c.sku)[0];
+        const now = new Date().toISOString();
+        const fields = {
+          'Pin Title': pin.title, 'EB Number': c.sku, 'Channel': 'Pinterest', 'Status': 'Draft',
+          'Description': pin.description, 'Board': pin.board, 'Alt Text': pin.alt_text,
+          'Product URL': c.p.onlineStoreUrl, 'Image URL': c.img.url, 'Drafted': now, 'Status changed': now
+        };
+        if (inv) fields['Inventory'] = [inv.id];
+        created.push({ fields });
+      } catch (e) { failed.push({ sku: c.sku, error: e.message }); }
+    }
+    const records = [];
+    for (let i = 0; i < created.length; i += 10) {
+      const data = await airtableReq(AT_MARKETING_TBL, { method: 'POST', body: JSON.stringify({ records: created.slice(i, i + 10), typecast: true }) });
+      records.push(...(data.records || []));
+    }
+    mktCacheUpsert(records);
+    res.json({ success: true, records, failed, remaining: eligible.length - pool.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /marketing/queue/:id { fields } — edit a draft or move it along Draft → Approved → Posted / Skipped.
+app.patch('/marketing/queue/:id', async (req, res) => {
+  const src = (req.body && req.body.fields) || {};
+  const fields = {};
+  for (const k of MKT_EDITABLE_FIELDS) if (k in src) fields[k] = src[k];
+  if (!Object.keys(fields).length) return res.status(400).json({ error: 'no editable fields given' });
+  if ('Status' in fields) {
+    if (!MKT_STATUSES.includes(fields['Status'])) return res.status(400).json({ error: 'unknown Status: ' + fields['Status'] });
+    fields['Status changed'] = new Date().toISOString();
+  }
+  try {
+    const data = await airtableReq(`${AT_MARKETING_TBL}/${req.params.id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) });
+    mktCacheUpsert([data]);
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 app.listen(PORT, () => {
   console.log(`EB server running on port ${PORT}`);

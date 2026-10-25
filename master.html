@@ -287,6 +287,24 @@ button:active{transform:scale(.97)}
 #cst-preview .t-empty{color:var(--text-muted);font-style:italic;font-size:14px;text-align:center}
 .mode-card.fulfillment{border-top:3px solid var(--amber-border)}
 .mode-card.sale-clearance{border-top:3px solid var(--amber-border)}
+.mode-card.marketing{border-top:3px solid var(--rose)}
+.mk-count{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:99px;background:var(--rose);color:#fff;margin-left:6px;vertical-align:middle}
+.mk-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.mk-tab{flex:1;min-width:90px;font-size:12px;font-weight:700;padding:9px 10px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:#fff;color:var(--text-mid);cursor:pointer}
+.mk-tab.active{background:var(--rose-bg);border-color:var(--rose);color:var(--rose)}
+.mk-card{background:var(--card);border:1.5px solid var(--border);border-left:4px solid var(--rose);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px;display:flex;gap:14px}
+.mk-card.approved{border-left-color:var(--teal)}.mk-card.posted{border-left-color:var(--green-text);opacity:.85}
+.mk-img{width:96px;height:144px;object-fit:cover;border-radius:8px;flex-shrink:0;background:var(--ivory-dark)}
+.mk-body{flex:1;min-width:0}
+.mk-label{font-size:11px;font-weight:700;color:var(--text-muted);margin:8px 0 3px;display:flex;justify-content:space-between}
+.mk-label:first-child{margin-top:0}
+.mk-input{width:100%;box-sizing:border-box;font-family:var(--font-body);font-size:13px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;color:var(--text)}
+.mk-input:focus{outline:none;border-color:var(--rose)}
+textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
+.mk-over{color:var(--red-text)}
+.mk-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.mk-actions .btn{flex:1;min-width:120px}
+@media (max-width:480px){.mk-card{flex-direction:column}.mk-img{width:100%;height:240px}}
 #rl-preview-frame{width:100%;display:flex;justify-content:center;margin:4px 0 16px}
 #rl-preview{width:min(340px,80%);aspect-ratio:4/6;background:#fff;border:1.5px solid var(--border-strong);border-radius:8px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.5%;padding:6% 7%;overflow:hidden}
 #rl-preview .rl-line{width:100%;text-align:center;font-weight:800;color:#2b2622;line-height:1.08;white-space:nowrap;font-family:Arial,Helvetica,sans-serif}
@@ -444,6 +462,7 @@ button:active{transform:scale(.97)}
     <div class="mode-card bin-mgmt" onclick="goTo('screen-bin-mgmt')"><span class="mode-icon">📦</span><div class="mode-title">Bin management</div><div class="mode-desc">Print bin, bar &amp; shelf labels, scan to assign pieces, update anytime</div><div class="mode-arrow">→</div></div>
     <div class="mode-card raw-label" onclick="goTo('screen-raw-label')"><span class="mode-icon">🧵</span><div class="mode-title">Raw material label</div><div class="mode-desc">Free-form 4×6 bin label — type up to 4 lines, big auto-sized text, print one off</div><div class="mode-arrow">→</div></div>
     <div class="mode-card craft-tag" onclick="goTo('screen-craft-tag')"><span class="mode-icon">🎪</span><div class="mode-title">Craft show tag</div><div class="mode-desc">Temporary 3×2 price tag for a show — enter an EB number, set the show price, print (no QR)</div><div class="mode-arrow">→</div></div>
+    <div class="mode-card marketing" onclick="goTo('screen-marketing')"><span class="mode-icon">📌</span><div class="mode-title">Marketing<span class="mk-count" id="mk-home-count" style="display:none"></span></div><div class="mode-desc">Review Pinterest pins drafted from the shop — approve, edit, then post</div><div class="mode-arrow">→</div></div>
     <div class="mode-card readiness" onclick="goTo('screen-readiness')"><span class="mode-icon">&#x1F4CB;</span><div class="mode-title">Listing readiness</div><div class="mode-desc">See what each piece is missing before it can publish to Shopify</div><div class="mode-arrow">→</div></div>
     <div class="mode-card log-cost" onclick="goTo('screen-costs')"><span class="mode-icon">&#x1F9FE;</span><div class="mode-title">Log a cost</div><div class="mode-desc">Snap a receipt, log mileage, or enter manually — saved to Airtable</div><div class="mode-arrow">→</div></div>
     <div class="mode-card resync" onclick="goTo('screen-resync')"><span class="mode-icon">&#x21BB;</span><div class="mode-title">Re-sync to Shopify</div><div class="mode-desc">Push attribute &amp; inventory updates to an already-published piece — keeps title, photos &amp; price</div><div class="mode-arrow">→</div></div>
@@ -1406,6 +1425,19 @@ button:active{transform:scale(.97)}
   </div>
 </div>
 
+<div id="screen-marketing" class="screen">
+  <div class="wizard-header">
+    <button class="hdr-nav-btn home-btn" onclick="goHome()" title="Home screen">⌂ Home</button>
+    <div class="wizard-title">Marketing — Pinterest</div>
+  </div>
+  <div class="screen-body">
+    <div class="info-card rose" style="margin-bottom:16px"><strong>How this works:</strong> The AI drafts pins from in-stock pieces, favoring the seasons shoppers are planning for. Nothing goes live until you approve it. For now you post approved pins yourself: <em>Post on Pinterest</em> copies the title and opens Pinterest with the photo, link and description filled in.</div>
+    <div class="btn-row" style="margin-bottom:14px"><button class="btn btn-primary btn-full" id="mk-draft-btn" onclick="mkDraft()">✨ Draft 5 new pins</button></div>
+    <div id="mk-status" class="info-card teal" style="display:none"></div>
+    <div class="mk-tabs" id="mk-tabs"></div>
+    <div id="mk-list"></div>
+  </div>
+</div>
 
 <script>
 const BASE_ID    = 'appHw4SEE5RNT8tCV';
@@ -1562,6 +1594,7 @@ async function connectAirtable(refresh) {
     const pill = document.getElementById('server-status');
     pill.onclick = () => connectAirtable(true); pill.title = 'Tap to refresh from Airtable';
     populateHomeStats(); populateLPSelect(); populateMSSelect(); populateSASelect(); populateCFInventory();
+    mkRefreshHomeCount(); // background: "N to review" on the Marketing card (server-cached)
     reconcileDriveFolders(); // background: tidy published/sold folders out of "Listing media sorted"
   } catch(e) {
     setServerStatus('error','Connection failed — tap to retry');
@@ -1813,6 +1846,7 @@ function goTo(screenId) {
   if(screenId==='screen-craft-tag') cstInit();
   if(screenId==='screen-backlog') blOnScreenEnter();
   if(screenId==='screen-readiness') readinessRender();
+  if(screenId==='screen-marketing') mkInit();
   if(screenId==='screen-bin-mgmt') bmOnScreenEnter();
   if(screenId==='screen-fulfillment') ffInit();
   if(screenId==='screen-new-piece') npFolderInit();
@@ -1821,6 +1855,155 @@ function goTo(screenId) {
 }
 function goHome() { stepBackFn = null; updateHeaderBackBtn(); goTo('screen-home'); }
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ── Marketing: Pinterest pin drafts → Patti approves → posts by hand (phase 1) ──
+// Rows live in the Airtable "Marketing Queue" table, read and written via the server.
+// "Post on Pinterest" copies the title (Pinterest's pin builder can't pre-fill it) and opens
+// the builder with the photo, product link and description already filled in.
+let mkRecords = [], mkTab = 'Draft', mkBusy = false;
+const MK_TABS = [['Draft','To review'],['Approved','Ready to post'],['Posted','Posted'],['Skipped','Skipped']];
+const MK_TITLE_MAX = 100, MK_DESC_MAX = 500;
+
+async function mkLoad(){
+  const r = await fetch(SERVER_URL + '/marketing/queue');
+  const d = await r.json().catch(()=>({}));
+  if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+  mkRecords = d.records || [];
+  mkUpdateHomeCount();
+}
+function mkUpdateHomeCount(){
+  const el = document.getElementById('mk-home-count'); if(!el) return;
+  const n = mkRecords.filter(r => r.fields['Status'] === 'Draft').length;
+  el.textContent = n + ' to review'; el.style.display = n ? '' : 'none';
+}
+async function mkRefreshHomeCount(){ try { await mkLoad(); } catch(e){ console.warn('Marketing queue load failed:', e.message); } }
+
+async function mkInit(){
+  const host = document.getElementById('mk-list');
+  host.innerHTML = '<div style="text-align:center;padding:36px 20px;color:var(--text-muted)">Loading pin drafts…</div>';
+  try { await mkLoad(); mkRender(); }
+  catch(e){ host.innerHTML = '<div class="info-card rose"><strong>Couldn\'t load the marketing queue</strong>' + escHtml(e.message) + '</div>'; }
+}
+function mkSetTab(t){ mkTab = t; mkRender(); }
+function mkStatusMsg(msg, type){
+  const el = document.getElementById('mk-status');
+  if(!msg){ el.style.display = 'none'; return; }
+  el.className = 'info-card ' + (type || 'teal'); el.style.display = 'block'; el.innerHTML = msg;
+}
+
+function mkRender(){
+  document.getElementById('mk-tabs').innerHTML = MK_TABS.map(([k,label]) => {
+    const n = mkRecords.filter(r => r.fields['Status'] === k).length;
+    return '<button class="mk-tab' + (mkTab===k?' active':'') + '" onclick="mkSetTab(\'' + k + '\')">' + label + ' (' + n + ')</button>';
+  }).join('');
+  const rows = mkRecords.filter(r => r.fields['Status'] === mkTab);
+  const host = document.getElementById('mk-list');
+  if(!rows.length){
+    const empty = { Draft:'No drafts waiting. Tap <b>Draft 5 new pins</b> to get some.', Approved:'Nothing approved yet — approve a draft and it shows up here to post.', Posted:'No pins posted yet.', Skipped:'Nothing skipped.' }[mkTab];
+    host.innerHTML = '<div style="text-align:center;padding:30px 16px;color:var(--text-muted);font-size:14px">' + empty + '</div>';
+    return;
+  }
+  host.innerHTML = rows.map(mkCardHtml).join('');
+}
+
+function mkCardHtml(r){
+  const f = r.fields, id = r.id, st = f['Status'];
+  const editable = st === 'Draft' || st === 'Approved';
+  const t = f['Pin Title'] || '', d = f['Description'] || '';
+  const field = (label, key, val, max, area) => {
+    const counter = max ? '<span id="mk-cnt-' + key + '-' + id + '"' + (val.length > max ? ' class="mk-over"' : '') + '>' + val.length + '/' + max + '</span>' : '';
+    const attrs = 'class="mk-input" id="mk-' + key + '-' + id + '"' + (editable ? '' : ' readonly') + (max ? ' oninput="mkCount(\'' + key + '\',\'' + id + '\',' + max + ')"' : '');
+    return '<div class="mk-label"><span>' + label + '</span>' + counter + '</div>' +
+      (area ? '<textarea ' + attrs + '>' + escHtml(val) + '</textarea>' : '<input ' + attrs + ' value="' + escHtml(val) + '">');
+  };
+  let actions = '';
+  if(st === 'Draft') actions = '<button class="btn btn-primary" onclick="mkApprove(\'' + id + '\')">✓ Approve</button><button class="btn" onclick="mkSetStatus(\'' + id + '\',\'Skipped\')">Skip</button>';
+  else if(st === 'Approved') actions = '<button class="btn btn-primary" onclick="mkPost(\'' + id + '\')">📌 Post on Pinterest</button><button class="btn" onclick="mkMarkPosted(\'' + id + '\')">Mark as posted</button><button class="btn" onclick="mkSetStatus(\'' + id + '\',\'Draft\')">Back to drafts</button>';
+  else if(st === 'Posted') actions = (f['Pin URL'] ? '<a class="btn" href="' + escHtml(f['Pin URL']) + '" target="_blank">View pin</a>' : '');
+  else actions = '<button class="btn" onclick="mkSetStatus(\'' + id + '\',\'Draft\')">Restore to drafts</button>';
+  return '<div class="mk-card ' + st.toLowerCase() + '">' +
+    '<a href="' + escHtml(f['Product URL'] || '#') + '" target="_blank" title="Open the product page"><img class="mk-img" src="' + escHtml(f['Image URL'] || '') + '" alt="' + escHtml(f['Alt Text'] || '') + '" loading="lazy"></a>' +
+    '<div class="mk-body">' +
+      '<div class="rd-eb">' + escHtml(f['EB Number'] || '') + '</div>' +
+      field('Pin title', 'title', t, MK_TITLE_MAX) +
+      field('Description', 'desc', d, MK_DESC_MAX, true) +
+      field('Board', 'board', f['Board'] || '') +
+      '<div class="mk-actions">' + actions + '</div>' +
+    '</div></div>';
+}
+function mkCount(key, id, max){
+  const v = document.getElementById('mk-' + key + '-' + id).value, c = document.getElementById('mk-cnt-' + key + '-' + id);
+  c.textContent = v.length + '/' + max; c.className = v.length > max ? 'mk-over' : '';
+}
+// The text currently in a card's inputs (Patti may have edited it).
+function mkCardFields(id){
+  const val = k => { const el = document.getElementById('mk-' + k + '-' + id); return el ? el.value.trim() : ''; };
+  return { 'Pin Title': val('title'), 'Description': val('desc'), 'Board': val('board') };
+}
+async function mkSave(id, fields){
+  const r = await fetch(SERVER_URL + '/marketing/queue/' + id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fields }) });
+  const d = await r.json().catch(()=>({}));
+  if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+  const i = mkRecords.findIndex(x => x.id === id); if(i >= 0) mkRecords[i] = d;
+  mkUpdateHomeCount(); mkRender();
+  return d;
+}
+async function mkApprove(id){
+  const f = mkCardFields(id);
+  if(!f['Pin Title'] || !f['Description']) return mkStatusMsg('<strong>Title and description are needed</strong>Fill both in before approving.', 'amber');
+  if(f['Pin Title'].length > MK_TITLE_MAX || f['Description'].length > MK_DESC_MAX) return mkStatusMsg('<strong>Too long for Pinterest</strong>Titles max ' + MK_TITLE_MAX + ' characters, descriptions max ' + MK_DESC_MAX + '.', 'amber');
+  try { await mkSave(id, { ...f, 'Status':'Approved' }); mkStatusMsg('Approved — it\'s waiting under <b>Ready to post</b>.'); }
+  catch(e){ mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
+}
+async function mkSetStatus(id, status){
+  try {
+    const rec = mkRecords.find(x => x.id === id);
+    const fields = { 'Status': status };
+    if(rec && (rec.fields['Status'] === 'Draft' || rec.fields['Status'] === 'Approved')) Object.assign(fields, mkCardFields(id));
+    await mkSave(id, fields); mkStatusMsg('');
+  } catch(e){ mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
+}
+async function mkPost(id){
+  const rec = mkRecords.find(x => x.id === id); if(!rec) return;
+  const f = mkCardFields(id);
+  // Open the tab and start the copy before any await: Safari (iPad) blocks pop-ups and
+  // clipboard writes that don't happen directly in the tap.
+  const url = 'https://www.pinterest.com/pin/create/button/?url=' + encodeURIComponent(rec.fields['Product URL'] || '') +
+    '&media=' + encodeURIComponent(rec.fields['Image URL'] || '') + '&description=' + encodeURIComponent(f['Description']);
+  window.open(url, '_blank');
+  let copy;
+  try { copy = navigator.clipboard.writeText(f['Pin Title']); } catch(e) { copy = Promise.reject(e); }
+  const copied = await copy.then(() => true, () => false);
+  mkStatusMsg('<strong>Pinterest is open in a new tab</strong>' + (copied ? 'The title is copied — paste it into the title box. ' : 'Copy the title from this card into the title box. ') +
+    'Pick the board <b>' + escHtml(f['Board'] || '') + '</b>, publish, then come back and tap <b>Mark as posted</b>.');
+  // Keep any last-second edits.
+  if(f['Pin Title'] !== (rec.fields['Pin Title']||'') || f['Description'] !== (rec.fields['Description']||'') || f['Board'] !== (rec.fields['Board']||'')){
+    try { await mkSave(id, f); } catch(e){ mkStatusMsg('<strong>Couldn\'t save your edits</strong>' + escHtml(e.message), 'rose'); }
+  }
+}
+async function mkMarkPosted(id){
+  const link = prompt('Optional: paste the link to the new pin (or leave blank).', '');
+  if(link === null) return;
+  const fields = { 'Status':'Posted' };
+  if(link.trim()) fields['Pin URL'] = link.trim();
+  try { await mkSave(id, fields); mkStatusMsg('Marked as posted.'); }
+  catch(e){ mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
+}
+async function mkDraft(){
+  if(mkBusy) return; mkBusy = true;
+  const btn = document.getElementById('mk-draft-btn'); btn.disabled = true; btn.textContent = 'Drafting pins… (about a minute)';
+  mkStatusMsg('');
+  try {
+    const r = await fetch(SERVER_URL + '/marketing/draft-pins', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ count: 5 }) });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+    await mkLoad(); mkTab = 'Draft'; mkRender();
+    const n = (d.records || []).length, failed = (d.failed || []).length;
+    if(!n && !failed) mkStatusMsg('<strong>Nothing new to draft</strong>Every in-stock piece with a photo already has a pin in the queue.', 'amber');
+    else mkStatusMsg(n + ' new draft' + (n === 1 ? '' : 's') + ' ready to review.' + (failed ? ' ' + failed + ' couldn\'t be drafted — try again later.' : ''), failed ? 'amber' : 'teal');
+  } catch(e){ mkStatusMsg('<strong>Couldn\'t draft pins</strong>' + escHtml(e.message), 'rose'); }
+  finally { mkBusy = false; btn.disabled = false; btn.textContent = '✨ Draft 5 new pins'; }
+}
 
 // ── Order fulfillment: open Shopify orders → packing reference ────────────────
 // Fetches /orders/open (open + unfulfilled Shopify orders joined to Airtable) and
