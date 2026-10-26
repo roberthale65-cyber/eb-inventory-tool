@@ -311,6 +311,8 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 .mk-actions .btn{flex:1;min-width:120px}
 .mk-ch{border-top:1px solid var(--border);padding-top:10px;margin-top:10px}
 .rd-eb + .mk-ch{border-top:none;padding-top:0}
+.hdr-nav-btn.guide-btn{text-decoration:none;border-color:var(--rose);color:var(--rose)}
+.hdr-nav-btn.guide-btn:hover{background:var(--rose-bg)}
 .mk-ch-head{font-size:12px;font-weight:800;color:var(--text);margin-bottom:2px}
 .mk-ch-off{font-size:10px;font-weight:700;color:var(--text-muted);background:var(--ivory-dark);border-radius:99px;padding:1px 7px;margin-left:4px}
 .mk-actions .btn.mk-small{flex:0 0 auto;min-width:0;font-size:12px;padding:6px 12px}
@@ -1456,9 +1458,10 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
   <div class="wizard-header">
     <button class="hdr-nav-btn home-btn" onclick="goHome()" title="Home screen">⌂ Home</button>
     <div class="wizard-title">Marketing</div>
+    <a class="hdr-nav-btn guide-btn" href="marketing-guide.html" target="_blank" rel="noopener" title="Open Patti's Marketing guide in a new tab">📘 How it works</a>
   </div>
   <div class="screen-body">
-    <div class="info-card rose" style="margin-bottom:12px"><strong>How this works:</strong> Every week the AI drafts a Pinterest pin, an Instagram post and a Facebook post for in-stock pieces, using the listing video when there is one and favoring the seasons shoppers are planning for. Nothing goes live until you approve it — one tap approves all three. When a piece sells, unposted drafts are skipped and live pins and Facebook posts point to similar pieces.</div>
+    <div class="info-card rose" style="margin-bottom:12px"><strong>How this works:</strong> Every week the AI drafts a Pinterest pin, an Instagram post and a Facebook post for in-stock pieces, using the listing video when there is one and favoring the seasons shoppers are planning for. Nothing goes live until you approve it — one tap approves all three. When a piece sells, unposted drafts are skipped and live pins and Facebook posts point to similar pieces. <a href="marketing-guide.html" target="_blank" rel="noopener" style="color:inherit;font-weight:700">Open the step-by-step guide →</a></div>
     <div id="mk-connect"></div>
     <div class="btn-row" style="margin-bottom:14px"><button class="btn btn-primary btn-full" id="mk-draft-btn" onclick="mkDraft()">✨ Draft 5 new pieces</button></div>
     <div id="mk-plan"></div>
