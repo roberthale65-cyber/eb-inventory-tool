@@ -2972,7 +2972,7 @@ const MKT_AUTO_EVERY_MS = 7 * 24 * 60 * 60 * 1000;
 const MKT_AUTO_BATCH = 5;
 let mktAutoBusy = false, mktSweepAt = 0;
 function mktMaybeAutoRun(records) {
-  if (PINTEREST_APP_SECRET || META_APP_SECRET) Promise.all([pinLoadAuth(), metaLoadAuth()]).then(() => mktPostPending(records, { skipErrored: true })).catch(e => console.warn('marketing: posting approved posts failed —', e.message));
+  if (PINTEREST_APP_SECRET || PINTEREST_ACCESS_TOKEN || META_APP_SECRET) Promise.all([pinLoadAuth(), metaLoadAuth()]).then(() => mktPostPending(records, { skipErrored: true })).catch(e => console.warn('marketing: posting approved posts failed —', e.message));
   if (mktAutoBusy || !shopifyAccessToken || !ANTHROPIC_API_KEY) return;
   const lastDrafted = Math.max(0, ...records.map(r => Date.parse((r.fields || {})['Drafted'] || '') || 0));
   const waiting = new Set(records.filter(r => (r.fields || {})['Status'] === 'Draft').map(r => r.fields['EB Number'])).size;
@@ -3087,6 +3087,10 @@ const PINTEREST_APP_SECRET = process.env.PINTEREST_APP_SECRET;
 // PINTEREST_API_BASE=https://api-sandbox.pinterest.com/v5 in Render to test there.
 const PINTEREST_API_BASE = (process.env.PINTEREST_API_BASE || 'https://api.pinterest.com/v5').replace(/\/$/, '');
 const PINTEREST_SCOPES = 'boards:read,boards:write,pins:read,pins:write,user_accounts:read';
+// Testing before the app secret is issued: an access token generated in Pinterest's developer
+// portal can be set as PINTEREST_ACCESS_TOKEN. It is used as is (no refresh, no saved
+// connection) and only when OAuth isn't connected; remove it once /pinterest-auth is set up.
+const PINTEREST_ACCESS_TOKEN = process.env.PINTEREST_ACCESS_TOKEN;
 const AT_STATE_TBL = 'tbljykqkWi9metp4c';
 const PIN_STATE_KEY = 'pinterest_auth';
 const pinAuth = { loaded: false, accessToken: null, refreshToken: null, expiresAt: 0, username: null };
@@ -3109,7 +3113,8 @@ function stateDecrypt(s, key) {
 function pinCipherKey() { return crypto.createHash('sha256').update('eb-pinterest-auth:' + PINTEREST_APP_SECRET).digest(); }
 function pinEncrypt(obj) { return stateEncrypt(obj, pinCipherKey()); }
 function pinDecrypt(s) { return stateDecrypt(s, pinCipherKey()); }
-function pinConnected() { return !!(PINTEREST_APP_SECRET && (pinAuth.refreshToken || pinAuth.accessToken)); }
+function pinOauthConnected() { return !!(PINTEREST_APP_SECRET && (pinAuth.refreshToken || pinAuth.accessToken)); }
+function pinConnected() { return pinOauthConnected() || !!PINTEREST_ACCESS_TOKEN; }
 
 async function pinLoadAuth() {
   if (pinAuth.loaded || !PINTEREST_APP_SECRET) return;
@@ -3143,6 +3148,7 @@ async function pinTokenRequest(params) {
 // A valid access token, refreshed when it's within a day of expiring.
 async function pinAccessToken() {
   await pinLoadAuth();
+  if (!pinOauthConnected() && PINTEREST_ACCESS_TOKEN) return PINTEREST_ACCESS_TOKEN;
   if (!pinConnected()) throw new Error('Pinterest is not connected — visit /pinterest-auth');
   if (!pinAuth.accessToken || Date.now() > pinAuth.expiresAt - 24 * 60 * 60 * 1000) {
     await pinTokenRequest({ grant_type: 'refresh_token', refresh_token: pinAuth.refreshToken });
@@ -3195,7 +3201,10 @@ app.get('/pinterest-auth/callback', async (req, res) => {
 // GET /pinterest/status — what the Marketing screen shows about the connection.
 app.get('/pinterest/status', async (req, res) => {
   try { await pinLoadAuth(); } catch (e) { /* Airtable hiccup: report what we know */ }
-  res.json({ configured: !!(PINTEREST_APP_ID && PINTEREST_APP_SECRET), connected: pinConnected(), username: pinAuth.username, sandbox: /sandbox/.test(PINTEREST_API_BASE) });
+  const tokenOnly = !pinOauthConnected() && !!PINTEREST_ACCESS_TOKEN;
+  // A portal token has no saved username; look it up once (needs user_accounts:read).
+  if (tokenOnly && !pinAuth.username) { try { pinAuth.username = (await pinApi('/user_account')).username || null; } catch (e) { /* scope missing: show without a name */ } }
+  res.json({ configured: !!(PINTEREST_APP_ID && PINTEREST_APP_SECRET) || !!PINTEREST_ACCESS_TOKEN, connected: pinConnected(), username: pinAuth.username, sandbox: /sandbox/.test(PINTEREST_API_BASE), testToken: tokenOnly });
 });
 
 // Boards are created the first time a pin needs them, so the profile never shows empty boards.
@@ -3212,8 +3221,16 @@ async function pinBoardId(name) {
   }
   const key = String(name).toLowerCase();
   if (!pinBoards.has(key)) {
-    const b = await pinApi('/boards', { method: 'POST', body: { name, description: PIN_BOARD_DESCRIPTION(name), privacy: 'PUBLIC' } });
-    pinBoards.set(key, b.id);
+    try {
+      const b = await pinApi('/boards', { method: 'POST', body: { name, description: PIN_BOARD_DESCRIPTION(name), privacy: 'PUBLIC' } });
+      pinBoards.set(key, b.id);
+    } catch (e) {
+      // A token without boards:write can't make boards: pin to an existing one rather than fail.
+      const fallback = pinBoards.get('everyday faux florals') || pinBoards.values().next().value;
+      if (!fallback) throw e;
+      console.warn(`Pinterest: couldn't create board "${name}" (${e.message}) — pinning to an existing board instead`);
+      return fallback;
+    }
   }
   return pinBoards.get(key);
 }
