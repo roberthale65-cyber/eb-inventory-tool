@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marketing Guide — Eternal Blooms Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Patti's how-to for the Marketing screen in master.html, opened from its "How this works" button.
+     Kept in step with the Claude Doc "Marketing in EB Master: Patti's Guide". -->
+<style>
+:root{
+  --ivory:#fbfaf9;--ivory-dark:#f2f0ee;--rose:#bb8588;--rose-bg:#faf6f6;--rose-light:#eddede;
+  --teal:#46867f;--teal-bg:#f4f9f8;--text:#2b2622;--text-mid:#5b5248;--text-muted:#817365;
+  --card:#ffffff;--border:#e9e6e2;--border-strong:#d9d4ce;
+  --font-display:'DM Serif Display',Georgia,serif;--font-body:'Poppins',system-ui,sans-serif;
+  --radius:16px;--radius-sm:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-body);background:var(--ivory);color:var(--text);line-height:1.65;font-size:15px}
+.top-bar{background:var(--rose);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10;box-shadow:0 2px 12px rgba(43,38,34,.15)}
+.brand-mark{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:15px}
+.brand-name{font-family:var(--font-display);font-size:17px}
+.brand-sub{font-size:12px;opacity:.85}
+.page{max-width:760px;margin:0 auto;padding:24px 16px 48px}
+h1{font-family:var(--font-display);font-weight:400;font-size:30px;line-height:1.2;margin-bottom:6px}
+.lead{color:var(--text-mid);margin-bottom:18px}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px}
+.toc a{background:var(--card);border:1.5px solid var(--border);border-radius:99px;padding:6px 14px;font-size:12px;font-weight:700;color:var(--text-mid);text-decoration:none}
+.toc a:hover{border-color:var(--rose);color:var(--rose)}
+section{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:20px 20px 16px;margin-bottom:16px}
+h2{font-family:var(--font-display);font-weight:400;font-size:21px;color:var(--text);margin-bottom:8px}
+h3{font-size:13px;font-weight:700;color:var(--rose);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 6px}
+p{margin-bottom:10px}
+ul,ol{margin:0 0 10px 22px}
+li{margin-bottom:6px}
+li ul{margin-top:6px}
+b,strong{font-weight:600}
+.note{background:var(--teal-bg);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:10px 14px;font-size:14px;color:var(--text-mid);margin-top:6px}
+table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0 12px}
+th{background:var(--rose-bg);color:var(--text-mid);font-size:12px;text-transform:uppercase;letter-spacing:.04em;text-align:left;padding:8px 10px;border-bottom:1.5px solid var(--rose-light)}
+td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+tr:last-child td{border-bottom:none}
+.footer{font-size:12px;color:var(--text-muted);text-align:center;margin-top:24px}
+@media (max-width:520px){h1{font-size:25px}section{padding:16px 14px 12px}th,td{padding:7px 6px}}
+</style>
+</head>
+<body>
+<div class="top-bar"><div class="brand-mark">EB</div><div><div class="brand-name">Eternal Blooms Studio</div><div class="brand-sub">Marketing guide</div></div></div>
+<div class="page">
+<h1>Marketing in EB Master</h1>
+<p class="lead">The AI writes posts about your in-stock pieces, you approve them, and EB Master posts them for you. Keep this tab open and switch back to EB Master whenever you need it.</p>
+<nav class="toc">
+  <a href="#what">What it does</a><a href="#routine">Weekly routine</a><a href="#card">Reviewing a card</a>
+  <a href="#plan">Planning posts</a><a href="#after">After you approve</a><a href="#help">If something looks wrong</a>
+</nav>
+
+<section id="what">
+<h2>What Marketing does for you</h2>
+<p>Nothing ever goes live without your OK.</p>
+<ul>
+  <li><b>Three channels per piece:</b> a Pinterest pin, an Instagram post and a Facebook post.</li>
+  <li><b>Your listing video is used when there is one.</b> It becomes an Instagram Reel and a Facebook video.</li>
+  <li><b>It follows the season.</b> It starts on Christmas in mid-September, Valentine's Day right after Christmas, and so on, the way stores do.</li>
+  <li><b>Each channel's voice:</b> Instagram describes the piece with a light "handmade by Patti" touch. Facebook sounds like you talking and is signed "— Patti".</li>
+  <li><b>New drafts arrive every week on their own.</b> The Marketing card on the Home screen shows how many are waiting, e.g. "5 to review".</li>
+</ul>
+<p class="note">Right now Facebook and Instagram post automatically. Pinterest is waiting for Pinterest to approve our app; until then, pins are posted by hand (see <a href="#help">If something looks wrong</a>).</p>
+</section>
+
+<section id="routine">
+<h2>Your weekly routine (about 5 minutes)</h2>
+<p>Once a week, open Marketing and approve or skip each waiting piece. That's all the system needs from you.</p>
+<ol>
+  <li>Open <b>EB Master</b> and tap the <b>Marketing</b> card on the Home screen. The badge shows how many pieces are waiting.</li>
+  <li>Stay on the <b>To review</b> tab. Each card is one piece, with its Pinterest, Instagram and Facebook posts stacked together.</li>
+  <li>For each piece, read the text and look at the photo or video.</li>
+  <li>Tap <b>✓ Approve &amp; post all</b>. Or tap <b>Skip piece</b> if you don't want to post it right now.</li>
+  <li>That's it. The posts go out over the next few days by themselves.</li>
+</ol>
+<p>If you'd like more to review, tap <b>✨ Draft 5 new pieces</b> at any time. It takes a minute or two.</p>
+</section>
+
+<section id="card">
+<h2>Reviewing a piece card</h2>
+<p>You can change any word before approving. Your edits are what gets posted.</p>
+<h3>What's on a card</h3>
+<ul>
+  <li><b>Photo or video</b> of the piece on the left. A video shows a small VIDEO tag; tap it to play.</li>
+  <li><b>Badges</b> next to the EB number: <b>New</b> (first time posted) or <b>Repost</b>, plus the season it was written for, e.g. <b>Christmas</b>.</li>
+  <li><b>"Posted before"</b> line: where and when this piece went out earlier, e.g. "📷 Sep 20 · 📌 Sep 12 (Fall)".</li>
+  <li><b>One block per channel:</b>
+    <ul>
+      <li>📌 Pinterest: a title, a description and a board.</li>
+      <li>📷 Instagram: a caption.</li>
+      <li>👍 Facebook: a post, with the shop link at the end.</li>
+    </ul>
+  </li>
+</ul>
+<h3>What you can do</h3>
+<table>
+  <tr><th>You want to…</th><th>Do this</th></tr>
+  <tr><td>Fix a word or a sentence</td><td>Tap into the text box and type. The counter shows if it's too long.</td></tr>
+  <tr><td>Post on two channels but not the third</td><td>Tap <b>Skip Pinterest</b> (or Instagram, or Facebook) under that channel, then approve the rest.</td></tr>
+  <tr><td>Post everything</td><td>Tap <b>✓ Approve &amp; post all</b>.</td></tr>
+  <tr><td>Not post this piece now</td><td>Tap <b>Skip piece</b>. You can bring it back from the <b>Skipped</b> tab.</td></tr>
+</table>
+<p class="note">A quick check before approving: does the text describe the piece correctly (colors, flowers, container)? The AI looks at the photo, but you know the piece best.</p>
+</section>
+
+<section id="plan">
+<h2>Planning posts yourself (optional)</h2>
+<p>The weekly batch handles things on its own, but the <b>Plan posts</b> box on the Marketing screen lets you choose what goes out. Pieces can be posted again: each repost is rewritten for the season, never a copy of the old post.</p>
+<h3>Coming up (seasonal suggestions)</h3>
+<p>This lists the seasons to promote right now, each with how many pieces fit, how many were never posted, and how many are ready to post again. Tap <b>Draft 5</b> next to a season, e.g. Christmas, to get 5 pieces drafted with that angle.</p>
+<h3>☑ Pick pieces… (choose them yourself)</h3>
+<ol>
+  <li>Tap <b>Pick pieces…</b>.</li>
+  <li>Narrow the list with the filters: season or occasion, type (wreath, centerpiece…), <b>Never posted</b> or <b>Ready to repost</b>, or search by name or EB number.</li>
+  <li>Tick up to 10 pieces. Each row shows when it was last posted on each channel.</li>
+  <li>Under <b>Post to</b>, untick any channel you don't want.</li>
+  <li>Under <b>Angle</b>, choose a season or occasion, or leave <b>Whatever season fits now</b>. You can also pick Everyday, Sympathy &amp; memorial, or Weddings &amp; showers.</li>
+  <li>Tap <b>✨ Draft selected</b>. The drafts appear in <b>To review</b>.</li>
+</ol>
+<h3>🎲 Surprise me</h3>
+<p>Tap it to get 5 random pieces that haven't been posted in a while.</p>
+<h3>How often a piece comes back</h3>
+<p>A piece can repost on the same channel 30 days after its last post there. If you pick a piece yourself, it doesn't have to wait.</p>
+</section>
+
+<section id="after">
+<h2>After you approve</h2>
+<p>Approved posts are spread out to about one per channel per day, so your followers don't get five posts in a minute.</p>
+<ul>
+  <li><b>Approved tab:</b> each channel shows <b>🗓 Scheduled for</b> with a day and time. Usual times are about noon for Instagram, 2 pm for Facebook and 8 pm for Pinterest (Central).</li>
+  <li><b>Post now:</b> tap it under a channel if you want that post out right away, e.g. for a craft show this weekend.</li>
+  <li><b>Back to drafts:</b> changed your mind? Tap it before the scheduled time.</li>
+  <li><b>Posted tab:</b> everything that went out, with <b>View on Instagram / Facebook / Pinterest</b> links.</li>
+  <li><b>Videos take a minute or two</b> to process. You'll see "⏳ Posting…" meanwhile.</li>
+</ul>
+<h3>When a piece sells</h3>
+<p>You don't have to do anything:</p>
+<ul>
+  <li>Drafts and scheduled posts for that piece are skipped automatically.</li>
+  <li>Live Pinterest pins and Facebook posts are updated to point to similar pieces in the shop.</li>
+  <li>Instagram doesn't allow editing captions, so those posts stay as they are.</li>
+</ul>
+</section>
+
+<section id="help">
+<h2>If something looks wrong</h2>
+<table>
+  <tr><th>What you see</th><th>What to do</th></tr>
+  <tr><td>A red <b>Couldn't post</b> message on a channel</td><td>Tap <b>↻ Retry</b>. If it fails again, take a screenshot and send it to Bob.</td></tr>
+  <tr><td>"Posted as a photo — the video failed" note</td><td>Nothing. The post went out with the photo instead; the video was the problem, not you.</td></tr>
+  <tr><td>Pinterest says <b>not connected</b></td><td>Expected for now. Tap <b>📌 Post on Pinterest</b>, paste the title (it's copied for you), pick the board shown, publish, then tap <b>Mark as posted</b>.</td></tr>
+  <tr><td>Facebook &amp; Instagram say <b>not connected</b></td><td>Send a screenshot to Bob. It may need to be reconnected once.</td></tr>
+  <tr><td><b>Nothing to draft</b> message</td><td>Every matching piece is already waiting or was posted in the last 30 days. Use <b>Pick pieces…</b> to choose some anyway.</td></tr>
+  <tr><td>The text gets a fact wrong</td><td>Fix it in the box before approving, or tap <b>Skip</b> for that channel.</td></tr>
+</table>
+<p class="note">When in doubt, don't approve. A skipped piece can always come back later.</p>
+</section>
+
+<p class="footer">Eternal Blooms Studio · Marketing guide · updated October 2026</p>
+</div>
+</body>
+</html>
