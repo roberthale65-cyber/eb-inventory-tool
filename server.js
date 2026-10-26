@@ -3090,7 +3090,9 @@ const PINTEREST_SCOPES = 'boards:read,boards:write,pins:read,pins:write,user_acc
 // Testing before the app secret is issued: an access token generated in Pinterest's developer
 // portal can be set as PINTEREST_ACCESS_TOKEN. It is used as is (no refresh, no saved
 // connection) and only when OAuth isn't connected; remove it once /pinterest-auth is set up.
-const PINTEREST_ACCESS_TOKEN = process.env.PINTEREST_ACCESS_TOKEN;
+// Tokens pasted into Render often carry a line break, spaces or a leading "Bearer", which Node
+// rejects in a header ("Invalid character in header content"); keep only the token itself.
+const PINTEREST_ACCESS_TOKEN = (process.env.PINTEREST_ACCESS_TOKEN || '').replace(/^\s*bearer\s+/i, '').replace(/\s+/g, '') || undefined;
 const AT_STATE_TBL = 'tbljykqkWi9metp4c';
 const PIN_STATE_KEY = 'pinterest_auth';
 const pinAuth = { loaded: false, accessToken: null, refreshToken: null, expiresAt: 0, username: null };
