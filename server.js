@@ -3087,9 +3087,11 @@ const PINTEREST_APP_SECRET = process.env.PINTEREST_APP_SECRET;
 // PINTEREST_API_BASE=https://api-sandbox.pinterest.com/v5 in Render to test there.
 const PINTEREST_API_BASE = (process.env.PINTEREST_API_BASE || 'https://api.pinterest.com/v5').replace(/\/$/, '');
 const PINTEREST_SCOPES = 'boards:read,boards:write,pins:read,pins:write,user_accounts:read';
-// Testing before the app secret is issued: an access token generated in Pinterest's developer
-// portal can be set as PINTEREST_ACCESS_TOKEN. It is used as is (no refresh, no saved
-// connection) and only when OAuth isn't connected; remove it once /pinterest-auth is set up.
+// Testing (e.g. a Sandbox token while the app is on Trial access): an access token generated in
+// Pinterest's developer portal can be set as PINTEREST_ACCESS_TOKEN. When set it wins over the
+// saved OAuth connection and is used as is (no refresh, nothing saved); a token only works in
+// its own environment, so pair a Sandbox token with the sandbox PINTEREST_API_BASE. Remove it
+// to go back to the /pinterest-auth connection.
 // Tokens pasted into Render often carry a line break, spaces or a leading "Bearer", which Node
 // rejects in a header ("Invalid character in header content"); keep only the token itself.
 const PINTEREST_ACCESS_TOKEN = (process.env.PINTEREST_ACCESS_TOKEN || '').replace(/^\s*bearer\s+/i, '').replace(/\s+/g, '') || undefined;
@@ -3150,7 +3152,7 @@ async function pinTokenRequest(params) {
 // A valid access token, refreshed when it's within a day of expiring.
 async function pinAccessToken() {
   await pinLoadAuth();
-  if (!pinOauthConnected() && PINTEREST_ACCESS_TOKEN) return PINTEREST_ACCESS_TOKEN;
+  if (PINTEREST_ACCESS_TOKEN) return PINTEREST_ACCESS_TOKEN;
   if (!pinConnected()) throw new Error('Pinterest is not connected — visit /pinterest-auth');
   if (!pinAuth.accessToken || Date.now() > pinAuth.expiresAt - 24 * 60 * 60 * 1000) {
     await pinTokenRequest({ grant_type: 'refresh_token', refresh_token: pinAuth.refreshToken });
@@ -3203,7 +3205,7 @@ app.get('/pinterest-auth/callback', async (req, res) => {
 // GET /pinterest/status — what the Marketing screen shows about the connection.
 app.get('/pinterest/status', async (req, res) => {
   try { await pinLoadAuth(); } catch (e) { /* Airtable hiccup: report what we know */ }
-  const tokenOnly = !pinOauthConnected() && !!PINTEREST_ACCESS_TOKEN;
+  const tokenOnly = !!PINTEREST_ACCESS_TOKEN;
   // A portal token has no saved username; look it up once (needs user_accounts:read).
   if (tokenOnly && !pinAuth.username) { try { pinAuth.username = (await pinApi('/user_account')).username || null; } catch (e) { /* scope missing: show without a name */ } }
   res.json({ configured: !!(PINTEREST_APP_ID && PINTEREST_APP_SECRET) || !!PINTEREST_ACCESS_TOKEN, connected: pinConnected(), username: pinAuth.username, sandbox: /sandbox/.test(PINTEREST_API_BASE), testToken: tokenOnly });
