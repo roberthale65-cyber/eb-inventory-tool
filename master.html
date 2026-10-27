@@ -1957,7 +1957,7 @@ function mkUpdateHomeCount(){
 async function mkRefreshHomeCount(){ try { await mkLoad(); } catch(e){ console.warn('Marketing queue load failed:', e.message); } }
 
 async function mkInit(){
-  if(!navRestoring){ mkNavDepth = 0; mkUpdateBack(); }
+  if(!navRestoring){ mkNavDepth = 0; mkUndo = []; mkUpdateBack(); }
   const host = document.getElementById('mk-list');
   host.innerHTML = '<div style="text-align:center;padding:36px 20px;color:var(--text-muted)">Loading drafts…</div>';
   mkLoadStatus();
@@ -1999,7 +1999,38 @@ function mkTogglePicker(){ mkPick.open = !mkPick.open; mkRenderPlan(); mkNavPush
 // Marketing steps for Back: which tab is showing and whether the picker is open.
 let mkNavDepth = 0;
 function mkNavPush(){ mkNavDepth++; navPush({ screen: 'screen-marketing', mk: { tab: mkTab, picker: mkPick.open, depth: mkNavDepth } }); mkUpdateBack(); }
-function mkRestore(m){ mkTab = m.tab || 'Draft'; mkPick.open = !!m.picker; mkNavDepth = m.depth || 0; mkRender(); mkRenderPlan(); mkUpdateBack(); }
+function mkRestore(m){
+  const target = m.depth || 0;
+  const undo = mkUndo.filter(a => a.depth > target);
+  mkUndo = mkUndo.filter(a => a.depth <= target);
+  mkTab = m.tab || 'Draft'; mkPick.open = !!m.picker; mkNavDepth = target; mkUpdateBack();
+  if(undo.length) mkUndoActions(undo.reverse()); // first, so a drawing hiccup below can't stop an undo
+  mkRender();
+  try { mkRenderPlan(); } catch(e){ console.warn('Plan posts redraw failed:', e.message); }
+}
+// Actions Patti takes on cards (skip, approve, back to drafts) are history steps too: Back undoes
+// them, newest first, by putting each row back to the status it had before.
+let mkUndo = [];
+function mkRecordAction(label, before){
+  mkNavPush();
+  mkUndo.push({ depth: mkNavDepth, label, rows: before.map(r => ({ id: r.id, status: r.status, channel: r.channel })) });
+}
+const mkSnapshot = rows => rows.map(r => ({ id: r.id, status: r.fields['Status'], channel: mkChannel(r.fields) }));
+async function mkUndoActions(actions){
+  const done = [], stuck = [];
+  for(const a of actions){
+    for(const row of a.rows){
+      const cur = mkRecords.find(x => x.id === row.id);
+      if(!cur || cur.fields['Status'] === row.status) continue;
+      if(cur.fields['Status'] === 'Posted'){ stuck.push(row.channel); continue; } // already live: can't be taken back
+      try { await mkSave(row.id, { 'Status': row.status }, { render:false }); }
+      catch(e){ stuck.push(row.channel); }
+    }
+    done.push(a.label);
+  }
+  mkUpdateHomeCount(); mkRender();
+  mkStatusMsg('Undone: ' + escHtml(done.join(', ')) + '.' + (stuck.length ? ' ' + escHtml([...new Set(stuck)].join(', ')) + ' had already posted, so ' + (stuck.length === 1 ? 'that one stays' : 'those stay') + ' posted.' : ''), stuck.length ? 'amber' : 'teal');
+}
 function mkUpdateBack(){ stepBackFn = mkNavDepth > 0 ? () => history.back() : null; updateHeaderBackBtn(); }
 function mkPickSet(key, val){ mkPick[key] = val; mkRenderPicker(); }
 function mkPickToggle(sku){ if(mkPick.selected.has(sku)) mkPick.selected.delete(sku); else if(mkPick.selected.size < MK_PICK_MAX) mkPick.selected.add(sku); else return mkStatusMsg('Up to ' + MK_PICK_MAX + ' pieces at a time.', 'amber'); mkRenderPicker(); }
@@ -2190,9 +2221,11 @@ async function mkApproveAll(eb){
   const bad = rows.map(mkInvalid).filter(Boolean);
   if(bad.length) return mkStatusMsg('<strong>Fix before approving</strong>' + escHtml(bad.join(' ')), 'amber');
   const edits = rows.map(r => [r, mkCardFields(r.id)]); // read inputs before the first re-render
+  const before = mkSnapshot(rows);
   try {
     const saved = [];
     for(const [r, f] of edits) saved.push(await mkSave(r.id, { ...f, 'Status':'Approved' }, { render:false }));
+    mkRecordAction('Approve ' + eb, before);
     mkUpdateHomeCount(); mkRender();
     const parts = saved.map(d => { const ch = mkChannel(d.fields); return !mkConnected(ch) ? ch + ' waits until connected' : mkDue(d.fields) ? ch + ' now' : ch + ' ' + mkWhen(d.fields['Scheduled for']); });
     mkStatusMsg('Approved — ' + escHtml(parts.join(', ')) + '. Posts are spread out to about one per channel per day.');
@@ -2204,7 +2237,8 @@ async function mkPostNow(id){
 }
 async function mkSkipAll(eb){
   const rows = mkRecords.filter(r => r.fields['EB Number'] === eb && r.fields['Status'] === 'Draft');
-  try { for(const r of rows) await mkSave(r.id, { ...mkCardFields(r.id), 'Status':'Skipped' }, { render:false }); mkStatusMsg(''); }
+  const before = mkSnapshot(rows);
+  try { for(const r of rows) await mkSave(r.id, { ...mkCardFields(r.id), 'Status':'Skipped' }, { render:false }); mkRecordAction('Skip ' + eb, before); mkStatusMsg('Skipped ' + escHtml(eb) + '. Back undoes it.'); }
   catch(e){ mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
   mkUpdateHomeCount(); mkRender();
 }
@@ -2222,7 +2256,11 @@ async function mkSetStatus(id, status){
     const rec = mkRecords.find(x => x.id === id);
     const fields = { 'Status': status };
     if(rec && (rec.fields['Status'] === 'Draft' || rec.fields['Status'] === 'Approved')) Object.assign(fields, mkCardFields(id));
-    await mkSave(id, fields); mkStatusMsg('');
+    const before = rec ? mkSnapshot([rec]) : [];
+    await mkSave(id, fields);
+    const what = { Skipped: 'Skip', Draft: 'Back to drafts', Approved: 'Approve' }[status] || status;
+    if(rec){ mkRecordAction(what + ' ' + mkChannel(rec.fields) + ' (' + (rec.fields['EB Number'] || '') + ')', before); mkStatusMsg(escHtml(what + ' ' + mkChannel(rec.fields)) + ' done. Back undoes it.'); }
+    else mkStatusMsg('');
   } catch(e){ mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
 }
 async function mkPost(id){
