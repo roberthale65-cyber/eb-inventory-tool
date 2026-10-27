@@ -3095,6 +3095,9 @@ const PINTEREST_SCOPES = 'boards:read,boards:write,pins:read,pins:write,user_acc
 // Tokens pasted into Render often carry a line break, spaces or a leading "Bearer", which Node
 // rejects in a header ("Invalid character in header content"); keep only the token itself.
 const PINTEREST_ACCESS_TOKEN = (process.env.PINTEREST_ACCESS_TOKEN || '').replace(/^\s*bearer\s+/i, '').replace(/\s+/g, '') || undefined;
+// While a test token handles the API calls, /pinterest-auth still exchanges its code with the live
+// API, so the saved connection is a real one that takes over as soon as the token is removed.
+const PINTEREST_OAUTH_BASE = PINTEREST_ACCESS_TOKEN ? 'https://api.pinterest.com/v5' : PINTEREST_API_BASE;
 const AT_STATE_TBL = 'tbljykqkWi9metp4c';
 const PIN_STATE_KEY = 'pinterest_auth';
 const pinAuth = { loaded: false, accessToken: null, refreshToken: null, expiresAt: 0, username: null };
@@ -3138,7 +3141,7 @@ async function pinSaveAuth() {
   }) });
 }
 async function pinTokenRequest(params) {
-  const r = await fetch(`${PINTEREST_API_BASE}/oauth/token`, {
+  const r = await fetch(`${PINTEREST_OAUTH_BASE}/oauth/token`, {
     method: 'POST',
     headers: { 'Authorization': 'Basic ' + Buffer.from(`${PINTEREST_APP_ID}:${PINTEREST_APP_SECRET}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams(params)
