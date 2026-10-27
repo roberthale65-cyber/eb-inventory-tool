@@ -3214,21 +3214,37 @@ app.get('/pinterest/status', async (req, res) => {
 // Boards are created the first time a pin needs them, so the profile never shows empty boards.
 const PIN_BOARD_DESCRIPTION = name => `${name}: handcrafted, one-of-a-kind faux floral arrangements by Eternal Blooms by Patti. Florals that bloom forever.`;
 let pinBoards = null; // name (lowercase) → board id
+async function pinLoadBoards() {
+  pinBoards = new Map(); let bookmark = null;
+  do {
+    const d = await pinApi('/boards?page_size=100' + (bookmark ? '&bookmark=' + encodeURIComponent(bookmark) : ''));
+    for (const b of (d.items || [])) pinBoards.set(String(b.name).toLowerCase(), b.id);
+    bookmark = d.bookmark || null;
+  } while (bookmark);
+}
+async function pinCreateBoard(name) {
+  const b = await pinApi('/boards', { method: 'POST', body: { name, description: PIN_BOARD_DESCRIPTION(name), privacy: 'PUBLIC' } });
+  pinBoards.set(String(name).toLowerCase(), b.id);
+  return b.id;
+}
 async function pinBoardId(name) {
-  if (!pinBoards) {
-    pinBoards = new Map(); let bookmark = null;
-    do {
-      const d = await pinApi('/boards?page_size=100' + (bookmark ? '&bookmark=' + encodeURIComponent(bookmark) : ''));
-      for (const b of (d.items || [])) pinBoards.set(String(b.name).toLowerCase(), b.id);
-      bookmark = d.bookmark || null;
-    } while (bookmark);
-  }
+  if (!pinBoards) await pinLoadBoards();
   const key = String(name).toLowerCase();
   if (!pinBoards.has(key)) {
     try {
-      const b = await pinApi('/boards', { method: 'POST', body: { name, description: PIN_BOARD_DESCRIPTION(name), privacy: 'PUBLIC' } });
-      pinBoards.set(key, b.id);
+      await pinCreateBoard(name);
     } catch (e) {
+      // "You already have a board with this name": the list may be stale, so reload it. The
+      // Sandbox lists only Sandbox boards but checks names against the real profile, so there a
+      // test board gets its own name instead.
+      if (/already have a board/i.test(e.message)) {
+        await pinLoadBoards();
+        if (pinBoards.has(key)) return pinBoards.get(key);
+        if (/sandbox/.test(PINTEREST_API_BASE)) {
+          const test = `${name} (sandbox)`;
+          return pinBoards.get(test.toLowerCase()) || await pinCreateBoard(test);
+        }
+      }
       // A token without boards:write can't make boards: pin to an existing one rather than fail.
       const fallback = pinBoards.get('everyday faux florals') || pinBoards.values().next().value;
       if (!fallback) throw e;
