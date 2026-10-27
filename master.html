@@ -1456,7 +1456,7 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 
 <div id="screen-marketing" class="screen">
   <div class="wizard-header">
-    <button class="hdr-nav-btn home-btn" onclick="goHome()" title="Home screen">⌂ Home</button>
+    <div style="display:flex;gap:6px;flex-shrink:0"><button class="hdr-nav-btn home-btn" onclick="goHome()" title="Home screen">⌂ Home</button><button class="hdr-nav-btn hdr-back-step-btn" onclick="goBackStep()" title="Previous step" style="display:none">← Back</button></div>
     <div class="wizard-title">Marketing</div>
     <a class="hdr-nav-btn guide-btn" href="marketing-guide.html" target="_blank" rel="noopener" title="Open Patti's Marketing guide in a new tab">📘 How it works</a>
   </div>
@@ -1867,6 +1867,8 @@ function setStatus(id, msg, type) {
 function hideStatus(id) { const b = document.getElementById('status-'+id); if(b) b.style.display='none'; }
 
 function goTo(screenId) {
+  const prevScreen = (document.querySelector('.screen.active') || {}).id;
+  if(prevScreen !== screenId) navPush(screenId === 'screen-marketing' ? { screen: screenId, mk: { tab: mkTab, picker: mkPick.open, depth: 0 } } : { screen: screenId });
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(screenId).classList.add('active');
   window.scrollTo({top:0,behavior:'smooth'});
@@ -1887,6 +1889,24 @@ function goTo(screenId) {
   atFlushSoon(); // leaving a screen persists any buffered Airtable edits
 }
 function goHome() { stepBackFn = null; updateHeaderBackBtn(); goTo('screen-home'); }
+
+// ── Browser Back / Forward ──
+// EB Master swaps screens in one page, so without this the browser's Back button left the app.
+// Each screen change, and each Marketing step (tab, picker), is a history entry: Back steps back
+// inside EB Master. The Marketing header's "← Back" button does the same.
+let navRestoring = false;
+function navPush(state){ if(!navRestoring) history.pushState(state, ''); }
+window.addEventListener('popstate', e => {
+  const s = e.state || { screen: 'screen-home' };
+  const cur = (document.querySelector('.screen.active') || {}).id;
+  navRestoring = true;
+  try {
+    if(cur === 'screen-marketing' && s.screen !== 'screen-marketing'){ stepBackFn = null; updateHeaderBackBtn(); }
+    if(s.screen !== cur && document.getElementById(s.screen)) goTo(s.screen);
+    if(s.screen === 'screen-marketing' && s.mk) mkRestore(s.mk);
+  } finally { navRestoring = false; }
+});
+history.replaceState({ screen: 'screen-home' }, '');
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ── Marketing: Pinterest, Instagram & Facebook drafts → Patti approves → the server posts them ──
@@ -1937,6 +1957,7 @@ function mkUpdateHomeCount(){
 async function mkRefreshHomeCount(){ try { await mkLoad(); } catch(e){ console.warn('Marketing queue load failed:', e.message); } }
 
 async function mkInit(){
+  if(!navRestoring){ mkNavDepth = 0; mkUpdateBack(); }
   const host = document.getElementById('mk-list');
   host.innerHTML = '<div style="text-align:center;padding:36px 20px;color:var(--text-muted)">Loading drafts…</div>';
   mkLoadStatus();
@@ -1974,7 +1995,12 @@ function mkRenderPlan(){
     cal + '<div class="mk-actions"><button class="btn" onclick="mkTogglePicker()">' + (mkPick.open ? 'Close picker' : '☑ Pick pieces…') + '</button><button class="btn" onclick="mkDraft({ mode:\'surprise\', count:5 })">🎲 Surprise me (5)</button></div></div>';
   mkRenderPicker();
 }
-function mkTogglePicker(){ mkPick.open = !mkPick.open; mkRenderPlan(); }
+function mkTogglePicker(){ mkPick.open = !mkPick.open; mkRenderPlan(); mkNavPush(); }
+// Marketing steps for Back: which tab is showing and whether the picker is open.
+let mkNavDepth = 0;
+function mkNavPush(){ mkNavDepth++; navPush({ screen: 'screen-marketing', mk: { tab: mkTab, picker: mkPick.open, depth: mkNavDepth } }); mkUpdateBack(); }
+function mkRestore(m){ mkTab = m.tab || 'Draft'; mkPick.open = !!m.picker; mkNavDepth = m.depth || 0; mkRender(); mkRenderPlan(); mkUpdateBack(); }
+function mkUpdateBack(){ stepBackFn = mkNavDepth > 0 ? () => history.back() : null; updateHeaderBackBtn(); }
 function mkPickSet(key, val){ mkPick[key] = val; mkRenderPicker(); }
 function mkPickToggle(sku){ if(mkPick.selected.has(sku)) mkPick.selected.delete(sku); else if(mkPick.selected.size < MK_PICK_MAX) mkPick.selected.add(sku); else return mkStatusMsg('Up to ' + MK_PICK_MAX + ' pieces at a time.', 'amber'); mkRenderPicker(); }
 function mkPickChannel(ch){ if(mkPick.channels.has(ch)) mkPick.channels.delete(ch); else mkPick.channels.add(ch); mkRenderPicker(); }
@@ -2029,7 +2055,7 @@ async function mkLoadStatus(){
   document.getElementById('mk-connect').innerHTML = cards.join('');
   if(document.getElementById('screen-marketing').classList.contains('active') && mkRecords.length) mkRender();
 }
-function mkSetTab(t){ mkTab = t; mkRender(); }
+function mkSetTab(t){ if(t === mkTab) return; mkTab = t; mkRender(); mkNavPush(); }
 // While approved posts are going out, refresh so they move to Posted (or show the error).
 function mkSchedulePoll(){
   clearTimeout(mkPollTimer);
