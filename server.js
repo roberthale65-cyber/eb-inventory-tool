@@ -2629,7 +2629,7 @@ const AT_MARKETING_TBL = 'tblUeywr9I8jflj0O';
 // pin description, Instagram caption or Facebook post, and Pin ID / Pin URL hold the live post.
 const MKT_CHANNELS = ['Pinterest', 'Instagram', 'Facebook'];
 const mktChannel = f => (f && f['Channel']) || 'Pinterest';
-const MKT_EDITABLE_FIELDS = ['Pin Title', 'Description', 'Board', 'Alt Text', 'Status', 'Pin URL', 'Notes', 'Scheduled for'];
+const MKT_EDITABLE_FIELDS = ['Pin Title', 'Description', 'Board', 'Alt Text', 'Status', 'Pin URL', 'Notes', 'Scheduled for', 'Logo'];
 const MKT_STATUSES = ['Draft', 'Approved', 'Posted', 'Skipped'];
 // Starter boards — the AI must pick one so boards stay few and searchable.
 const PIN_BOARDS = [
@@ -3063,6 +3063,8 @@ app.patch('/marketing/queue/:id', async (req, res) => {
     mktCacheUpsert([data]);
     // Approving is the go-ahead: once its channel is connected the post goes out by itself.
     if (data.fields['Status'] === 'Approved' && mktIsDue(data.fields) && mktChannelReady(mktChannel(data.fields))) mktPostPin(req.params.id);
+    // Otherwise brand the photo/video now, so it's ready (and previewable) before its slot.
+    else if (data.fields['Status'] === 'Approved') mktBrandRow(data.fields).catch(() => {});
     res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -3371,6 +3373,189 @@ app.get('/meta/status', async (req, res) => {
   res.json({ configured: !!(META_APP_ID && META_APP_SECRET), connected: metaConnected(), pageName: metaAuth.pageName, igUsername: metaAuth.igUsername, instagram: !!metaAuth.igId });
 });
 
+// ── Logo on posted photos and videos ──
+// Every photo and video that goes out carries the white Eternal Blooms logo. Some listing videos
+// were made in Canva with the logo already on them, so per queue row the Logo field decides:
+// blank/Auto = Claude looks at the photo (or 3 video frames) and the logo is added only when it
+// isn't there yet; "Add logo" always adds it; "Already has logo" posts the media untouched.
+// Branded copies are made with ffmpeg and kept on this server's disk; the channels fetch them from
+// /marketing/media/<file> while posting (the Shopify app has no write_files scope). The disk is
+// wiped on restart, so a missing copy is simply made again. Copies are named by a hash of their
+// source, so a piece's photo and video are made once and shared by all three channels.
+const fs = require('fs'), path = require('path'), os = require('os');
+const { spawn } = require('child_process');
+const FFMPEG_PATH = (() => { try { return require('@ffmpeg-installer/ffmpeg').path; } catch (e) { return null; } })();
+const BRAND_LOGO = path.join(__dirname, 'assets', 'logo-white.png');
+const BRAND_DIR = path.join(os.tmpdir(), 'eb-branded');
+const BRAND_VERSION = 1; // bump when the placement changes so old copies are remade
+const BRAND_KEEP_MS = 3 * MKT_DAY_MS;
+// Logo width as a share of the frame, and where its bottom edge sits as a share of the height.
+// Videos keep it above the bottom ~22% that Reels and video pins cover with captions and buttons.
+const BRAND_PLACE = { video: { w: 0.7, bottom: 0.76 }, image: { w: 0.8, bottom: 0.97 } };
+const BRAND_LOGO_SIZE = (() => { try { const b = fs.readFileSync(BRAND_LOGO); return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) }; } catch (e) { return null; } })();
+fs.mkdirSync(BRAND_DIR, { recursive: true });
+
+// Runs ffmpeg; resolves with its log. allowFail resolves on a non-zero exit too (ffmpeg -i
+// with no output "fails" but prints the size and duration we want).
+function ffmpeg(args, { allowFail = false, timeoutMs = 15 * 60 * 1000 } = {}) {
+  return new Promise((resolve, reject) => {
+    if (!FFMPEG_PATH) return reject(new Error('ffmpeg is not installed on the server'));
+    const p = spawn(FFMPEG_PATH, ['-hide_banner', '-y', ...args]);
+    let log = '';
+    p.stderr.on('data', c => { log += c; if (log.length > 40000) log = log.slice(-20000); });
+    const timer = setTimeout(() => p.kill('SIGKILL'), timeoutMs);
+    p.on('error', e => { clearTimeout(timer); reject(e); });
+    p.on('close', code => {
+      clearTimeout(timer);
+      if (code === 0 || allowFail) return resolve(log);
+      reject(new Error('ffmpeg failed: ' + log.trim().split('\n').slice(-2).join(' ').slice(0, 300)));
+    });
+  });
+}
+async function brandProbe(file) {
+  const log = await ffmpeg(['-i', file], { allowFail: true });
+  const size = log.match(/Video:.*?\b(\d{2,5})x(\d{2,5})\b/);
+  if (!size) throw new Error('could not read the media size');
+  const d = log.match(/Duration: (\d+):(\d+):([\d.]+)/);
+  return { w: +size[1], h: +size[2], seconds: d ? (+d[1]) * 3600 + (+d[2]) * 60 + parseFloat(d[3]) : 0 };
+}
+async function brandDownload(url, file) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`download failed (${r.status})`);
+  await new Promise((resolve, reject) => {
+    const out = fs.createWriteStream(file);
+    r.body.on('error', reject); out.on('error', reject); out.on('finish', resolve);
+    r.body.pipe(out);
+  });
+}
+
+// Does the photo/video already carry the logo? Claude looks at small frames and answers yes/no.
+async function brandHasLogo(frames) {
+  if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set');
+  const content = frames.map(f => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: fs.readFileSync(f).toString('base64') } }));
+  content.push({ type: 'text', text: 'These are frames from one product photo or video. The Eternal Blooms logo is a line drawing of a magnolia flower beside the words "Eternal Blooms" in flowing script, usually white, often across the lower part of the picture. Is that logo, or the words "Eternal Blooms" as a watermark, visible in ANY of these images? Answer only YES or NO.' });
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 5, messages: [{ role: 'user', content }] })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error((data.error && data.error.message) || 'Anthropic API error');
+  return /^\s*yes/i.test((data.content && data.content[0] && data.content[0].text) || '');
+}
+
+// The ffmpeg filter that lays the logo (with a soft shadow for light backgrounds) over a frame
+// of the given size.
+function brandFilter(kind, { w, h }) {
+  const p = BRAND_PLACE[kind];
+  const lw = Math.round(w * p.w / 2) * 2, lh = Math.round(lw * BRAND_LOGO_SIZE.h / BRAND_LOGO_SIZE.w / 2) * 2;
+  const x = Math.round((w - lw) / 2), y = Math.round(h * p.bottom - lh);
+  const off = Math.max(2, Math.round(w * 0.003)), blur = Math.max(2, Math.round(lh * 0.06));
+  const end = kind === 'video' ? ':shortest=1' : '';
+  return `[1:v]scale=${lw}:${lh},split[lg][lgs];[lgs]colorchannelmixer=rr=0:gg=0:bb=0:aa=0.5,boxblur=${blur}:2[sh];` +
+    `[0:v][sh]overlay=${x + off}:${y + off}${end}[b];[b][lg]overlay=${x}:${y}${end}[v]`;
+}
+
+const brandSeen = new Map();   // source URL → true when it already carries the logo
+const brandJobs = new Map();   // copy file name → in-flight promise, so 3 channels share one job
+const brandFailed = new Map(); // copy file name → { error, at }: don't retry a failure on every poll
+let brandQueue = Promise.resolve(); // one job at a time: the Render instance is small
+const brandName = (src, kind) => crypto.createHash('sha256').update(`${BRAND_VERSION}|${kind}|${src}`).digest('hex').slice(0, 32) + (kind === 'video' ? '.mp4' : '.jpg');
+const brandUrl = name => `${SERVER_URL}/marketing/media/${name}`;
+
+// The URL to post for one photo or video: the branded copy, or the source itself.
+// Resolves to { url, logo: 'added' | 'already' | 'kept' }.
+async function brandMedia(src, kind, mode) {
+  if (!src || mode === 'Already has logo') return { url: src, logo: 'kept' };
+  const name = brandName(src, kind), file = path.join(BRAND_DIR, name);
+  if (fs.existsSync(file)) return { url: brandUrl(name), logo: 'added' };
+  if (mode !== 'Add logo' && brandSeen.get(src)) return { url: src, logo: 'already' };
+  const failed = brandFailed.get(name);
+  if (failed && Date.now() - failed.at < 10 * 60 * 1000) throw new Error(failed.error);
+  if (!brandJobs.has(name)) {
+    const job = brandQueue.then(() => brandMake(src, kind, mode, name, file));
+    brandQueue = job.catch(() => {});
+    brandJobs.set(name, job);
+    job.catch(e => brandFailed.set(name, { error: e.message, at: Date.now() })).finally(() => brandJobs.delete(name));
+  }
+  return brandJobs.get(name);
+}
+async function brandMake(src, kind, mode, name, file) {
+  if (!BRAND_LOGO_SIZE) throw new Error('logo file is missing on the server');
+  const tag = crypto.randomBytes(6).toString('hex');
+  const input = path.join(BRAND_DIR, `in-${tag}${kind === 'video' ? '.mp4' : '.jpg'}`);
+  const tmp = path.join(BRAND_DIR, `out-${tag}${kind === 'video' ? '.mp4' : '.jpg'}`);
+  const frames = [];
+  const started = Date.now();
+  try {
+    await brandDownload(src, input);
+    const size = await brandProbe(input);
+    if (mode !== 'Add logo') {
+      if (!brandSeen.has(src)) {
+        const times = kind === 'video' ? [Math.min(1, size.seconds / 4), size.seconds / 2, Math.max(0, size.seconds - 1.5)] : [null];
+        for (const [i, t] of times.entries()) {
+          const f = path.join(BRAND_DIR, `fr-${tag}-${i}.jpg`);
+          await ffmpeg([...(t === null ? [] : ['-ss', t.toFixed(2)]), '-i', input, '-frames:v', '1', '-vf', 'scale=512:-2', '-q:v', '4', f]);
+          frames.push(f);
+        }
+        brandSeen.set(src, await brandHasLogo(frames));
+      }
+      if (brandSeen.get(src)) return { url: src, logo: 'already' };
+    }
+    const filter = brandFilter(kind, size);
+    if (kind === 'video') {
+      await ffmpeg(['-i', input, '-loop', '1', '-i', BRAND_LOGO, '-filter_complex', filter, '-map', '[v]', '-map', '0:a?',
+        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-movflags', '+faststart', '-threads', '2', tmp]);
+    } else {
+      await ffmpeg(['-i', input, '-i', BRAND_LOGO, '-filter_complex', filter, '-map', '[v]', '-frames:v', '1', '-q:v', '2', tmp]);
+    }
+    fs.renameSync(tmp, file);
+    console.log(`branding: logo added to ${kind} in ${Math.round((Date.now() - started) / 1000)} s (${name})`);
+    return { url: brandUrl(name), logo: 'added' };
+  } finally {
+    for (const f of [input, tmp, ...frames]) fs.rm(f, { force: true }, () => {});
+  }
+}
+
+// The photo and video a queue row should post with, per its Logo setting. A branding failure
+// never blocks a post: that piece of media goes out as it is and the reason comes back as a note.
+async function mktBrandRow(f) {
+  const mode = f['Logo'] || 'Auto', notes = [];
+  const one = (src, kind) => brandMedia(src, kind, mode).catch(e => { notes.push(`${kind === 'video' ? 'Video' : 'Photo'} posted without the logo: ${e.message}`); return { url: src, logo: 'failed' }; });
+  const image = await one(f['Image URL'], 'image');
+  const video = f['Media'] === 'Video' && f['Video URL'] ? await one(f['Video URL'], 'video') : null;
+  return { image: image.url, imageLogo: image.logo, video: video && video.url, videoLogo: video && video.logo, notes };
+}
+
+// Old copies are deleted after a few days; the disk is small and copies are cheap to remake.
+function brandCleanup() {
+  fs.readdir(BRAND_DIR, (err, names) => {
+    if (err) return;
+    for (const n of names) fs.stat(path.join(BRAND_DIR, n), (e, st) => { if (!e && Date.now() - st.mtimeMs > BRAND_KEEP_MS) fs.rm(path.join(BRAND_DIR, n), { force: true }, () => {}); });
+  });
+}
+brandCleanup();
+setInterval(brandCleanup, 6 * 60 * 60 * 1000);
+
+// GET /marketing/media/<file> — a branded copy, fetched by Pinterest/Instagram/Facebook and
+// shown in EB Master's preview.
+app.get('/marketing/media/:name', (req, res) => {
+  if (!/^[a-f0-9]{32}\.(mp4|jpg)$/.test(req.params.name)) return res.status(404).end();
+  const file = path.join(BRAND_DIR, req.params.name);
+  if (!fs.existsSync(file)) return res.status(404).end();
+  res.sendFile(file, { maxAge: '1d' });
+});
+
+// GET /marketing/brand/:id — what a row will post with. Starts the branding if needed and
+// answers { status: 'working' } until it's done; EB Master polls for the preview.
+app.get('/marketing/brand/:id', async (req, res) => {
+  const rec = (await mktRecords().catch(() => [])).find(r => r.id === req.params.id);
+  if (!rec) return res.status(404).json({ error: 'queue row not found' });
+  const job = mktBrandRow(rec.fields);
+  const done = await Promise.race([job, new Promise(r => setTimeout(() => r(null), 1500))]);
+  res.json(done ? { status: 'ready', ...done } : { status: 'working' });
+});
+
 function mktChannelReady(channel) {
   if (channel === 'Instagram') return metaConnected() && !!metaAuth.igId;
   if (channel === 'Facebook') return metaConnected();
@@ -3450,9 +3635,14 @@ async function mktPostPin(id) {
     const f = rec.fields || {};
     if (f['Status'] !== 'Approved' || f['Pin ID']) return;
     const channel = mktChannel(f);
-    const post = await (channel === 'Instagram' ? mktPublishInstagram(f) : channel === 'Facebook' ? mktPublishFacebook(f) : mktPublishPinterest(f));
+    // Post the logo-branded photo/video; the row keeps the Shopify originals.
+    const media = await mktBrandRow(f);
+    const g = { ...f, 'Image URL': media.image, 'Video URL': media.video || f['Video URL'] };
+    const post = await (channel === 'Instagram' ? mktPublishInstagram(g) : channel === 'Facebook' ? mktPublishFacebook(g) : mktPublishPinterest(g));
     const fields = { 'Status': 'Posted', 'Status changed': new Date().toISOString(), 'Pin ID': post.id, 'Pin URL': post.url, 'Post error': '' };
-    if (post.note) Object.assign(fields, { 'Media': 'Photo', 'Notes': [f['Notes'], post.note].filter(Boolean).join('\n') });
+    const notes = [...media.notes, post.note].filter(Boolean);
+    if (notes.length) fields['Notes'] = [f['Notes'], ...notes].filter(Boolean).join('\n');
+    if (post.note) fields['Media'] = 'Photo';
     await save(fields);
     console.log(`marketing: posted ${f['EB Number']} to ${channel} as ${post.id}${post.note ? ' (photo fallback)' : ''}`);
   } catch (e) {
