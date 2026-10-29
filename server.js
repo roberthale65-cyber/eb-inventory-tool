@@ -3610,7 +3610,10 @@ async function musicFetch(t) {
 // piece's tagged themes (more when in season); sympathy tracks only go to sympathy pieces.
 // Recently used tracks drop back, and the 3 picks spread across moods when scores are close.
 function musicSuggest(lib, { rowTheme, tagThemes, inSeason }) {
-  const weight = name => (name === rowTheme ? 4 : 0) + (tagThemes.includes(name) ? (inSeason.includes(name) ? 3 : 2) : 0);
+  // A post angled at a theme with no music yet (e.g. Fall) gets the neutral Everyday tracks
+  // rather than another holiday the piece also happens to be tagged for.
+  const angleHasMusic = !rowTheme || lib.some(t => t.active && t.themes.includes(rowTheme));
+  const weight = name => (name === rowTheme || (!angleHasMusic && name === 'Everyday') ? 4 : 0) + (tagThemes.includes(name) ? (inSeason.includes(name) ? 3 : 2) : 0);
   const everyday = !tagThemes.length || tagThemes.includes('Everyday');
   const now = Date.now();
   const scored = lib.filter(t => t.active).map(t => {
