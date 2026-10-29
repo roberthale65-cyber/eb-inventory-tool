@@ -2629,7 +2629,7 @@ const AT_MARKETING_TBL = 'tblUeywr9I8jflj0O';
 // pin description, Instagram caption or Facebook post, and Pin ID / Pin URL hold the live post.
 const MKT_CHANNELS = ['Pinterest', 'Instagram', 'Facebook'];
 const mktChannel = f => (f && f['Channel']) || 'Pinterest';
-const MKT_EDITABLE_FIELDS = ['Pin Title', 'Description', 'Board', 'Alt Text', 'Status', 'Pin URL', 'Notes', 'Scheduled for', 'Logo'];
+const MKT_EDITABLE_FIELDS = ['Pin Title', 'Description', 'Board', 'Alt Text', 'Status', 'Pin URL', 'Notes', 'Scheduled for', 'Logo', 'Music'];
 const MKT_STATUSES = ['Draft', 'Approved', 'Posted', 'Skipped'];
 // Starter boards — the AI must pick one so boards stay few and searchable.
 const PIN_BOARDS = [
@@ -2760,7 +2760,7 @@ async function mktShopifyCandidates() {
   if (mktCandCache.list && Date.now() - mktCandCache.at < MKT_FRESH_MS) return mktCandCache.list;
   const out = []; let cursor = null;
   do {
-    const d = await shopifyGraphql(`query($after:String){products(first:100,after:$after,query:"status:active inventory_total:>0"){nodes{title handle onlineStoreUrl productType tags description(truncateAt:700) variants(first:1){nodes{sku}} media(first:10){nodes{... on MediaImage{image{url width height altText}} ... on Video{duration sources{url format width height}}}}} pageInfo{hasNextPage endCursor}}}`, { after: cursor });
+    const d = await shopifyGraphql(`query($after:String){products(first:100,after:$after,query:"status:active inventory_total:>0"){nodes{id title handle onlineStoreUrl productType tags description(truncateAt:700) variants(first:1){nodes{sku}} media(first:10){nodes{id mediaContentType ... on MediaImage{image{url width height altText}} ... on Video{duration sources{url format width height}}}}} pageInfo{hasNextPage endCursor}}}`, { after: cursor });
     const conn = d && d.data && d.data.products;
     if (!conn) throw new Error('Shopify product query failed: ' + JSON.stringify((d && d.errors) || d));
     out.push(...conn.nodes);
@@ -3059,8 +3059,12 @@ app.patch('/marketing/queue/:id', async (req, res) => {
       const rec = records.find(r => r.id === req.params.id);
       fields['Scheduled for'] = mktNextSlot(mktChannel(rec && rec.fields), records.filter(r => r.id !== req.params.id)).toISOString();
     } else if ('Status' in fields && fields['Status'] !== 'Approved') fields['Scheduled for'] = null;
+    // A new music pick means the Shopify video needs swapping again.
+    if ('Music' in fields) fields['Shopify video'] = '';
     const data = await airtableReq(`${AT_MARKETING_TBL}/${req.params.id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) });
     mktCacheUpsert([data]);
+    // Approved with music: the same music + logo video replaces the one on the Shopify listing.
+    if (data.fields['Status'] === 'Approved' && mktMusicId(data.fields) && data.fields['Video URL'] && !mktShopifyReplaced(data.fields)) mktShopifyMusicSoon(data.fields['EB Number']);
     // Approving is the go-ahead: once its channel is connected the post goes out by itself.
     if (data.fields['Status'] === 'Approved' && mktIsDue(data.fields) && mktChannelReady(mktChannel(data.fields))) mktPostPin(req.params.id);
     // Otherwise brand the photo/video now, so it's ready (and previewable) before its slot.
@@ -3460,27 +3464,30 @@ const brandSeen = new Map();   // source URL → true when it already carries th
 const brandJobs = new Map();   // copy file name → in-flight promise, so 3 channels share one job
 const brandFailed = new Map(); // copy file name → { error, at }: don't retry a failure on every poll
 let brandQueue = Promise.resolve(); // one job at a time: the Render instance is small
-const brandName = (src, kind) => crypto.createHash('sha256').update(`${BRAND_VERSION}|${kind}|${src}`).digest('hex').slice(0, 32) + (kind === 'video' ? '.mp4' : '.jpg');
+const brandLogoOf = new Map(); // copy file name → what happened to the logo, for cached copies
+const brandName = (src, kind, musicId) => crypto.createHash('sha256').update(`${BRAND_VERSION}|${kind}|${src}${musicId ? '|' + musicId : ''}`).digest('hex').slice(0, 32) + (kind === 'video' ? '.mp4' : '.jpg');
 const brandUrl = name => `${SERVER_URL}/marketing/media/${name}`;
 
-// The URL to post for one photo or video: the branded copy, or the source itself.
-// Resolves to { url, logo: 'added' | 'already' | 'kept' }.
-async function brandMedia(src, kind, mode) {
-  if (!src || mode === 'Already has logo') return { url: src, logo: 'kept' };
-  const name = brandName(src, kind), file = path.join(BRAND_DIR, name);
-  if (fs.existsSync(file)) return { url: brandUrl(name), logo: 'added' };
-  if (mode !== 'Add logo' && brandSeen.get(src)) return { url: src, logo: 'already' };
+// The URL to post for one photo or video: the branded copy, or the source itself. A video can
+// also get a music track (a Music Library track from musicTrack()) in place of its own sound.
+// Resolves to { url, logo: 'added' | 'already' | 'kept', name? (the copy's file name) }.
+async function brandMedia(src, kind, mode, music = null) {
+  if (kind !== 'video') music = null;
+  if (!src || (mode === 'Already has logo' && !music)) return { url: src, logo: 'kept' };
+  const name = brandName(src, kind, music && music.id), file = path.join(BRAND_DIR, name);
+  if (fs.existsSync(file)) return { url: brandUrl(name), logo: brandLogoOf.get(name) || 'added', name };
+  if (!music && mode !== 'Add logo' && brandSeen.get(src)) return { url: src, logo: 'already' };
   const failed = brandFailed.get(name);
   if (failed && Date.now() - failed.at < 10 * 60 * 1000) throw new Error(failed.error);
   if (!brandJobs.has(name)) {
-    const job = brandQueue.then(() => brandMake(src, kind, mode, name, file));
+    const job = brandQueue.then(() => brandMake(src, kind, mode, name, file, music));
     brandQueue = job.catch(() => {});
     brandJobs.set(name, job);
     job.catch(e => brandFailed.set(name, { error: e.message, at: Date.now() })).finally(() => brandJobs.delete(name));
   }
   return brandJobs.get(name);
 }
-async function brandMake(src, kind, mode, name, file) {
+async function brandMake(src, kind, mode, name, file, music) {
   if (!BRAND_LOGO_SIZE) throw new Error('logo file is missing on the server');
   const tag = crypto.randomBytes(6).toString('hex');
   const input = path.join(BRAND_DIR, `in-${tag}${kind === 'video' ? '.mp4' : '.jpg'}`);
@@ -3490,7 +3497,9 @@ async function brandMake(src, kind, mode, name, file) {
   try {
     await brandDownload(src, input);
     const size = await brandProbe(input);
-    if (mode !== 'Add logo') {
+    let logo = 'added';
+    if (mode === 'Already has logo') logo = 'kept';
+    else if (mode !== 'Add logo') {
       if (!brandSeen.has(src)) {
         const times = kind === 'video' ? [Math.min(1, size.seconds / 4), size.seconds / 2, Math.max(0, size.seconds - 1.5)] : [null];
         for (const [i, t] of times.entries()) {
@@ -3500,18 +3509,34 @@ async function brandMake(src, kind, mode, name, file) {
         }
         brandSeen.set(src, await brandHasLogo(frames));
       }
-      if (brandSeen.get(src)) return { url: src, logo: 'already' };
+      if (brandSeen.get(src)) logo = 'already';
     }
-    const filter = brandFilter(kind, size);
+    if (logo !== 'added' && !music) return { url: src, logo };
     if (kind === 'video') {
-      await ffmpeg(['-i', input, '-loop', '1', '-i', BRAND_LOGO, '-filter_complex', filter, '-map', '[v]', '-map', '0:a?',
-        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-movflags', '+faststart', '-threads', '2', tmp]);
+      // Logo: re-encode with the overlay, or copy the picture untouched when it already has one.
+      // Music: loops if the video is longer than the track, fades in/out, evened to -16 LUFS.
+      const args = ['-i', input], filters = [];
+      let vmap = '0:v', vcodec = ['-c:v', 'copy'], amap = '0:a?', acodec = ['-c:a', 'copy'];
+      if (logo === 'added') {
+        args.push('-loop', '1', '-i', BRAND_LOGO);
+        filters.push(brandFilter(kind, size));
+        vmap = '[v]'; vcodec = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p'];
+      }
+      if (music) {
+        args.push('-stream_loop', '-1', '-i', await musicFetch(music));
+        const d = size.seconds, fades = d > 3 ? `,afade=t=in:st=0:d=0.4,afade=t=out:st=${(d - 1.5).toFixed(2)}:d=1.5` : '';
+        filters.push(`[${logo === 'added' ? 2 : 1}:a]${d ? `atrim=0:${d.toFixed(2)},` : ''}asetpts=PTS-STARTPTS${fades},loudnorm=I=-16:TP=-1.5:LRA=11[a]`);
+        amap = '[a]'; acodec = ['-c:a', 'aac', '-b:a', '160k', '-ar', '44100'];
+      }
+      if (filters.length) args.push('-filter_complex', filters.join(';'));
+      await ffmpeg([...args, '-map', vmap, '-map', amap, ...vcodec, ...acodec, ...(music ? ['-shortest'] : []), '-movflags', '+faststart', '-threads', '2', tmp]);
     } else {
-      await ffmpeg(['-i', input, '-i', BRAND_LOGO, '-filter_complex', filter, '-map', '[v]', '-frames:v', '1', '-q:v', '2', tmp]);
+      await ffmpeg(['-i', input, '-i', BRAND_LOGO, '-filter_complex', brandFilter(kind, size), '-map', '[v]', '-frames:v', '1', '-q:v', '2', tmp]);
     }
     fs.renameSync(tmp, file);
-    console.log(`branding: logo added to ${kind} in ${Math.round((Date.now() - started) / 1000)} s (${name})`);
-    return { url: brandUrl(name), logo: 'added' };
+    brandLogoOf.set(name, logo);
+    console.log(`branding: ${kind} ${logo === 'added' ? 'logo added' : 'logo ' + logo}${music ? ', music ' + music.name : ''} in ${Math.round((Date.now() - started) / 1000)} s (${name})`);
+    return { url: brandUrl(name), logo, name };
   } finally {
     for (const f of [input, tmp, ...frames]) fs.rm(f, { force: true }, () => {});
   }
@@ -3521,10 +3546,201 @@ async function brandMake(src, kind, mode, name, file) {
 // never blocks a post: that piece of media goes out as it is and the reason comes back as a note.
 async function mktBrandRow(f) {
   const mode = f['Logo'] || 'Auto', notes = [];
-  const one = (src, kind) => brandMedia(src, kind, mode).catch(e => { notes.push(`${kind === 'video' ? 'Video' : 'Photo'} posted without the logo: ${e.message}`); return { url: src, logo: 'failed' }; });
+  const hasVideo = f['Media'] === 'Video' && f['Video URL'];
+  // Patti's music pick, unless the Shopify video was already swapped for the version with it.
+  let music = null;
+  if (hasVideo && mktMusicId(f) && !mktShopifyReplaced(f)) {
+    music = await musicTrack(mktMusicId(f)).catch(() => null);
+    if (!music) notes.push('Video posted without music: the chosen track is no longer in the Music Library.');
+  }
+  const one = (src, kind, m) => brandMedia(src, kind, mode, m).catch(e => { notes.push(`${kind === 'video' ? 'Video' : 'Photo'} posted without the logo${m ? ' or music' : ''}: ${e.message}`); return { url: src, logo: 'failed' }; });
   const image = await one(f['Image URL'], 'image');
-  const video = f['Media'] === 'Video' && f['Video URL'] ? await one(f['Video URL'], 'video') : null;
-  return { image: image.url, imageLogo: image.logo, video: video && video.url, videoLogo: video && video.logo, notes };
+  const video = hasVideo ? await one(f['Video URL'], 'video', music) : null;
+  return { image: image.url, imageLogo: image.logo, video: video && video.url, videoLogo: video && video.logo, music: music && video && video.logo !== 'failed' ? music.name : null, notes };
+}
+
+// ── Music for listing videos ──
+// Tracks live in Drive (Music Library folder) and are catalogued in the Airtable "Music Library"
+// table. For each piece with a video, EB Master suggests 3 tracks from its theme, season and
+// what's been used lately; Patti's pick (the queue row's Music field: a track record ID, or
+// "none" to keep the video's own sound) replaces the sound on every channel. Approving also
+// swaps the Shopify product video for the same music + logo version.
+const AT_MUSIC_TBL = 'tbll5NtHpdzHjvlql';
+const mktMusicId = f => (f && f['Music'] && f['Music'] !== 'none') ? f['Music'] : null;
+const mktShopifyReplaced = f => /^Replaced/.test((f && f['Shopify video']) || '');
+let musicCache = { at: 0, list: null };
+async function musicLibrary({ force = false } = {}) {
+  if (!force && musicCache.list && Date.now() - musicCache.at < MKT_FRESH_MS) return musicCache.list;
+  let out = [], offset = null;
+  do {
+    const data = await airtableReq(`${AT_MUSIC_TBL}?pageSize=100${offset ? '&offset=' + encodeURIComponent(offset) : ''}`);
+    out = out.concat(data.records || []);
+    offset = data.offset || null;
+  } while (offset);
+  musicCache = { at: Date.now(), list: out.map(r => { const f = r.fields || {}; return {
+    id: r.id, name: f['Track'] || '', driveId: f['Drive file ID'] || '', mood: f['Mood'] || '', themes: f['Themes'] || [],
+    energy: f['Energy'] || '', seconds: f['Length (s)'] || 0, active: !!f['Active'], used: f['Times used'] || 0, last: f['Last used'] || null
+  }; }).filter(t => t.name && /^[\w-]+$/.test(t.driveId)) };
+  return musicCache.list;
+}
+async function musicTrack(id) { return (await musicLibrary()).find(t => t.id === id) || null; }
+
+// The track's MP3 on this server's disk, downloaded from Drive with the server's Google login.
+const musicDownloads = new Map();
+async function musicFetch(t) {
+  const file = path.join(BRAND_DIR, `music-${t.driveId}.mp3`);
+  if (fs.existsSync(file)) return file;
+  if (!musicDownloads.has(t.driveId)) {
+    const job = (async () => {
+      const token = await getValidGoogleToken();
+      const r = await fetch(`https://www.googleapis.com/drive/v3/files/${t.driveId}?alt=media`, { headers: { Authorization: 'Bearer ' + token } });
+      if (!r.ok) throw new Error(`music download from Drive failed (${r.status})`);
+      const tmp = file + '.part';
+      await new Promise((resolve, reject) => { const out = fs.createWriteStream(tmp); r.body.on('error', reject); out.on('error', reject); out.on('finish', resolve); r.body.pipe(out); });
+      fs.renameSync(tmp, file);
+      return file;
+    })();
+    musicDownloads.set(t.driveId, job);
+    job.finally(() => musicDownloads.delete(t.driveId)).catch(() => {});
+  }
+  return musicDownloads.get(t.driveId);
+}
+
+// Up to 3 tracks for a piece. Themes count most when they're the row's chosen angle, then the
+// piece's tagged themes (more when in season); sympathy tracks only go to sympathy pieces.
+// Recently used tracks drop back, and the 3 picks spread across moods when scores are close.
+function musicSuggest(lib, { rowTheme, tagThemes, inSeason }) {
+  const weight = name => (name === rowTheme ? 4 : 0) + (tagThemes.includes(name) ? (inSeason.includes(name) ? 3 : 2) : 0);
+  const everyday = !tagThemes.length || tagThemes.includes('Everyday');
+  const now = Date.now();
+  const scored = lib.filter(t => t.active).map(t => {
+    let s = Math.max(0, ...t.themes.map(weight));
+    if (!s && t.themes.includes('Everyday')) s = everyday ? 2 : 1; // the fallback when no theme fits
+    if (t.themes.includes('Sympathy & memorial') && !tagThemes.includes('Sympathy & memorial') && rowTheme !== 'Sympathy & memorial') s -= 5;
+    const ageDays = t.last ? (now - Date.parse(t.last)) / MKT_DAY_MS : 999;
+    s -= (ageDays < 7 ? 1.5 : ageDays < 30 ? 0.5 : 0) + Math.min(1, t.used * 0.1) - Math.random() * 0.4;
+    return { t, s };
+  }).sort((a, b) => b.s - a.s);
+  const picks = [];
+  for (const c of scored) {
+    if (picks.length >= 3) break;
+    const sameMood = picks.some(p => p.t.mood === c.t.mood);
+    const better = scored.find(o => !picks.includes(o) && o !== c && !picks.some(p => p.t.mood === o.t.mood) && c.s - o.s < 1.5);
+    if (sameMood && better && scored.indexOf(better) > scored.indexOf(c)) continue;
+    picks.push(c);
+  }
+  for (const c of scored) { if (picks.length >= 3) break; if (!picks.includes(c)) picks.push(c); }
+  return picks.map(c => c.t);
+}
+const musicPublic = t => t && { id: t.id, name: t.name, mood: t.mood, themes: t.themes, energy: t.energy, seconds: t.seconds };
+
+// GET /marketing/music/suggest/:eb — { current, options: [3 tracks], all: [every active track] }
+app.get('/marketing/music/suggest/:eb', async (req, res) => {
+  try {
+    const eb = req.params.eb;
+    const rows = (await mktRecords()).filter(r => r.fields['EB Number'] === eb && (r.fields['Status'] === 'Draft' || r.fields['Status'] === 'Approved'));
+    const p = (await mktShopifyCandidates().catch(() => [])).find(c => ((c.variants && c.variants.nodes) || []).some(v => v.sku === eb));
+    const tags = p ? mktTagText(p) : '';
+    const tagThemes = MKT_ALL_THEMES.filter(t => t.tags.test(tags)).map(t => t.name);
+    const inSeason = mktCalendar().filter(c => c.active).map(c => c.name);
+    const lib = await musicLibrary();
+    const options = musicSuggest(lib, { rowTheme: (rows[0] && rows[0].fields['Theme']) || '', tagThemes, inSeason });
+    const current = rows.map(r => r.fields['Music']).find(Boolean) || '';
+    res.json({ current, shopify: (rows.map(r => r.fields['Shopify video']).find(Boolean)) || '', options: options.map(musicPublic),
+      all: lib.filter(t => t.active).sort((a, b) => a.name.localeCompare(b.name)).map(musicPublic) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /marketing/music/audio/:id — the track's MP3, for listening on the card.
+app.get('/marketing/music/audio/:id', async (req, res) => {
+  try {
+    const t = await musicTrack(req.params.id);
+    if (!t) return res.status(404).json({ error: 'track not found' });
+    res.type('audio/mpeg').sendFile(await musicFetch(t), { maxAge: '1d' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Swap a piece's Shopify product video for the music + logo version: upload the copy, wait for
+// Shopify to finish processing it, put it where the old video was, then delete the old one.
+// Open queue rows then point at the new video and are marked so nothing gets mixed twice.
+const mktShopifyJobs = new Map();
+function mktShopifyMusicSoon(eb) {
+  if (mktShopifyJobs.has(eb)) return;
+  const job = mktShopifyMusic(eb).catch(async e => {
+    console.warn(`marketing: Shopify video for ${eb} failed —`, e.message);
+    const rows = (await mktRecords().catch(() => [])).filter(r => r.fields['EB Number'] === eb && (r.fields['Status'] === 'Draft' || r.fields['Status'] === 'Approved'));
+    for (const r of rows) await airtableReq(`${AT_MARKETING_TBL}/${r.id}`, { method: 'PATCH', body: JSON.stringify({ fields: { 'Shopify video': ('Error: ' + e.message).slice(0, 250) } }) }).then(d => mktCacheUpsert([d])).catch(() => {});
+  }).finally(() => mktShopifyJobs.delete(eb));
+  mktShopifyJobs.set(eb, job);
+}
+const urlPath = u => String(u || '').split('?')[0];
+async function mktShopifyMusic(eb) {
+  const open = (await mktRecords()).filter(r => r.fields['EB Number'] === eb && (r.fields['Status'] === 'Draft' || r.fields['Status'] === 'Approved'));
+  const row = open.find(r => mktMusicId(r.fields) && r.fields['Video URL']);
+  if (!row || mktShopifyReplaced(row.fields)) return;
+  const f = row.fields;
+  const track = await musicTrack(mktMusicId(f));
+  if (!track) throw new Error('the chosen track is no longer in the Music Library');
+  const p = (await mktShopifyCandidates()).find(c => ((c.variants && c.variants.nodes) || []).some(v => v.sku === eb));
+  if (!p) throw new Error('product not found on Shopify (active and in stock)');
+  const media = (p.media && p.media.nodes) || [];
+  const vids = media.filter(n => n && n.mediaContentType === 'VIDEO');
+  const old = vids.find(n => (n.sources || []).some(s => urlPath(s.url) === urlPath(f['Video URL']))) || (vids.length === 1 ? vids[0] : null);
+  if (!old) throw new Error('could not tell which Shopify video this post uses');
+  const made = await brandMedia(f['Video URL'], 'video', f['Logo'] || 'Auto', track);
+  if (!made.name) throw new Error('the music + logo version was not made');
+  const file = path.join(BRAND_DIR, made.name), bytes = fs.statSync(file).size;
+  const filename = `${eb}-music.mp4`;
+
+  const stage = await shopifyGraphql(`mutation($input:[StagedUploadInput!]!){stagedUploadsCreate(input:$input){stagedTargets{url resourceUrl parameters{name value}}userErrors{message}}}`,
+    { input: [{ filename, mimeType: 'video/mp4', resource: 'VIDEO', fileSize: String(bytes), httpMethod: 'POST' }] });
+  const st = stage && stage.data && stage.data.stagedUploadsCreate;
+  if (!st || (st.userErrors || []).length || !st.stagedTargets[0]) throw new Error('staged upload: ' + JSON.stringify((st && st.userErrors) || (stage && stage.errors) || stage).slice(0, 200));
+  const target = st.stagedTargets[0];
+  const form = new FormData();
+  for (const prm of target.parameters || []) form.append(prm.name, prm.value);
+  form.append('file', fs.createReadStream(file), { knownLength: bytes, contentType: 'video/mp4', filename });
+  await new Promise((resolve, reject) => form.submit(target.url, (err, up) => {
+    if (err) return reject(err);
+    let txt = ''; up.on('data', c => { if (txt.length < 300) txt += c; });
+    up.on('end', () => up.statusCode >= 200 && up.statusCode < 300 ? resolve() : reject(new Error(`upload failed (${up.statusCode}): ${txt.slice(0, 200)}`)));
+    up.on('error', reject);
+  }));
+  const created = await shopifyGraphql(`mutation($media:[CreateMediaInput!]!,$productId:ID!){productCreateMedia(media:$media,productId:$productId){media{id}mediaUserErrors{message}}}`,
+    { productId: p.id, media: [{ originalSource: target.resourceUrl, alt: p.title || eb, mediaContentType: 'VIDEO' }] });
+  const pcm = created && created.data && created.data.productCreateMedia;
+  if (!pcm || (pcm.mediaUserErrors || []).length || !pcm.media[0]) throw new Error('add video: ' + JSON.stringify((pcm && pcm.mediaUserErrors) || (created && created.errors) || created).slice(0, 200));
+  const newId = pcm.media[0].id;
+  // Shopify transcodes the video; only swap once it's playable, so the listing never loses its video.
+  let ready = null;
+  for (let i = 0; i < 60 && !ready; i++) {
+    await new Promise(r => setTimeout(r, 10000));
+    const q = await shopifyGraphql(`query($id:ID!){node(id:$id){... on Video{status sources{url format width height}}}}`, { id: newId });
+    const n = q && q.data && q.data.node;
+    if (n && n.status === 'FAILED') throw new Error('Shopify could not process the new video');
+    if (n && n.status === 'READY') ready = n;
+  }
+  if (!ready) throw new Error('Shopify was still processing the new video after 10 minutes (it was added; the old one was kept)');
+  const pos = media.indexOf(old);
+  if (pos >= 0) await shopifyGraphql(`mutation($id:ID!,$moves:[MoveInput!]!){productReorderMedia(id:$id,moves:$moves){mediaUserErrors{message}}}`, { id: p.id, moves: [{ id: newId, newPosition: String(pos) }] }).catch(() => {});
+  const del = await shopifyGraphql(`mutation($productId:ID!,$mediaIds:[ID!]!){productDeleteMedia(productId:$productId,mediaIds:$mediaIds){deletedMediaIds mediaUserErrors{message}}}`, { productId: p.id, mediaIds: [old.id] });
+  const delErr = del && del.data && del.data.productDeleteMedia && del.data.productDeleteMedia.mediaUserErrors;
+  if (delErr && delErr.length) console.warn(`marketing: old video for ${eb} not deleted —`, delErr.map(e => e.message).join(', '));
+  const mp4 = (ready.sources || []).filter(s => s.format === 'mp4' && s.url && s.height <= 1920).sort((a, b) => b.height - a.height)[0];
+  const stamp = `Replaced ${new Date().toISOString().slice(0, 10)} (${track.name})`;
+  for (const r0 of open) {
+    const r = (await mktRecords()).find(x => x.id === r0.id) || r0;
+    // The old video is gone, so every row moves to the new one; if Patti picked another track
+    // meanwhile, it isn't stamped and approving swaps the Shopify video again.
+    const fields = { 'Logo': 'Already has logo' };
+    if (mktMusicId(r.fields) === track.id) fields['Shopify video'] = stamp;
+    if (mp4 && r.fields['Video URL']) fields['Video URL'] = mp4.url;
+    const d = await airtableReq(`${AT_MARKETING_TBL}/${r.id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) });
+    mktCacheUpsert([d]);
+  }
+  await airtableReq(`${AT_MUSIC_TBL}/${track.id}`, { method: 'PATCH', body: JSON.stringify({ fields: { 'Times used': (track.used || 0) + 1, 'Last used': new Date().toISOString() } }) }).catch(() => {});
+  musicCache.at = 0; mktCandCache.at = 0;
+  console.log(`marketing: Shopify video for ${eb} replaced with music ${track.name}`);
 }
 
 // Old copies are deleted after a few days; the disk is small and copies are cheap to remake.
