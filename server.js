@@ -2802,6 +2802,23 @@ function mktSimilarUrl(p) {
   return SHOP_COLLECTIONS_URL + 'shop-all';
 }
 
+// Shop links in posts carry UTM tags so Shopify's reports can credit visits and sales to the
+// channel and piece: utm_source = channel, utm_content = EB number, utm_campaign = new or repost.
+// Visits from inside the Instagram/Facebook apps otherwise often show up as "direct".
+function mktTrackedUrl(url, f, { sold = false } = {}) {
+  if (!url) return url;
+  try {
+    const u = new URL(url);
+    u.searchParams.set('utm_source', mktChannel(f).toLowerCase());
+    u.searchParams.set('utm_medium', 'social');
+    u.searchParams.set('utm_campaign', sold ? 'sold-redirect' : f['Post type'] === 'Repost' ? 'repost' : 'new-post');
+    if (f['EB Number']) u.searchParams.set('utm_content', f['EB Number']);
+    return u.toString();
+  } catch (e) { return url; }
+}
+// The post text with every plain copy of the product link swapped for the tagged one.
+const mktTrackText = (text, f) => f['Product URL'] ? String(text || '').split(f['Product URL']).join(mktTrackedUrl(f['Product URL'], f)) : text;
+
 function mktSeasonScore(p, now) {
   const t = mktTagText(p);
   if (mktAutoTheme(p, now)) return 2;
@@ -3370,7 +3387,10 @@ app.get('/meta-auth/callback', async (req, res) => {
 // GET /meta/status — what the Marketing screen shows about the Facebook & Instagram connection.
 app.get('/meta/status', async (req, res) => {
   try { await metaLoadAuth(); } catch (e) { /* Airtable hiccup: report what we know */ }
-  res.json({ configured: !!(META_APP_ID && META_APP_SECRET), connected: metaConnected(), pageName: metaAuth.pageName, igUsername: metaAuth.igUsername, instagram: !!metaAuth.igId });
+  // Instagram captions say "link in bio", so show where that link goes.
+  let igWebsite = null;
+  if (metaConnected() && metaAuth.igId) igWebsite = (await metaApi('/' + metaAuth.igId, { params: { fields: 'website', access_token: metaAuth.pageToken } }).catch(() => ({}))).website || null;
+  res.json({ configured: !!(META_APP_ID && META_APP_SECRET), connected: metaConnected(), pageName: metaAuth.pageName, igUsername: metaAuth.igUsername, instagram: !!metaAuth.igId, igWebsite });
 });
 
 // ── Logo on posted photos ──
@@ -3549,7 +3569,7 @@ function mktChannelReady(channel) {
 async function mktPublishPinterest(f) {
   const body = {
     board_id: await pinBoardId(f['Board'] || 'Everyday Faux Florals'),
-    title: f['Pin Title'], description: f['Description'], link: f['Product URL'], alt_text: f['Alt Text'] || undefined,
+    title: f['Pin Title'], description: f['Description'], link: mktTrackedUrl(f['Product URL'], f), alt_text: f['Alt Text'] || undefined,
     media_source: { source_type: 'image_url', url: f['Image URL'] }
   };
   let note = null;
@@ -3594,6 +3614,7 @@ async function mktPublishInstagram(f) {
 // photo with the post text as its message.
 async function mktPublishFacebook(f) {
   const page = metaAuth.pageId, access_token = metaAuth.pageToken;
+  f = { ...f, 'Description': mktTrackText(f['Description'], f) };
   let note = null;
   if (f['Media'] === 'Video' && f['Video URL']) {
     try {
@@ -3691,14 +3712,14 @@ async function mktHandleSold(sku) {
       continue;
     }
     if (f['Status'] !== 'Posted' || f['Sold redirect']) continue;
-    const similar = f['Similar URL'] || SHOP_COLLECTIONS_URL + 'shop-all';
+    const similar = mktTrackedUrl(f['Similar URL'] || SHOP_COLLECTIONS_URL + 'shop-all', f, { sold: true });
     if (channel === 'Instagram') {
       await patch({ 'Sold redirect': now }); // nothing to change; marks it handled for the daily sweep
       continue;
     }
     if (channel === 'Facebook') {
       if (!f['Pin ID'] || !metaConnected()) continue;
-      const text = `Update: this one has found its home. Similar pieces are in the shop: ${similar}\n\n${f['Description'] || ''}`;
+      const text = `Update: this one has found its home. Similar pieces are in the shop: ${similar}\n\n${mktTrackText(f['Description'], f) || ''}`;
       await metaApi('/' + f['Pin ID'], { method: 'POST', params: { [f['Media'] === 'Video' ? 'description' : 'message']: text, access_token: metaAuth.pageToken } });
       await patch({ 'Sold redirect': now });
       console.log(`marketing: ${sku} sold — Facebook post ${f['Pin ID']} now points to similar pieces`);
