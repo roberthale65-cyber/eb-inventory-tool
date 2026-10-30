@@ -333,12 +333,6 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 .mk-history{font-size:12px;color:var(--text-muted);margin:2px 0 8px}
 .mk-logo{font-size:12px;color:var(--text-muted);margin:2px 0 8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .mk-logo select{font-size:12px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;background:#fff;color:var(--text-mid)}
-.mk-music{font-size:12px;color:var(--text-muted);margin:2px 0 10px;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px}
-.mk-music-head{font-weight:700;color:var(--text-mid);margin-bottom:4px}
-.mk-track{display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;color:var(--text-mid)}
-.mk-track.on{color:var(--rose);font-weight:700}
-.mk-track .mk-play{margin-left:auto;flex:0 0 auto}
-.mk-music select{font-size:12px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;background:#fff;color:var(--text-mid);margin-top:4px;max-width:100%}
 .mk-chip{display:inline-block;font-family:var(--font-body);font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;background:var(--ivory-dark);color:var(--text-mid);margin-left:6px;vertical-align:middle}
 .mk-chip.repost{background:#ece4f4;color:#6b4f8a}.mk-chip.theme{background:var(--rose-bg);color:var(--rose)}
 @media (max-width:480px){.mk-card{flex-direction:column}.mk-img{width:100%;height:240px}}
@@ -2124,11 +2118,6 @@ function mkRender(){
     return;
   }
   host.innerHTML = pieces.map(mkPieceHtml).join('');
-  // Music suggestions load once per video piece that's still open.
-  for(const rows of pieces){
-    const f0 = rows[0].fields, eb = f0['EB Number'];
-    if(eb && !mkMusic[eb] && (f0['Status'] === 'Draft' || f0['Status'] === 'Approved') && rows.some(r => r.fields['Media'] === 'Video' && r.fields['Video URL'])) mkLoadMusic(eb);
-  }
 }
 
 // One card per piece: shared photo/video, then a block per channel.
@@ -2136,17 +2125,16 @@ function mkPieceHtml(rows){
   const f0 = rows[0].fields, st = f0['Status'], eb = f0['EB Number'] || '';
   const isVideo = rows.some(r => r.fields['Media'] === 'Video' && r.fields['Video URL']);
   const vf = (rows.find(r => r.fields['Media'] === 'Video' && r.fields['Video URL']) || rows[0]).fields;
-  const br = mkBranded[eb] || {}; // the logo preview, once loaded
+  const br = mkBranded[eb] || {}; // the photo logo preview, once loaded
   const media = isVideo
-    ? '<video class="mk-img" src="' + escHtml(br.video || vf['Video URL']) + '" poster="' + escHtml(br.image || vf['Image URL'] || '') + '"' + (br.video ? '' : ' muted') + ' playsinline controls preload="none"></video><span class="mk-media-tag">VIDEO</span>'
+    ? '<video class="mk-img" src="' + escHtml(vf['Video URL']) + '" poster="' + escHtml(vf['Image URL'] || '') + '" muted playsinline controls preload="none"></video><span class="mk-media-tag">VIDEO</span>'
     : '<a href="' + escHtml(f0['Product URL'] || '#') + '" target="_blank" title="Open the product page"><img class="mk-img" src="' + escHtml(br.image || f0['Image URL'] || '') + '" alt="' + escHtml(f0['Alt Text'] || '') + '" loading="lazy"></a>';
-  const logo = (st === 'Draft' || st === 'Approved')
+  const logo = (!isVideo && (st === 'Draft' || st === 'Approved'))
     ? '<div class="mk-logo">Logo <select onchange="mkSetLogo(\'' + escHtml(eb) + '\', this.value)">' +
         MK_LOGO_OPTS.map(([v, label]) => '<option value="' + v + '"' + ((f0['Logo'] || 'Auto') === v ? ' selected' : '') + '>' + label + '</option>').join('') +
       '</select><button class="btn mk-small" onclick="mkPreviewLogo(\'' + escHtml(eb) + '\')">Preview</button>' +
       '<span>' + escHtml(br.status || '') + '</span></div>'
     : '';
-  const music = (isVideo && (st === 'Draft' || st === 'Approved')) ? mkMusicHtml(eb, rows) : '';
   let group = '';
   if(st === 'Draft'){
     const any = rows.some(r => mkConnected(mkChannel(r.fields)));
@@ -2161,7 +2149,7 @@ function mkPieceHtml(rows){
   return '<div class="mk-card ' + st.toLowerCase() + '">' +
     '<div class="mk-media">' + media + '</div>' +
     '<div class="mk-body">' +
-      '<div class="rd-eb">' + escHtml(eb) + chips + '</div>' + history + logo + music +
+      '<div class="rd-eb">' + escHtml(eb) + chips + '</div>' + history + logo +
       rows.map(r => mkChannelHtml(r, rows.length > 1)).join('') +
       group +
     '</div></div>';
@@ -2252,10 +2240,10 @@ async function mkApproveAll(eb){
     mkStatusMsg('Approved — ' + escHtml(parts.join(', ')) + '. Posts are spread out to about one per channel per day.');
   } catch(e){ mkUpdateHomeCount(); mkRender(); mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
 }
-// Logo on the posted photo/video. Auto: the server adds it unless the media already has it.
+// Logo on the posted photo. Auto: the server adds it unless the photo already has it.
 const MK_LOGO_OPTS = [['Auto', 'Auto (add if missing)'], ['Add logo', 'Always add'], ['Already has logo', 'Already has it']];
 const MK_LOGO_RESULT = { added:'logo added', already:'already had the logo', kept:'posted as is', failed:'logo failed' };
-const mkBranded = {}; // EB number → { image, video, status } from the last preview
+const mkBranded = {}; // EB number → { image, status } from the last preview
 async function mkSetLogo(eb, value){
   const rows = mkRecords.filter(r => r.fields['EB Number'] === eb && (r.fields['Status'] === 'Draft' || r.fields['Status'] === 'Approved'));
   try {
@@ -2264,87 +2252,25 @@ async function mkSetLogo(eb, value){
     mkRender(); mkStatusMsg('Logo for ' + escHtml(eb) + ': <b>' + escHtml(MK_LOGO_OPTS.find(o => o[0] === value)[1]) + '</b>. Tap Preview to see it.');
   } catch(e){ mkRender(); mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
 }
-// Asks the server for the branded photo/video (making it can take a few minutes for a video)
-// and shows it on the card.
+// Asks the server for the branded photo and shows it on the card.
 async function mkPreviewLogo(eb){
   const rows = mkRecords.filter(r => r.fields['EB Number'] === eb && (r.fields['Status'] === 'Draft' || r.fields['Status'] === 'Approved'));
-  const row = rows.find(r => r.fields['Media'] === 'Video' && r.fields['Video URL']) || rows[0];
+  const row = rows[0];
   if(!row) return;
   const show = d => { mkBranded[eb] = d; mkRender(); };
-  show({ status: row.fields['Media'] === 'Video' ? 'Preparing… a video takes a few minutes' : 'Preparing…' });
-  for(let i = 0; i < 120; i++){
+  show({ status: 'Preparing…' });
+  for(let i = 0; i < 24; i++){
     try {
       const r = await fetch(SERVER_URL + '/marketing/brand/' + row.id);
       const d = await r.json().catch(()=>({}));
       if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
       if(d.status === 'ready'){
-        const parts = [d.video ? 'Video: ' + MK_LOGO_RESULT[d.videoLogo] + (d.music ? ', with music' : '') : '', 'Photo: ' + MK_LOGO_RESULT[d.imageLogo]].filter(Boolean);
-        return show({ image: d.image, video: d.video, status: parts.join(' · ') + (d.notes.length ? ' (' + d.notes.join(' ') + ')' : '') });
+        return show({ image: d.image, status: 'Photo: ' + MK_LOGO_RESULT[d.imageLogo] + (d.notes.length ? ' (' + d.notes.join(' ') + ')' : '') });
       }
     } catch(e){ return show({ status: 'Preview failed: ' + e.message }); }
     await new Promise(r => setTimeout(r, 5000));
   }
-  show({ status: 'Still working. Tap Preview again in a few minutes.' });
-}
-// Music for a piece's video: 3 suggested tracks (listen with ▶), any other track from the list,
-// or the video's own sound. The pick goes on every open row of the piece; approving also swaps
-// the Shopify product video for the same music + logo version.
-const mkMusic = {}; // EB number → { loading } | { error } | { current, shopify, options, all }
-let mkAudio = null, mkAudioId = '';
-async function mkLoadMusic(eb){
-  mkMusic[eb] = { loading: true };
-  try {
-    const r = await fetch(SERVER_URL + '/marketing/music/suggest/' + encodeURIComponent(eb));
-    const d = await r.json().catch(()=>({}));
-    if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
-    mkMusic[eb] = d;
-  } catch(e){ mkMusic[eb] = { error: e.message }; }
-  mkRender();
-}
-const mkTrackLabel = t => escHtml(t.mood || t.name) + ' <span class="mk-muted">· ' + escHtml((t.themes || []).join(', ')) + (t.seconds ? ' · ' + Math.floor(t.seconds / 60) + ':' + String(t.seconds % 60).padStart(2, '0') : '') + '</span>';
-function mkMusicHtml(eb, rows){
-  const m = mkMusic[eb] || { loading: true };
-  const head = '<div class="mk-music-head">🎵 Music</div>';
-  if(m.loading) return '<div class="mk-music">' + head + 'Finding tracks…</div>';
-  if(m.error) return '<div class="mk-music">' + head + 'Couldn\'t load music: ' + escHtml(m.error) + '</div>';
-  const cur = rows.map(r => r.fields['Music']).find(Boolean) || '';
-  const shown = m.options.slice();
-  const curTrack = m.all.find(t => t.id === cur);
-  if(curTrack && !shown.some(t => t.id === cur)) shown.unshift(curTrack);
-  const e = escHtml(eb);
-  const opt = (id, label, play) => '<label class="mk-track' + (cur === id ? ' on' : '') + '"><input type="radio" name="mkmus-' + e + '"' + (cur === id ? ' checked' : '') + ' onchange="mkSetMusic(\'' + e + '\',\'' + id + '\')"> ' + label +
-    (play ? '<button class="btn mk-small mk-play" onclick="mkPlayTrack(event,\'' + id + '\')">' + (mkAudioId === id ? '❚❚' : '▶') + '</button>' : '') + '</label>';
-  const others = m.all.filter(t => !shown.some(s => s.id === t.id));
-  const shopify = rows.map(r => r.fields['Shopify video']).find(Boolean) || '';
-  const approved = rows.some(r => r.fields['Status'] === 'Approved');
-  const status = shopify ? (/^Error/.test(shopify) ? '⚠ Shopify video: ' + escHtml(shopify) : '✓ Shopify video ' + escHtml(shopify.replace(/^Replaced/, 'replaced'))) :
-    (cur && cur !== 'none' ? (approved ? 'Updating the Shopify video… this takes a few minutes.' : 'When you approve, the Shopify video gets this music and the logo too.') : '');
-  return '<div class="mk-music">' + head +
-    (cur ? '' : '<div>Pick one — tap ▶ to listen:</div>') +
-    shown.map(t => opt(t.id, mkTrackLabel(t), true)).join('') +
-    opt('none', 'Keep the video\'s own sound', false) +
-    (others.length ? '<select onchange="if(this.value)mkSetMusic(\'' + e + '\',this.value)"><option value="">Other tracks…</option>' + others.map(t => '<option value="' + t.id + '">' + escHtml(t.mood + ' · ' + (t.themes || []).join(', ') + ' (' + t.name + ')') + '</option>').join('') + '</select>' : '') +
-    (status ? '<div style="margin-top:6px">' + status + '</div>' : '') +
-  '</div>';
-}
-function mkPlayTrack(ev, id){
-  ev.preventDefault(); ev.stopPropagation();
-  if(!mkAudio) { mkAudio = new Audio(); mkAudio.onended = () => { mkAudioId = ''; mkRender(); }; }
-  if(mkAudioId === id){ mkAudio.pause(); mkAudioId = ''; }
-  else { mkAudio.src = SERVER_URL + '/marketing/music/audio/' + id; mkAudio.play().catch(e => mkStatusMsg('<strong>Couldn\'t play the track</strong>' + escHtml(e.message), 'rose')); mkAudioId = id; }
-  mkRender();
-}
-async function mkSetMusic(eb, id){
-  const rows = mkRecords.filter(r => r.fields['EB Number'] === eb && (r.fields['Status'] === 'Draft' || r.fields['Status'] === 'Approved'));
-  if(mkAudio && mkAudioId){ mkAudio.pause(); mkAudioId = ''; }
-  try {
-    for(const r of rows) await mkSave(r.id, { ...mkCardFields(r.id), 'Music': id }, { render:false });
-    delete mkBranded[eb];
-    mkRender();
-    if(id === 'none') return mkStatusMsg('Music for ' + escHtml(eb) + ': the video keeps its own sound.');
-    mkStatusMsg('Music picked for ' + escHtml(eb) + '. Making the video with it so you can watch and listen…');
-    mkPreviewLogo(eb);
-  } catch(e){ mkRender(); mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
+  show({ status: 'Still working. Tap Preview again in a minute.' });
 }
 async function mkPostNow(id){
   try { await mkSave(id, { 'Scheduled for': new Date().toISOString() }); mkStatusMsg('Posting now — it moves to <b>Posted</b> when it\'s live.'); }
