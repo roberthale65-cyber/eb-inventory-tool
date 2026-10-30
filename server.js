@@ -3315,6 +3315,10 @@ const META_APP_SECRET = process.env.META_APP_SECRET;
 const META_GRAPH       = 'https://graph.facebook.com/' + (process.env.META_GRAPH_VERSION || 'v23.0');
 const META_GRAPH_VIDEO = META_GRAPH.replace('//graph.', '//graph-video.');
 const META_SCOPES = 'pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish,business_management';
+// The app uses Facebook Login for Business, which logs in with a saved configuration (made in the
+// app's Facebook Login for Business → Configurations, with the permissions above) rather than a
+// scope list. When META_CONFIG_ID is set the connect link sends it instead of the scopes.
+const META_CONFIG_ID = process.env.META_CONFIG_ID;
 const META_STATE_KEY = 'meta_auth';
 const metaAuth = { loaded: false, pageId: null, pageName: null, pageToken: null, igId: null, igUsername: null };
 const metaOauthStates = new Map(); // state → issued-at, for CSRF protection on the callback
@@ -3355,7 +3359,8 @@ app.get('/meta-auth', (req, res) => {
   metaOauthStates.set(state, Date.now());
   res.redirect(META_GRAPH.replace('//graph.', '//www.') + '/dialog/oauth?client_id=' + encodeURIComponent(META_APP_ID)
     + '&redirect_uri=' + encodeURIComponent(`${SERVER_URL}/meta-auth/callback`)
-    + '&response_type=code&scope=' + encodeURIComponent(META_SCOPES) + '&state=' + state);
+    + '&response_type=code' + (META_CONFIG_ID ? '&config_id=' + encodeURIComponent(META_CONFIG_ID) : '&scope=' + encodeURIComponent(META_SCOPES))
+    + '&state=' + state);
 });
 
 app.get('/meta-auth/callback', async (req, res) => {
