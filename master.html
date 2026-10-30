@@ -2237,7 +2237,7 @@ async function mkApproveAll(eb){
     mkRecordAction('Approve ' + eb, before);
     mkUpdateHomeCount(); mkRender();
     const parts = saved.map(d => { const ch = mkChannel(d.fields); return !mkConnected(ch) ? ch + ' waits until connected' : mkDue(d.fields) ? ch + ' now' : ch + ' ' + mkWhen(d.fields['Scheduled for']); });
-    mkStatusMsg('Approved — ' + escHtml(parts.join(', ')) + '. Posts are spread out to about one per channel per day.');
+    mkStatusMsg('Approved — ' + escHtml(parts.join(', ')) + '. Posts are spread out: up to 3 pins a day on Pinterest, 1 a day on Instagram and Facebook.');
   } catch(e){ mkUpdateHomeCount(); mkRender(); mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
 }
 // Logo on the posted photo. Auto: the server adds it unless the photo already has it.

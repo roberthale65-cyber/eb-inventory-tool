@@ -3664,21 +3664,33 @@ async function mktPostPin(id) {
 // by a restart mid-post. Posted one at a time so two pins can't both create a missing board.
 // The background pass skips rows with a Post error so a failing post waits for Retry
 // instead of being retried on every app open.
-// Spreading posts out: about one per channel per day, at a time that suits the channel
-// (UTC hours ≈ 8 pm, noon and 2 pm Central). Approving books the first free day; if today's
-// time has passed but nothing went out today, it goes out now.
-const MKT_SLOT_UTC_HOUR = { Pinterest: 1, Instagram: 17, Facebook: 19 };
+// Spreading posts out: a few slots per channel per day, at times that suit the channel.
+// Pinterest rewards a steady stream of fresh pins, so it gets three (about 9 am, 2 pm and 8 pm
+// Central); Instagram (noon) and Facebook (2 pm) get one, since more per day splits their reach.
+// Hours are UTC, so they shift an hour with daylight saving. Days are counted in Central time.
+// Approving books the first free slot; if a slot earlier today was missed and nothing went
+// out on that channel in the last few hours, it goes out now.
+const MKT_SLOT_UTC_HOURS = { Pinterest: [1, 14, 19], Instagram: [17], Facebook: [19] };
+const MKT_SLOT_GAP_MS = 3 * 60 * 60 * 1000;
+const mktLocalDay = d => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(d);
 function mktNextSlot(channel, records, now = new Date()) {
-  const taken = new Set(records.filter(r => mktChannel(r.fields) === channel).map(r => {
+  const hours = MKT_SLOT_UTC_HOURS[channel] || [18];
+  const times = records.filter(r => mktChannel(r.fields) === channel).map(r => {
     const f = r.fields || {};
-    if (f['Status'] === 'Posted') return String(f['Status changed'] || '').slice(0, 10);
-    if (f['Status'] === 'Approved' && f['Scheduled for']) return new Date(f['Scheduled for']).toISOString().slice(0, 10);
-    return null;
-  }).filter(Boolean));
-  for (let i = 0; i < 366; i++) {
-    let slot = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + i, MKT_SLOT_UTC_HOUR[channel] ?? 18));
-    if (slot <= now) { if (i > 0) continue; slot = now; }
-    if (!taken.has(slot.toISOString().slice(0, 10))) return slot;
+    if (f['Status'] === 'Posted') return Date.parse(f['Status changed'] || '');
+    if (f['Status'] === 'Approved' && f['Scheduled for']) return Date.parse(f['Scheduled for']);
+    return NaN;
+  }).filter(t => !isNaN(t));
+  const perDay = {};
+  for (const t of times) { const k = mktLocalDay(new Date(t)); perDay[k] = (perDay[k] || 0) + 1; }
+  const free = slot => (perDay[mktLocalDay(slot)] || 0) < hours.length && !times.some(t => Math.abs(t - slot) < MKT_SLOT_GAP_MS);
+  const today = mktLocalDay(now);
+  for (let i = -1; i < 367; i++) {
+    const day = [...hours].sort((a, b) => a - b).map(h => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + i, h)));
+    for (const slot of day) {
+      if (slot > now) { if (free(slot)) return slot; }
+      else if (mktLocalDay(slot) === today && free(now)) return now;
+    }
   }
   return now;
 }
