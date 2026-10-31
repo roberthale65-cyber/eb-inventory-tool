@@ -329,6 +329,15 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 .mk-res-days .btn.on{background:var(--rose);border-color:var(--rose);color:#fff}
 .mk-res-sub{font-size:12px;font-weight:800;margin:12px 0 2px}
 .mk-stat{white-space:nowrap}
+.mk-chk{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--border);font-size:13px;line-height:1.45}
+.mk-chk input{width:18px;height:18px;margin:1px 0 0;flex-shrink:0;accent-color:var(--rose)}
+.mk-chk.done .mk-chk-label{color:var(--text-muted);text-decoration:line-through}
+.mk-chk-body{flex:1;min-width:0}
+#mk-check details{margin-top:6px}
+#mk-check summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--rose)}
+.mk-draft{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--ivory-dark);border-radius:8px;padding:9px 10px;margin-top:6px;font-size:12.5px;line-height:1.5}
+.mk-draft-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;font-size:12px;font-weight:700}
+.mk-draft-head .btn{font-size:12px;padding:4px 10px;min-width:0}
 .mk-pick-filters{display:flex;gap:8px;flex-wrap:wrap}
 .mk-pick-filters .mk-input{flex:1;min-width:140px}
 .mk-pick-list{max-height:420px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px}
@@ -1474,6 +1483,7 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
     <div class="info-card rose" style="margin-bottom:12px"><strong>How this works:</strong> Every week the AI drafts a Pinterest pin, an Instagram post and a Facebook post for in-stock pieces, using the listing video when there is one and favoring the seasons shoppers are planning for. Nothing goes live until you approve it — one tap approves all three. When a piece sells, unposted drafts are skipped and live pins and Facebook posts point to similar pieces. <a href="marketing-guide.html" target="_blank" rel="noopener" style="color:inherit;font-weight:700">Open the step-by-step guide →</a></div>
     <div id="mk-connect"></div>
     <div class="btn-row" style="margin-bottom:14px"><button class="btn btn-primary btn-full" id="mk-draft-btn" onclick="mkDraft()">✨ Draft 5 new pieces</button></div>
+    <div id="mk-check"></div>
     <div id="mk-results"></div>
     <div id="mk-plan"></div>
     <div id="mk-picker" style="display:none"></div>
@@ -1972,10 +1982,77 @@ async function mkInit(){
   const host = document.getElementById('mk-list');
   host.innerHTML = '<div style="text-align:center;padding:36px 20px;color:var(--text-muted)">Loading drafts…</div>';
   mkLoadStatus();
+  mkLoadCheck();
   mkLoadReport();
   mkLoadPlan();
   try { await mkLoad(); mkRender(); }
   catch(e){ host.innerHTML = '<div class="info-card rose"><strong>Couldn\'t load the marketing queue</strong>' + escHtml(e.message) + '</div>'; }
+}
+
+// ── This week: Patti's own marketing tasks, shared between everyone who opens EB Master ──
+// Daily items reset each day and weekly ones each Monday (Central). Approving and reposting
+// tick themselves from the queue; the group post and outreach messages are redrafted weekly.
+let mkCheck = null;
+async function mkCheckCall(method, path, body){
+  const r = await fetch(SERVER_URL + '/marketing/checklist' + (path || ''), body ? { method, headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) } : { method });
+  const d = await r.json().catch(()=>({}));
+  if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+  return d;
+}
+async function mkLoadCheck(){
+  const el = document.getElementById('mk-check');
+  if(!mkCheck) el.innerHTML = '<div class="mk-plan-card"><div class="mk-plan-title">This week</div><div class="mk-note" style="margin-top:0">Loading this week’s list… (Mondays take a little longer while the posts are written)</div></div>';
+  try { mkCheck = await mkCheckCall('GET'); }
+  catch(e){ el.innerHTML = '<div class="mk-plan-card"><div class="mk-plan-title">This week</div><div class="mk-note">Couldn\'t load the list: ' + escHtml(e.message) + '</div></div>'; return; }
+  mkRenderCheck();
+}
+async function mkCheckToggle(key, on){
+  const it = mkCheck.items.find(i => i.key === key);
+  const was = { ticked: it.ticked, done: it.done };
+  it.ticked = on; it.done = on || (it.auto && it.done && !was.ticked);
+  mkRenderCheck();
+  try { const d = await mkCheckCall('PATCH', '', { item: key, done: on }); mkCheck = { ...mkCheck, ...d, draftsError: mkCheck.draftsError }; }
+  catch(e){ Object.assign(it, was); alert('Couldn\'t save that tick: ' + e.message); }
+  mkRenderCheck();
+}
+async function mkCheckRedraft(btn){
+  btn.disabled = true; btn.textContent = 'Writing…';
+  try { mkCheck = await mkCheckCall('POST', '/redraft'); }
+  catch(e){ alert('Couldn\'t write new drafts: ' + e.message); }
+  mkRenderCheck();
+}
+async function mkCheckCopy(btn, text){
+  let ok = false;
+  try { ok = await navigator.clipboard.writeText(text).then(() => true, () => false); } catch(e){}
+  const o = btn.textContent; btn.textContent = ok ? '✓ Copied' : 'Copy failed'; setTimeout(() => { btn.textContent = o; }, 1800);
+}
+const mkCheckTexts = [];
+function mkCheckDraftBlock(title, text){
+  mkCheckTexts.push(text);
+  return '<div class="mk-draft-head"><span>' + escHtml(title) + '</span><button class="btn" onclick="mkCheckCopy(this, mkCheckTexts[' + (mkCheckTexts.length - 1) + '])">Copy</button></div><div class="mk-draft">' + escHtml(text) + '</div>';
+}
+function mkRenderCheck(){
+  const c = mkCheck; if(!c) return;
+  mkCheckTexts.length = 0;
+  const dr = c.drafts;
+  const extra = {
+    groups: dr ? '<details><summary>This week’s drafted posts</summary>' +
+      (dr.piece ? mkCheckDraftBlock('For groups that allow shop posts (add the photo of ' + dr.piece.sku + ')', dr.groupPost) + mkCheckDraftBlock('Shop link, if the group allows links', dr.piece.url) : '') +
+      mkCheckDraftBlock('For groups that don’t allow selling', dr.groupQuestion) + '</details>' : '',
+    outreach: dr && dr.outreach.length ? '<details><summary>Drafted messages</summary>' + dr.outreach.map(o => mkCheckDraftBlock(o.who, o.message)).join('') + '</details>' : ''
+  };
+  const row = it => '<label class="mk-chk' + (it.done ? ' done' : '') + '"><input type="checkbox"' + (it.done ? ' checked' : '') + ' onchange="mkCheckToggle(\'' + it.key + '\', this.checked)">' +
+    '<div class="mk-chk-body"><span class="mk-chk-label">' + escHtml(it.label) + '</span>' + (it.note ? '<div class="mk-muted">' + escHtml(it.note) + '</div>' : '') + '</div></label>' +
+    (extra[it.key] ? '<div style="margin:-4px 0 6px 28px">' + extra[it.key] + '</div>' : '');
+  const day = c.items.filter(i => i.when === 'day'), week = c.items.filter(i => i.when === 'week');
+  const done = week.filter(i => i.done).length;
+  document.getElementById('mk-check').innerHTML = '<div class="mk-plan-card"><div class="mk-res-head"><div class="mk-plan-title">This week</div><span class="mk-muted">' + done + ' of ' + week.length + ' done · week of ' + mkDate(c.week + 'T12:00:00') + '</span></div>' +
+    '<div class="mk-res-sub">Every day</div>' + day.map(row).join('') +
+    '<div class="mk-res-sub">This week</div>' + week.map(row).join('') +
+    (c.draftsError ? '<div class="mk-note">Couldn\'t write this week\'s posts: ' + escHtml(c.draftsError) + '</div>' : '') +
+    '<div class="mk-res-sub">Every order</div><div class="mk-chk" style="display:block">Put a thank-you card in the box asking the buyer to share a photo. Ask before reposting it.' +
+    '<details><summary>Card text</summary>' + mkCheckDraftBlock('Thank-you card', c.thanksCard) + '</details></div>' +
+    (dr ? '<div class="mk-actions"><button class="btn mk-small" onclick="mkCheckRedraft(this)">↻ Write new drafts</button></div>' : '') + '</div>';
 }
 
 // ── Results: what the posts did — channel stats, shop visits from tagged links, and sales ──

@@ -4141,6 +4141,169 @@ app.get('/marketing/report', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Weekly checklist ──
+// The human part of marketing that EB Master can't do for Patti: replies, comments, Facebook
+// groups, a personal post and local outreach. Ticks are shared (Server State key
+// "mkt_checklist"); daily items reset each day and weekly ones each Monday, Central time.
+// Approving drafts and reposting tick themselves from the queue. Each week Claude drafts a
+// Facebook group post and outreach messages around an in-season piece, ready to copy.
+const MKT_CHECK_KEY = 'mkt_checklist';
+const MKT_CHECK_TZ = 'America/Chicago';
+const MKT_CHECK_ITEMS = [
+  { key: 'replies', when: 'day', label: 'Reply to comments and messages on Facebook and Instagram' },
+  { key: 'comments', when: 'day', label: 'Comment on 3–5 other accounts: local shops, decorators, customers' },
+  { key: 'approve', when: 'week', label: 'Approve this week’s drafts', auto: true },
+  { key: 'repost', when: 'week', label: 'Check Results, then repost the top 1–2 pieces (Pick pieces)', auto: true },
+  { key: 'groups', when: 'week', label: 'Post in 2–3 local Facebook groups, then answer replies' },
+  { key: 'personal', when: 'week', label: 'Share one behind-the-scenes post: the workbench, a piece in progress, a craft show' },
+  { key: 'outreach', when: 'week', label: 'Send 1–2 messages to a local shop, realtor or decorator' }
+];
+const MKT_THANKS_CARD = 'Thank you for bringing one of my pieces home. I hope it brings you joy for years to come. I’d love to see where it landed: share a photo and tag @eternalbloomsbypatti on Instagram or Facebook.\n— Patti\nEternal Blooms by Patti · Florals that bloom forever.';
+const mktCheck = { loaded: false, data: { week: '', done: {}, days: {}, drafts: null } };
+let mktCheckDrafting = null;
+// Today's date and this week's Monday in Central time, as YYYY-MM-DD.
+function mktCheckDates(now = new Date()) {
+  const today = now.toLocaleDateString('en-CA', { timeZone: MKT_CHECK_TZ });
+  const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(now.toLocaleDateString('en-US', { weekday: 'short', timeZone: MKT_CHECK_TZ }));
+  const t = new Date(today + 'T12:00:00Z');
+  return { today, week: new Date(t - ((dow + 6) % 7) * MKT_DAY_MS).toISOString().slice(0, 10) };
+}
+async function mktCheckLoad() {
+  if (mktCheck.loaded) return;
+  const data = await airtableReq(`${AT_STATE_TBL}?maxRecords=1&filterByFormula=${encodeURIComponent(`{Key}='${MKT_CHECK_KEY}'`)}`, { source: 'checklist:load' });
+  const rec = (data.records || [])[0];
+  if (rec && rec.fields['Value']) { try { mktCheck.data = { ...mktCheck.data, ...JSON.parse(rec.fields['Value']) }; } catch (e) { console.warn('checklist: saved value unreadable, starting fresh'); } }
+  mktCheck.loaded = true;
+}
+async function mktCheckSave() {
+  await airtableReq(AT_STATE_TBL, { method: 'PATCH', source: 'checklist:save', body: JSON.stringify({
+    performUpsert: { fieldsToMergeOn: ['Key'] },
+    records: [{ fields: { 'Key': MKT_CHECK_KEY, 'Value': JSON.stringify(mktCheck.data), 'Updated': new Date().toISOString() } }]
+  }) });
+}
+// A new week clears the weekly ticks and the daily ticks of earlier weeks.
+function mktCheckRoll({ week }) {
+  const d = mktCheck.data;
+  if (d.week === week) return false;
+  d.week = week; d.done = {};
+  for (const day of Object.keys(d.days || {})) if (day < week) delete d.days[day];
+  return true;
+}
+// The piece the group post features: in season if possible, otherwise any piece with a photo.
+async function mktCheckPiece() {
+  const list = (await mktShopifyCandidates()).filter(p => p.onlineStoreUrl && p.variants.nodes[0] && p.variants.nodes[0].sku && p.media.nodes.some(m => m.image));
+  const inSeason = list.filter(p => mktAutoTheme(p));
+  const pool = inSeason.length ? inSeason : list;
+  if (!pool.length) return null;
+  const p = pool[Math.floor(Math.random() * pool.length)], sku = p.variants.nodes[0].sku;
+  const u = new URL(p.onlineStoreUrl);
+  for (const [k, v] of Object.entries({ utm_source: 'facebook', utm_medium: 'social', utm_campaign: 'group', utm_content: sku })) u.searchParams.set(k, v);
+  return { p, sku, title: p.title, url: u.toString(), image: p.media.nodes.find(m => m.image).image.url, theme: mktAutoTheme(p) };
+}
+async function mktCheckDraft(week) {
+  const piece = await mktCheckPiece();
+  const season = (mktCalendar().find(c => c.active) || {}).name || '';
+  const prompt = `${PIN_VOICE_RULES}
+${SOCIAL_VOICE_RULES}
+
+Patti makes one-of-a-kind faux floral arrangements in Omaha and sells them at eternalbloomsbypatti.com. Write this week's community posts and outreach messages in Patti's own voice (first person, warm, local; mentioning Omaha is fine; at most one exclamation point per piece of text; no emoji; no hashtags; no price or sale wording). These texts follow the Facebook rules above, not the pin rules: naming Omaha or the neighborhood is welcome here.${season ? ` The season shoppers are decorating for now: ${season}.` : ''}
+
+1. group_post: a post for local Facebook groups (community, home decor, handmade) that allow small-business posts. Conversational, not an ad: share the piece below and ask the group a simple question that invites replies (e.g. which spot they'd put it, or what they're decorating this week). 3–5 sentences, under 500 characters. No link in the text (Patti adds it only where the group allows). Sign off "— Patti".
+2. group_question: a short question-only post for groups that don't allow selling. No product, no link, no mention of the shop. Something seasonal about decorating or hosting that people enjoy answering. 1–2 sentences.
+3. outreach: three short first messages, each under 600 characters, starting "Hi [Name]," and signed "— Patti, Eternal Blooms by Patti (eternalbloomsbypatti.com)":
+   - "Gift shop or boutique": propose a small display or a cross-promotion of each other's shops.
+   - "Realtor": handmade arrangements as closing gifts for buyers.
+   - "Decorator or home stager": pieces for staging or client projects.
+   Friendly, specific, low-pressure; one clear ask (a quick call or stopping by).
+${piece ? `\nFeatured piece (group_post only): ${piece.title}\nType: ${piece.p.productType || 'arrangement'}\nDescription: ${piece.p.description || ''}` : ''}
+
+Return ONLY valid JSON, no code fences: {"group_post": "...", "group_question": "...", "outreach": [{"who": "Gift shop or boutique", "message": "..."}, {"who": "Realtor", "message": "..."}, {"who": "Decorator or home stager", "message": "..."}]}`;
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 1500, messages: [{ role: 'user', content: prompt }] })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error((data.error && data.error.message) || 'Anthropic API error');
+  const raw = (data.content && data.content[0] && data.content[0].text || '').trim();
+  const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
+  const parsed = JSON.parse(s >= 0 && e > s ? raw.slice(s, e + 1) : raw);
+  return {
+    week, at: new Date().toISOString(),
+    piece: piece ? { sku: piece.sku, title: piece.title, url: piece.url, image: piece.image } : null,
+    groupPost: String(parsed.group_post || '').trim(),
+    groupQuestion: String(parsed.group_question || '').trim(),
+    outreach: (Array.isArray(parsed.outreach) ? parsed.outreach : []).slice(0, 3).map(o => ({ who: String(o.who || '').trim(), message: String(o.message || '').trim() }))
+  };
+}
+// One drafting run at a time; the result is saved for the rest of the week.
+function mktCheckEnsureDrafts(week, force) {
+  const d = mktCheck.data;
+  if (!force && d.drafts && d.drafts.week === week) return Promise.resolve();
+  if (!ANTHROPIC_API_KEY) return Promise.reject(new Error('ANTHROPIC_API_KEY not configured on server.'));
+  if (!mktCheckDrafting) mktCheckDrafting = mktCheckDraft(week)
+    .then(async drafts => { d.drafts = drafts; await mktCheckSave(); })
+    .finally(() => { mktCheckDrafting = null; });
+  return mktCheckDrafting;
+}
+async function mktCheckView() {
+  const dates = mktCheckDates(), d = mktCheck.data;
+  const records = await mktRecords();
+  const weekStart = Date.parse(dates.week + 'T00:00:00-06:00'); // close enough across DST for "this week"
+  const waiting = records.filter(r => (r.fields || {})['Status'] === 'Draft').length;
+  const reposts = records.filter(r => { const f = r.fields || {}; return f['Post type'] === 'Repost' && (Date.parse(f['Drafted']) || 0) >= weekStart; }).length;
+  const auto = {
+    approve: { done: waiting === 0, note: waiting ? `${waiting} draft${waiting === 1 ? '' : 's'} waiting on the To review tab` : 'Nothing waiting' },
+    repost: { done: reposts > 0, note: reposts ? `${reposts} repost${reposts === 1 ? '' : 's'} drafted this week` : 'No reposts drafted yet this week' }
+  };
+  const today = (d.days || {})[dates.today] || {};
+  return {
+    week: dates.week, today: dates.today,
+    items: MKT_CHECK_ITEMS.map(it => {
+      const ticked = it.when === 'day' ? !!today[it.key] : !!d.done[it.key];
+      return { ...it, done: ticked || !!(auto[it.key] && auto[it.key].done), ticked, note: auto[it.key] ? auto[it.key].note : '' };
+    }),
+    drafts: d.drafts && d.drafts.week === dates.week ? d.drafts : null,
+    thanksCard: MKT_THANKS_CARD
+  };
+}
+// GET /marketing/checklist — this week's list; drafts the week's text on the first load.
+app.get('/marketing/checklist', async (req, res) => {
+  if (!AIRTABLE_TOKEN) return res.status(500).json({ error: 'AIRTABLE_TOKEN not configured on server.' });
+  try {
+    await mktCheckLoad();
+    if (mktCheckRoll(mktCheckDates())) await mktCheckSave();
+    let draftsError = null;
+    if (shopifyAccessToken) await mktCheckEnsureDrafts(mktCheck.data.week).catch(e => { draftsError = e.message; });
+    res.json({ ...(await mktCheckView()), draftsError });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// PATCH /marketing/checklist { item, done } — tick or untick; daily items count for today.
+app.patch('/marketing/checklist', async (req, res) => {
+  const { item, done } = req.body || {};
+  const it = MKT_CHECK_ITEMS.find(i => i.key === item);
+  if (!it) return res.status(400).json({ error: 'unknown item: ' + item });
+  try {
+    await mktCheckLoad();
+    const dates = mktCheckDates(), d = mktCheck.data;
+    mktCheckRoll(dates);
+    if (it.when === 'day') { d.days = d.days || {}; d.days[dates.today] = { ...(d.days[dates.today] || {}), [item]: !!done }; }
+    else d.done[item] = !!done;
+    await mktCheckSave();
+    res.json(await mktCheckView());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// POST /marketing/checklist/redraft — new text for this week's group post and messages.
+app.post('/marketing/checklist/redraft', async (req, res) => {
+  if (!shopifyAccessToken) return res.status(401).json({ error: 'Shopify not authorized — visit /auth' });
+  try {
+    await mktCheckLoad();
+    mktCheckRoll(mktCheckDates());
+    await mktCheckEnsureDrafts(mktCheck.data.week, true);
+    res.json({ ...(await mktCheckView()), draftsError: null });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.listen(PORT, () => {
   console.log(`EB server running on port ${PORT}`);
   ensureOrderWebhook();
