@@ -133,7 +133,7 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .thumb-row img.sel{outline:3px solid var(--rose);outline-offset:-2px}
 .np-sub-thumbs{margin:0 0 14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
 .np-bigpreview{margin-top:8px}
-.np-bigpreview img{width:100%;max-height:340px;object-fit:contain;background:#fff;border:1px solid var(--border);border-radius:12px;cursor:zoom-out;display:block}
+.np-bigpreview img,.np-bigpreview canvas{width:100%;max-height:340px;object-fit:contain;background:#fff;border:1px solid var(--border);border-radius:12px;cursor:zoom-out;display:block}
 /* ── Video panel ── */
 .lp-video-panel{border:1.5px dashed var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;margin-top:10px}
 .lp-video-panel.found{border-color:var(--teal);background:var(--teal-bg)}
@@ -2896,7 +2896,7 @@ function npRenderSubThumbs(){
     const box=document.getElementById(mid); if(!box) return;
     if(!npSelectedFolder||!imgs.length){ box.style.display='none'; box.innerHTML=''; return; }
     box.style.display='block';
-    box.innerHTML='<div class="thumb-row thumb-row-zoom">'+imgs.map(f=>'<img src="'+(f.thumbnailLink||'')+'" data-full="'+escHtml(driveUpsize(f.thumbnailLink||''))+'" alt="'+escHtml(f.name)+'" referrerpolicy="no-referrer" onclick="npFolderBigPreview(this)">').join('')+'</div><div class="np-bigpreview" style="display:none"></div>';
+    box.innerHTML='<div class="thumb-row thumb-row-zoom">'+imgs.map(f=>'<img src="'+(f.thumbnailLink||'')+'" data-full="'+escHtml(driveUpsize(f.thumbnailLink||''))+'" alt="'+escHtml(f.name)+'" referrerpolicy="no-referrer"'+driveThumbOri(f)+' onclick="npFolderBigPreview(this)">').join('')+'</div><div class="np-bigpreview" style="display:none"></div>';
   });
 }
 document.getElementById('np-type').addEventListener('change', function() { document.getElementById('np-outdoor-warning').style.display = this.value==='OP'?'block':'none'; npApplyWreathDefaults(); npApplyCategoryBuckets(); });
@@ -3191,10 +3191,18 @@ async function npFolderRenderPreview(folderId){
     npFolderImages=imgs; npRenderSubThumbs(); // cache + carry across 1.2–1.4
     if(!box) return;
     if(!imgs.length){ box.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:6px 0">No photos in this folder yet.</div>'; return; }
-    box.innerHTML='<div class="thumb-row thumb-row-zoom">'+imgs.map(f=>'<img src="'+(f.thumbnailLink||'')+'" data-full="'+escHtml(driveUpsize(f.thumbnailLink||''))+'" alt="'+escHtml(f.name)+'" referrerpolicy="no-referrer" onclick="npFolderBigPreview(this)">').join('')+'</div>'+(total>imgs.length?'<div style="font-size:11px;color:var(--text-muted);margin-top:3px">+'+(total-imgs.length)+' more</div>':'')+'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">Tap a photo to enlarge it below for reference.</div><div class="np-bigpreview" style="display:none"></div>';
+    box.innerHTML='<div class="thumb-row thumb-row-zoom">'+imgs.map(f=>'<img src="'+(f.thumbnailLink||'')+'" data-full="'+escHtml(driveUpsize(f.thumbnailLink||''))+'" alt="'+escHtml(f.name)+'" referrerpolicy="no-referrer"'+driveThumbOri(f)+' onclick="npFolderBigPreview(this)">').join('')+'</div>'+(total>imgs.length?'<div style="font-size:11px;color:var(--text-muted);margin-top:3px">+'+(total-imgs.length)+' more</div>':'')+'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">Tap a photo to enlarge it below for reference.</div><div class="np-bigpreview" style="display:none"></div>';
   }catch(e){ if(box) box.innerHTML='<div style="font-size:11px;color:var(--rose);padding:6px 0">⚠ '+escHtml(e.message)+'</div>'; }
 }
 // Request a larger render of a Google Drive thumbnail link (they end with =s220 / =w200-h150).
+// Drive thumbnails ignore the EXIF "rotate me" flag on phone photos, so they arrive sideways.
+// The server reports each JPEG's EXIF orientation; these rotate the thumbnail to match the real photo.
+// Only rotates a 6/8 thumbnail that actually arrived landscape, so an already-upright one is left alone.
+function driveThumbOri(f){ const o=f&&+f.orientation; return o>1?' data-ori="'+o+'" onload="driveThumbFix(this)"':''; }
+function driveThumbDeg(img){ const o=+(img.dataset.ori||1); if(o===3||o===4) return 180; if((o>=5&&o<=8)&&img.naturalWidth>img.naturalHeight) return (o===6||o===5)?90:-90; return 0; }
+function driveThumbFix(img){ const d=driveThumbDeg(img); img.style.transform=d?'rotate('+d+'deg)':''; }
+// Enlarged preview isn't square, so a CSS rotate would overflow — redraw it rotated on a canvas instead.
+function driveBigFix(img){ const d=driveThumbDeg(img); if(!d) return; const w=img.naturalWidth,h=img.naturalHeight,c=document.createElement('canvas'),q=d===180; c.width=q?w:h; c.height=q?h:w; const ctx=c.getContext('2d'); ctx.translate(c.width/2,c.height/2); ctx.rotate(d*Math.PI/180); ctx.drawImage(img,-w/2,-h/2); c.onclick=img.onclick; img.replaceWith(c); }
 function driveUpsize(t){ if(!t) return t; if(/=s\d+/i.test(t)) return t.replace(/=s\d+(-[a-z0-9]+)*/i,'=s1200'); if(/=w\d+-h\d+/i.test(t)) return t.replace(/=w\d+-h\d+(-[a-z0-9]+)*/i,'=s1200'); return t; }
 // Click a Step 1.1 thumbnail → show it large beneath the row (toggle off on re-tap or tapping the big image).
 function npFolderBigPreview(imgEl){
@@ -3205,7 +3213,8 @@ function npFolderBigPreview(imgEl){
   const row=imgEl.parentElement;
   if(box.style.display!=='none' && box.dataset.src===full){ box.style.display='none'; box.dataset.src=''; row.querySelectorAll('img').forEach(t=>t.classList.remove('sel')); return; }
   box.dataset.src=full;
-  box.innerHTML='<img src="'+escHtml(full)+'" referrerpolicy="no-referrer" alt="enlarged preview" onclick="this.parentElement.style.display=\'none\';this.parentElement.dataset.src=\'\';">';
+  const ori=+(imgEl.dataset.ori||1);
+  box.innerHTML='<img src="'+escHtml(full)+'" referrerpolicy="no-referrer" alt="enlarged preview"'+(ori>1?' data-ori="'+ori+'" onload="driveBigFix(this)"':'')+' onclick="this.parentElement.style.display=\'none\';this.parentElement.dataset.src=\'\';">';
   box.style.display='block';
   row.querySelectorAll('img').forEach(t=>t.classList.remove('sel')); imgEl.classList.add('sel');
 }
@@ -4083,7 +4092,7 @@ async function lpDriveLoadImages(folderId, force){
     // Files no longer in the folder are dropped; the cleaned order is re-persisted.
     const savedSel=lpSelectionStore[folderId]||[];
     if(savedSel.length){
-      lpPhotoItems=savedSel.map(fid=>lpDriveImages.find(f=>f.id===fid)).filter(Boolean).map(img=>{const sc=lpCropStore[img.id]||null;return {driveFileId:img.id,name:img.name,thumbnailLink:img.thumbnailLink,mime:img.mimeType,dataUrl:null,crop:sc,cropped:!!sc};});
+      lpPhotoItems=savedSel.map(fid=>lpDriveImages.find(f=>f.id===fid)).filter(Boolean).map(img=>{const sc=lpCropStore[img.id]||null;return {driveFileId:img.id,name:img.name,thumbnailLink:img.thumbnailLink,orientation:img.orientation,mime:img.mimeType,dataUrl:null,crop:sc,cropped:!!sc};});
       if(lpPhotoItems.length!==savedSel.length) lpSelectionStoreSync();
     }
     if(lpDriveImages.length===0){ if(status){status.style.display='block'; status.textContent='No images found in this folder.';} if(label)label.style.display='none'; }
@@ -4096,12 +4105,12 @@ function lpDriveSelectedIndex(id){ return lpPhotoItems.findIndex(it=>it.driveFil
 function lpDriveToggle(id){
   const idx=lpDriveSelectedIndex(id);
   if(idx>=0){ lpPhotoItems.splice(idx,1); }
-  else { if(lpPhotoItems.length>=15){alert('Up to 15 photos.');return;} const img=lpDriveImages.find(f=>f.id===id); if(!img)return; const savedCrop=lpCropStore[img.id]||null; lpPhotoItems.push({driveFileId:img.id,name:img.name,thumbnailLink:img.thumbnailLink,mime:img.mimeType,dataUrl:null,crop:savedCrop,cropped:!!savedCrop}); }
+  else { if(lpPhotoItems.length>=15){alert('Up to 15 photos.');return;} const img=lpDriveImages.find(f=>f.id===id); if(!img)return; const savedCrop=lpCropStore[img.id]||null; lpPhotoItems.push({driveFileId:img.id,name:img.name,thumbnailLink:img.thumbnailLink,orientation:img.orientation,mime:img.mimeType,dataUrl:null,crop:savedCrop,cropped:!!savedCrop}); }
   lpDriveLinked=false; lpSelectionStoreSync(); lpRenderDriveGrid(); lpRenderPhotos();
 }
 function lpRenderDriveGrid(){
   const grid=document.getElementById('lp-drive-grid'); if(!grid)return;
-  grid.innerHTML=lpDriveImages.map(img=>{const ord=lpDriveSelectedIndex(img.id),sel=ord>=0;return '<div class="photo-card-opt" style="cursor:pointer'+(sel?';outline:3px solid var(--sage);outline-offset:-3px':'')+'" onclick="lpDriveToggle(\''+img.id+'\')">'+(sel?'<span class="photo-badge" style="background:var(--sage)">'+(ord===0?'HERO':ord+1)+'</span>':'')+'<img src="'+(img.thumbnailLink||'')+'" alt="'+escHtml(img.name)+'" referrerpolicy="no-referrer"><div class="photo-card-footer-opt">'+escHtml(img.name)+'</div></div>';}).join('');
+  grid.innerHTML=lpDriveImages.map(img=>{const ord=lpDriveSelectedIndex(img.id),sel=ord>=0;return '<div class="photo-card-opt" style="cursor:pointer'+(sel?';outline:3px solid var(--sage);outline-offset:-3px':'')+'" onclick="lpDriveToggle(\''+img.id+'\')">'+(sel?'<span class="photo-badge" style="background:var(--sage)">'+(ord===0?'HERO':ord+1)+'</span>':'')+'<img src="'+(img.thumbnailLink||'')+'" alt="'+escHtml(img.name)+'" referrerpolicy="no-referrer"'+driveThumbOri(img)+'><div class="photo-card-footer-opt">'+escHtml(img.name)+'</div></div>';}).join('');
 }
 function lpRenderPhotos(){
   const grid=document.getElementById('lp-photo-grid'),count=lpPhotoItems.length;
@@ -4111,7 +4120,7 @@ function lpRenderPhotos(){
   const btns=document.getElementById('lp-photo-btns'); if(btns)btns.style.display=count>0?'flex':'none';
   const pill=document.getElementById('lp-photo-count-pill'); if(pill){pill.textContent=count+'/15';pill.style.background=count<8?'var(--gold)':'var(--sage)';}
   const lbl=document.getElementById('lp-photo-count-label'); if(lbl)lbl.textContent=count+' photo'+(count!==1?'s':'')+' selected'+(count<8?' — aim for 8+':' ✓');
-  if(grid)grid.innerHTML=lpPhotoItems.map((item,i)=>'<div class="photo-card-opt" id="lpc-'+i+'" draggable="true" ondragstart="lpPhotoDragStart('+i+')" ondragover="lpPhotoDragOver(event,'+i+')" ondragleave="lpPhotoDragLeave('+i+')" ondrop="lpPhotoDrop(event,'+i+')"><span class="photo-badge">'+(i===0?'HERO':i+1)+'</span><button class="photo-remove" onclick="lpRemovePhoto('+i+')">✕</button><img src="'+(item.thumbnailLink||item.dataUrl||'')+'" alt="photo '+(i+1)+'" referrerpolicy="no-referrer"><button class="photo-crop-btn'+(item.cropped?' set':'')+'" onclick="lpOpenCrop('+i+')">'+(item.cropped?'✓ Square':'◻ Crop')+'</button><div class="photo-card-footer-opt">'+escHtml(item.name||'')+'</div></div>').join('');
+  if(grid)grid.innerHTML=lpPhotoItems.map((item,i)=>'<div class="photo-card-opt" id="lpc-'+i+'" draggable="true" ondragstart="lpPhotoDragStart('+i+')" ondragover="lpPhotoDragOver(event,'+i+')" ondragleave="lpPhotoDragLeave('+i+')" ondrop="lpPhotoDrop(event,'+i+')"><span class="photo-badge">'+(i===0?'HERO':i+1)+'</span><button class="photo-remove" onclick="lpRemovePhoto('+i+')">✕</button><img src="'+(item.thumbnailLink||item.dataUrl||'')+'" alt="photo '+(i+1)+'" referrerpolicy="no-referrer"'+(item.thumbnailLink?driveThumbOri(item):'')+'><button class="photo-crop-btn'+(item.cropped?' set':'')+'" onclick="lpOpenCrop('+i+')">'+(item.cropped?'✓ Square':'◻ Crop')+'</button><div class="photo-card-footer-opt">'+escHtml(item.name||'')+'</div></div>').join('');
   lpUpdatePublishSummary();
 }
 function lpRemovePhoto(i){lpPhotoItems.splice(i,1);lpDriveLinked=false;lpSelectionStoreSync();lpRenderDriveGrid();lpRenderPhotos();}
@@ -6258,7 +6267,7 @@ function blRenderGrid() {
     const card = document.createElement('div');
     card.id = 'blcard-' + file.id;
     card.style.cssText = ['background:var(--card)','border:2.5px solid ' + (isSelected ? 'var(--sage)' : 'var(--border)'),'border-radius:var(--radius-sm)','overflow:hidden','cursor:pointer','position:relative','transition:border-color .15s,box-shadow .15s','box-shadow:' + (isSelected ? '0 0 0 3px rgba(92,122,92,0.2)' : 'var(--shadow-sm)')].join(';');
-    card.innerHTML = ['<div style="position:absolute;top:6px;left:6px;z-index:2;width:22px;height:22px;border-radius:50%;background:' + (isSelected ? 'var(--sage)' : 'rgba(255,255,255,0.85)') + ';border:2px solid ' + (isSelected ? 'var(--sage)' : 'rgba(0,0,0,0.2)') + ';display:flex;align-items:center;justify-content:center;font-size:12px">' + (isSelected ? '✓' : '') + '</div>',isVideo ? '<div style="position:absolute;top:6px;right:6px;z-index:2;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:99px">VIDEO</div>' : '',thumb ? '<img src="' + thumb + '" style="width:100%;aspect-ratio:1;object-fit:cover;display:block">' : '<div style="width:100%;aspect-ratio:1;background:var(--ivory-dark);display:flex;align-items:center;justify-content:center;font-size:28px">' + (isVideo ? '🎬' : '🖼') + '</div>','<div style="padding:5px 7px;font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + blEsc(file.name) + '</div>','<a href="' + blEsc(file.webViewLink || '#') + '" target="_blank" onclick="event.stopPropagation()" style="display:block;text-align:center;padding:5px;font-size:10px;font-weight:700;color:var(--teal);border-top:1px solid var(--border);text-decoration:none">Open ↗</a>'].join('');
+    card.innerHTML = ['<div style="position:absolute;top:6px;left:6px;z-index:2;width:22px;height:22px;border-radius:50%;background:' + (isSelected ? 'var(--sage)' : 'rgba(255,255,255,0.85)') + ';border:2px solid ' + (isSelected ? 'var(--sage)' : 'rgba(0,0,0,0.2)') + ';display:flex;align-items:center;justify-content:center;font-size:12px">' + (isSelected ? '✓' : '') + '</div>',isVideo ? '<div style="position:absolute;top:6px;right:6px;z-index:2;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:99px">VIDEO</div>' : '',thumb ? '<img src="' + thumb + '" style="width:100%;aspect-ratio:1;object-fit:cover;display:block"' + driveThumbOri(file) + '>' : '<div style="width:100%;aspect-ratio:1;background:var(--ivory-dark);display:flex;align-items:center;justify-content:center;font-size:28px">' + (isVideo ? '🎬' : '🖼') + '</div>','<div style="padding:5px 7px;font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + blEsc(file.name) + '</div>','<a href="' + blEsc(file.webViewLink || '#') + '" target="_blank" onclick="event.stopPropagation()" style="display:block;text-align:center;padding:5px;font-size:10px;font-weight:700;color:var(--teal);border-top:1px solid var(--border);text-decoration:none">Open ↗</a>'].join('');
     card.addEventListener('click', (e) => blToggleSelect(file.id, e));
     grid.appendChild(card);
   });
