@@ -603,6 +603,7 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
             </div>
             <button type="button" class="btn" style="flex-shrink:0;font-size:11px;padding:8px 10px" onclick="npFolderLoad()" title="Refresh folder list">↻</button>
           </div>
+          <div id="np-folder-dup-warn" class="dim-hint dh-over"></div>
           <div id="np-folder-preview" style="display:none"></div>
         </div>
       </div>
@@ -3158,6 +3159,26 @@ function npFolderComboSync(){
     chip.appendChild(x); chips.appendChild(chip);
   }
   const search=document.getElementById('np-folder-search'); if(search) search.placeholder = npSelectedFolder ? '' : 'Search folders…';
+  npFolderDupWarnSync();
+}
+// Other (non-archived) records already using this Drive folder — a second record for the
+// same folder is almost always the same piece entered twice (e.g. EB-26MS-WR-008 / -009).
+function npFolderOwners(folderId){
+  if(!folderId) return [];
+  return allRecords.filter(r=>r.id!==npCurrentRecordId && r.fields['Drive Folder ID']===folderId && r.fields['Status']!=='Archived');
+}
+function npFolderDupWarnSync(){
+  const el=document.getElementById('np-folder-dup-warn'); if(!el) return;
+  const owners=npFolderOwners(npSelectedFolder&&npSelectedFolder.id);
+  if(!owners.length){ el.style.display='none'; el.innerHTML=''; return; }
+  el.innerHTML='&#9888; This folder is already used by <strong>'+owners.map(r=>escHtml(pieceLabel(r.fields))+' ('+escHtml(r.fields['Status']||'no status')+')').join(', ')+'</strong>. If it\'s the same piece, edit that one instead of creating a new EB number.';
+  el.style.display='block';
+}
+// Create paths only: ask before a new EB number is assigned to a folder another record has.
+function npConfirmFolderNotDuplicate(){
+  const owners=npFolderOwners(npSelectedFolder&&npSelectedFolder.id);
+  if(!owners.length) return true;
+  return confirm('This Drive folder is already used by '+owners.map(r=>pieceLabel(r.fields)).join(', ')+'.\n\nCreating a new EB number will make a duplicate of that piece. Create it anyway?');
 }
 function npFolderPick(f){
   npSelectedFolder={id:f.id, name:f.name};
@@ -3441,6 +3462,8 @@ async function npSaveAndExitStep1() {
     wipSaveNP(); goHome(); return;
   }
   // Enough data: auto-generate EB and write to Airtable before exiting.
+  // Same folder as an existing piece → keep the draft local instead of making a duplicate.
+  if (!npConfirmFolderNotDuplicate()) { wipSaveNP(); goHome(); return; }
   setStatus('np','Saving to Airtable before exit...','loading');
   const year   = document.getElementById('np-year').value;
   const type   = document.getElementById('np-type').value;
@@ -3477,6 +3500,7 @@ async function npGenerateEB() {
   if(!fields['Reference name']){alert('Please enter a Reference name.');return;}
   if(seasons.length===0){alert('Please select at least one season.');return;}
   if(!fields['Product description']){alert('Please enter a Product description.');return;}
+  if(!npConfirmFolderNotDuplicate()) return;
   setStatus('np','Assigning EB number...','loading');
   const prefix='EB-'+year+npSeasonCode(seasons)+'-'+type+'-';
   const existing=allRecords.map(r=>r.fields['EB Number']||'').filter(eb=>eb.startsWith(prefix)).map(eb=>parseInt(eb.split('-').pop())||0);
