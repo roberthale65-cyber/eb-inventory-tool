@@ -599,6 +599,67 @@ async function driveRequest(path, opts = {}) {
   return res.json();
 }
 
+// ── EXIF orientation for Drive photos ──
+// iPhone JPEGs are stored landscape with an EXIF "rotate me" flag (orientation 6/8/3).
+// Drive's thumbnailLink ignores that flag, so thumbnails show sideways in the app even
+// though the full photo (and the square crop sent to Shopify) is upright. We read just
+// the first 128 KB of each JPEG (where EXIF lives) and return the flag so the page can
+// rotate the thumbnail. Cached by file ID — a file's bytes don't change under its ID.
+const exifOrientationCache = new Map();
+
+function parseJpegOrientation(b) {
+  if (b.length < 4 || b[0] !== 0xFF || b[1] !== 0xD8) return 1;
+  let i = 2;
+  while (i + 4 <= b.length && b[i] === 0xFF) {
+    const marker = b[i + 1], len = b.readUInt16BE(i + 2);
+    if (marker === 0xDA) break; // start of image data — no EXIF past here
+    if (marker === 0xE1 && i + 10 <= b.length && b.toString('ascii', i + 4, i + 8) === 'Exif') {
+      const t = i + 10;
+      if (t + 8 > b.length) return 1;
+      const le = b.toString('ascii', t, t + 2) === 'II';
+      const r16 = o => le ? b.readUInt16LE(o) : b.readUInt16BE(o);
+      const r32 = o => le ? b.readUInt32LE(o) : b.readUInt32BE(o);
+      const ifd = t + r32(t + 4);
+      if (ifd + 2 > b.length) return 1;
+      const n = r16(ifd);
+      for (let k = 0; k < n; k++) {
+        const e = ifd + 2 + k * 12;
+        if (e + 10 > b.length) break;
+        if (r16(e) === 0x0112) { const o = r16(e + 8); return o >= 1 && o <= 8 ? o : 1; }
+      }
+      return 1;
+    }
+    i += 2 + len;
+  }
+  return 1;
+}
+
+async function driveExifOrientation(fileId, token) {
+  if (exifOrientationCache.has(fileId)) return exifOrientationCache.get(fileId);
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    headers: { 'Authorization': 'Bearer ' + token, 'Range': 'bytes=0-131071' }
+  });
+  if (!r.ok) return 1;
+  const o = parseJpegOrientation(Buffer.from(await r.arrayBuffer()));
+  if (exifOrientationCache.size > 20000) exifOrientationCache.clear();
+  exifOrientationCache.set(fileId, o);
+  return o;
+}
+
+// Adds `orientation` (1–8) to each JPEG in a Drive file list. Best-effort: a failed
+// read just leaves the file at 1 (shown as-is), never fails the listing.
+async function addExifOrientation(files) {
+  const jpegs = files.filter(f => /jpe?g/i.test(f.mimeType || ''));
+  if (!jpegs.length) return files;
+  const token = await getValidGoogleToken();
+  for (let i = 0; i < jpegs.length; i += 8) {
+    await Promise.all(jpegs.slice(i, i + 8).map(async f => {
+      try { f.orientation = await driveExifOrientation(f.id, token); } catch (e) { f.orientation = 1; }
+    }));
+  }
+  return files;
+}
+
 // ── Health check ─────────────────────────────────────────────
 app.get('/health', async (req, res) => {
   const checks = {
@@ -781,6 +842,7 @@ app.get('/drive-list-unsorted', async (req, res) => {
       const props = f.properties || {};
       return props.sorted !== 'true';
     });
+    await addExifOrientation(unsorted);
 
     res.json({ files: unsorted, total: unsorted.length });
   } catch(e) {
@@ -947,6 +1009,7 @@ app.get('/drive-folder-images', async (req, res) => {
       files = files.concat(data.files || []);
       pageToken = data.nextPageToken || null;
     } while (pageToken);
+    await addExifOrientation(files);
     res.json({ files, total: files.length });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
