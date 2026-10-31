@@ -3423,11 +3423,10 @@ fs.mkdirSync(BRAND_DIR, { recursive: true });
 
 // Runs ffmpeg; resolves with its log. allowFail resolves on a non-zero exit too (ffmpeg -i
 // with no output "fails" but prints the size we want).
-function ffmpeg(args, { allowFail = false, timeoutMs = 5 * 60 * 1000, lowPriority = false } = {}) {
+function ffmpeg(args, { allowFail = false, timeoutMs = 5 * 60 * 1000 } = {}) {
   return new Promise((resolve, reject) => {
     if (!FFMPEG_PATH) return reject(new Error('ffmpeg is not installed on the server'));
     const p = spawn(FFMPEG_PATH, ['-hide_banner', '-y', ...args]);
-    if (lowPriority) try { os.setPriority(p.pid, 19); } catch (e) {} // keep the app responsive
     let log = '';
     p.stderr.on('data', c => { log += c; if (log.length > 40000) log = log.slice(-20000); });
     const timer = setTimeout(() => p.kill('SIGKILL'), timeoutMs);
@@ -3568,127 +3567,29 @@ app.get('/marketing/brand/:id', async (req, res) => {
 });
 
 // ── Social video cut ──
-// Listing videos post as a 15-second social cut, built to the rules Patti approved over four
-// review rounds (social-video-cut-rules.md, 2026-10-31): three moments (the whole piece, a close
-// look at the flowers and berries, the whole piece again), the footage slowed to 70% with motion
-// smoothing, 1-second dissolves, a light zoom on the whole-piece shots, and the white logo nearly
-// full width at the bottom for the whole video. No captions, no sound.
-// Claude picks the three moments from frames of the listing video. The cut is made in the
-// background as soon as a video post is drafted (it takes several minutes: the smoothing is slow),
-// kept on this server's disk like the branded photos, and saved to the Drive folder "Video shorts
-// optimized for Social Posting". After a restart it is fetched back from Drive, not remade.
-// Per queue row, Video version "Original video" posts the Shopify video as it is instead.
-const CUT_VERSION = 1; // bump when the recipe changes so old cuts are remade
-const CUT_SPEED = 0.7, CUT_DISSOLVE = 1, CUT_W = 1080, CUT_H = 1920;
-const CUT_LOGO_W = 1000, CUT_LOGO_BOTTOM = 170; // px in the 1080×1920 frame (Patti, round 3)
+// Listing videos post as a 15-second social cut made to the rules Patti approved (2026-10-31;
+// the recipe is in lib/social-cut.js). Making one needs far more memory and CPU than this
+// instance has (it restarted the server, 2026-10-31), so a GitHub Action makes them every 30
+// minutes (scripts/social-cut-worker.js): it asks /marketing/cut-jobs which videos need one and
+// sends each cut back to /marketing/cut-upload, with the shared SOCIAL_CUT_KEY. The server keeps
+// the cut on disk like the branded photos and saves it to the Drive folder "Video shorts
+// optimized for Social Posting"; after a restart it is fetched back from Drive.
+// Approved posts wait for their cut (up to CUT_MAX_WAIT_MS); a video with no usable footage, or
+// Video version "Original video", posts the Shopify video as it is.
+const { cutName } = require('./lib/social-cut');
+const CUT_KEY = process.env.SOCIAL_CUT_KEY || '';
 const CUT_DRIVE_FOLDER = process.env.SOCIAL_CUT_FOLDER_ID || '10Wsw5PbSjx3GT6_iVoZpa9ajGP0P4RXU';
-const CUT_STEP_TIMEOUT_MS = 40 * 60 * 1000; // motion smoothing is single-threaded and slow
-// ffmpeg otherwise starts a thread per CPU it sees on Render's host, and their frame buffers
-// push the 512 MB instance out of memory.
-const CUT_THREADS = ['-threads', '2'];
-// Making cuts here restarted the 512 MB instance even at 2 threads (2026-10-31), taking the
-// whole app down. Until they're made elsewhere, the server only uses cuts already saved in
-// Drive; set SOCIAL_CUT_ON_SERVER=1 to make them here again.
-const CUT_ON_SERVER = process.env.SOCIAL_CUT_ON_SERVER === '1';
-const cutName = src => crypto.createHash('sha256').update(`${CUT_VERSION}|cut|${src}`).digest('hex').slice(0, 32) + '.mp4';
-const cutJobs = new Map();   // cut file name → { promise, stage }
-const cutFailed = new Map(); // cut file name → { error, at }
-const cutDrive = new Map();  // cut file name → Drive file id
-let cutQueue = Promise.resolve(); // one cut at a time: the Render instance is small
-
-async function cutProbe(file) {
-  const log = await ffmpeg(['-i', file], { allowFail: true });
-  const size = log.match(/Video:.*?\b(\d{2,5})x(\d{2,5})\b/), dur = log.match(/Duration: (\d+):(\d+):([\d.]+)/);
-  if (!size || !dur) throw new Error('could not read the video');
-  let w = +size[1], h = +size[2];
-  if (/rotate\s*:\s*-?(90|270)/.test(log)) [w, h] = [h, w]; // iPhone MOVs; ffmpeg auto-rotates
-  return { w, h, duration: +dur[1] * 3600 + +dur[2] * 60 + +dur[3] };
-}
-
-// Claude looks at a frame every second or two and picks the three moments.
-async function cutPickMoments(file, info, tag) {
-  if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set');
-  const step = info.duration > 60 ? 2 : 1, dir = path.join(BRAND_DIR, `frames-${tag}`);
-  fs.mkdirSync(dir, { recursive: true });
-  try {
-    await ffmpeg([...CUT_THREADS, '-i', file, '-vf', `fps=1/${step},scale=200:-2`, '-q:v', '5', ...CUT_THREADS, path.join(dir, 'f%03d.jpg')], { lowPriority: true });
-    const frames = fs.readdirSync(dir).filter(n => n.endsWith('.jpg')).sort().slice(0, 90);
-    const content = [];
-    frames.forEach((n, i) => {
-      content.push({ type: 'text', text: `t=${(i * step).toFixed(0)}s` });
-      content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: fs.readFileSync(path.join(dir, n)).toString('base64') } });
-    });
-    content.push({ type: 'text', text: `These are frames from a ${info.duration.toFixed(1)}-second listing video of one handmade faux floral piece (wreath, swag, centerpiece or arrangement), one frame every ${step} s. Pick three moments of the source video for a 15-second social cut. Each moment is played at 70% speed, so the source moments must add up to 11.0–11.9 s.
-
-1. "open": the WHOLE piece, sharp and steady, about 3.2–3.6 s, usually near the start.
-2. "detail": a close look at what makes the piece beautiful: the main flowers with the berries and best textures, about 3.0 s. Never a stretch that dwells on ribbon loops, bare branches, twigs, stems or plain greenery.
-3. "close": the WHOLE piece again with a little room around it, about 4.6–5.2 s, usually near the end.
-
-Rules: the moments are in time order and don't overlap. Only steady footage: no blur, focus hunting, fast camera moves, hands or people, and skip the first and last half second. The whole piece must be complete, not cut off, in "open" and "close". Prefer moments where the camera is still or moving slowly, since the joins are dissolves.
-Each moment also gets a zoom and an anchor for the vertical 9:16 frame: zoom 1.1–1.2 on the whole-piece moments to trim empty wall (use 1.0 when zooming would cut off the ends of a wide piece), 1.0 on the detail; anchor 0–1 is where the crop sits vertically (0.5 centered, 0.55–0.6 when there is empty wall above the piece).
-If the video has no stretch good enough for one of the moments, say so instead.
-Answer with JSON only: {"ok":true,"moments":[{"start":0.0,"end":3.4,"zoom":1.1,"anchor":0.5},{...},{...}]} or {"ok":false,"reason":"..."}` });
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 400, messages: [{ role: 'user', content }] })
-    });
-    const data = await r.json();
-    if (!r.ok) throw new Error((data.error && data.error.message) || 'Anthropic API error');
-    const text = (data.content && data.content[0] && data.content[0].text) || '';
-    const json = JSON.parse((text.match(/\{[\s\S]*\}/) || ['{}'])[0]);
-    if (!json.ok) throw new Error('no footage good enough for a social cut' + (json.reason ? ': ' + json.reason : ''));
-    return cutCheckMoments(json.moments, info.duration);
-  } finally {
-    fs.rm(dir, { recursive: true, force: true }, () => {});
-  }
-}
-function cutCheckMoments(moments, duration) {
-  if (!Array.isArray(moments) || moments.length !== 3) throw new Error('Claude did not pick three moments');
-  const out = moments.map(m => ({
-    start: Math.max(0.3, +m.start || 0), end: Math.min(duration - 0.3, +m.end || 0),
-    zoom: Math.min(1.25, Math.max(1, +m.zoom || 1)), anchor: Math.min(1, Math.max(0, m.anchor == null ? 0.5 : +m.anchor))
-  }));
-  out.forEach((m, i) => {
-    if (m.end - m.start < 2.5) throw new Error(`moment ${i + 1} is too short`);
-    if (i && m.start < out[i - 1].end - 0.05) throw new Error('the moments overlap');
-  });
-  const total = cutLength(out);
-  if (total < 12 || total > 16.5) throw new Error(`the cut would be ${total.toFixed(1)} s`);
-  return out;
-}
-const cutLength = ms => ms.reduce((s, m) => s + (m.end - m.start) / CUT_SPEED, 0) - CUT_DISSOLVE * (ms.length - 1);
-
-// One moment: cropped to 9:16 and zoomed, slowed with motion smoothing, scaled to 1080×1920.
-async function cutRenderMoment(file, info, m, out) {
-  const even = v => Math.max(2, Math.floor(v / 2) * 2);
-  const baseW = Math.min(info.w, info.h * 9 / 16), baseH = baseW * 16 / 9;
-  const cw = even(baseW / m.zoom), ch = even(baseH / m.zoom);
-  const x = Math.round((info.w - cw) / 2), y = Math.round((info.h - ch) * m.anchor);
-  await ffmpeg([...CUT_THREADS, '-ss', m.start.toFixed(2), '-t', (m.end - m.start).toFixed(2), '-i', file,
-    '-vf', `setpts=(PTS-STARTPTS)/${CUT_SPEED},crop=${cw}:${ch}:${x}:${y},minterpolate=fps=30:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,scale=${CUT_W}:${CUT_H},setsar=1`,
-    '-an', '-c:v', 'libx264', '-crf', '16', '-preset', 'fast', ...CUT_THREADS, out], { timeoutMs: CUT_STEP_TIMEOUT_MS, lowPriority: true });
-}
-
-// The moments joined with dissolves (this ffmpeg has no xfade, so each one fades in over the
-// last on a black base), with the logo on top for the whole video.
-async function cutAssemble(parts, moments, out) {
-  const lens = moments.map(m => (m.end - m.start) / CUT_SPEED), total = cutLength(moments);
-  const lh = Math.round(CUT_LOGO_W * BRAND_LOGO_SIZE.h / BRAND_LOGO_SIZE.w / 2) * 2;
-  const chain = [`color=black:s=${CUT_W}x${CUT_H}:r=30:d=${total.toFixed(2)}[base]`];
-  let off = 0, last = 'base';
-  parts.forEach((_, i) => {
-    chain.push(`[${i}:v]setpts=PTS-STARTPTS,format=yuva420p${i ? `,fade=in:st=0:d=${CUT_DISSOLVE}:alpha=1` : ''},setpts=PTS+${off.toFixed(3)}/TB[s${i}]`);
-    chain.push(`[${last}][s${i}]overlay=eof_action=pass[v${i}]`);
-    last = `v${i}`; off += lens[i] - CUT_DISSOLVE;
-  });
-  chain.push(`[${parts.length}:v]scale=${CUT_LOGO_W}:${lh},format=rgba,fade=in:st=0:d=0.5:alpha=1[lg]`);
-  chain.push(`[${last}][lg]overlay=x=(W-w)/2:y=H-h-${CUT_LOGO_BOTTOM}:eof_action=pass,format=yuv420p[out]`);
-  await ffmpeg(['-filter_complex_threads', '1', ...parts.flatMap(p => [...CUT_THREADS, '-i', p]), '-loop', '1', '-t', total.toFixed(2), '-i', BRAND_LOGO,
-    '-filter_complex', chain.join(';'), '-map', '[out]', '-t', total.toFixed(2),
-    '-c:v', 'libx264', '-preset', 'slow', '-crf', '21', '-maxrate', '7M', '-bufsize', '14M', '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', ...CUT_THREADS, out],
-    { timeoutMs: CUT_STEP_TIMEOUT_MS, lowPriority: true });
-}
+const CUT_MAX_WAIT_MS = 3 * 60 * 60 * 1000;
+const CUT_DRIVE_RECHECK_MS = 10 * 60 * 1000;
+const CUT_WAITING = 'waiting for the video maker, which runs every 30 minutes';
+const cutJobs = new Map();    // cut file name → { promise, stage }: fetching a saved cut from Drive
+const cutFailed = new Map();  // cut file name → { error, at }
+const cutDrive = new Map();   // cut file name → Drive file id
+const cutChecked = new Map(); // cut file name → when Drive was last checked for it
+const cutAuthorized = req => {
+  const got = crypto.createHash('sha256').update(String(req.get('x-cut-key') || '')).digest();
+  return !!CUT_KEY && crypto.timingSafeEqual(got, crypto.createHash('sha256').update(CUT_KEY).digest());
+};
 
 // Drive keeps every cut (for other uses too), named with the full EB number.
 async function cutDriveFind(name) {
@@ -3729,62 +3630,29 @@ async function cutDriveFetch(id, file) {
   fs.renameSync(tmp, file);
 }
 
-async function cutMake(src, name, file, eb, title, job) {
-  if (!BRAND_LOGO_SIZE) throw new Error('logo file is missing on the server');
-  const driveId = await cutDriveFind(name).catch(() => null);
-  if (driveId) {
-    job.stage = 'fetching the saved cut from Drive';
-    await cutDriveFetch(driveId, file);
-    return { url: brandUrl(name), driveId, notes: [] };
-  }
-  if (!CUT_ON_SERVER) throw new Error('15-second cuts are paused for now');
-  const tag = crypto.randomBytes(6).toString('hex');
-  const input = path.join(BRAND_DIR, `vin-${tag}.mp4`), out = path.join(BRAND_DIR, `vout-${tag}.mp4`);
-  const parts = [0, 1, 2].map(i => path.join(BRAND_DIR, `vpart-${tag}-${i}.mp4`));
-  try {
-    job.stage = 'downloading the listing video';
-    await brandDownload(src, input);
-    const info = await cutProbe(input);
-    if (info.duration < 12) throw new Error(`the listing video is only ${info.duration.toFixed(0)} s long`);
-    job.stage = 'choosing the best moments';
-    const moments = await cutPickMoments(input, info, tag);
-    for (let i = 0; i < 3; i++) {
-      job.stage = `smoothing moment ${i + 1} of 3`;
-      await cutRenderMoment(input, info, moments[i], parts[i]);
-    }
-    job.stage = 'adding the logo';
-    await cutAssemble(parts, moments, out);
-    fs.renameSync(out, file);
-    console.log(`social cut: made ${name} for ${eb} (${moments.map(m => `${m.start}-${m.end}`).join(', ')})`);
-    const notes = [];
-    const id = await cutDriveSave(file, name, eb, title).catch(e => { notes.push('Not saved to Drive: ' + e.message); return null; });
-    return { url: brandUrl(name), driveId: id, notes };
-  } finally {
-    for (const f of [input, out, ...parts]) fs.rm(f, { force: true }, () => {});
-  }
-}
-
-// The social cut for a listing video. Resolves to { status: 'ready', url, driveId, notes },
-// { status: 'working', stage } or { status: 'failed', error }; starts the job when needed.
-function cutStatus(src, eb, title) {
+// The social cut for a listing video: { status: 'ready', url }, { status: 'working', stage } or
+// { status: 'failed', error }. A cut not on disk is looked for in Drive (at most every 10
+// minutes); one not there yet waits for the video maker.
+function cutStatus(src) {
   const name = cutName(src), file = path.join(BRAND_DIR, name);
-  if (fs.existsSync(file)) return { status: 'ready', url: brandUrl(name), driveId: cutDrive.get(name) || null, notes: [] };
+  if (fs.existsSync(file)) return { status: 'ready', url: brandUrl(name) };
   const running = cutJobs.get(name);
   if (running) return { status: 'working', stage: running.stage };
   const failed = cutFailed.get(name);
-  if (failed && Date.now() - failed.at < 6 * 60 * 60 * 1000) return { status: 'failed', error: failed.error };
-  const job = { stage: 'waiting for the video before it' };
-  job.promise = cutQueue.then(() => cutMake(src, name, file, eb, title, job));
-  cutQueue = job.promise.catch(() => {});
-  cutJobs.set(name, job);
-  job.promise.then(() => cutFailed.delete(name), e => {
-    console.warn(`social cut: ${eb} failed —`, e.message);
-    cutFailed.set(name, { error: e.message, at: Date.now() });
-  }).finally(() => cutJobs.delete(name));
-  return { status: 'working', stage: job.stage };
+  if (failed) return { status: 'failed', error: failed.error };
+  if (!CUT_KEY) return { status: 'failed', error: '15-second cuts are paused for now' };
+  if (Date.now() - (cutChecked.get(name) || 0) > CUT_DRIVE_RECHECK_MS) {
+    cutChecked.set(name, Date.now());
+    const job = { stage: 'checking Drive for the saved cut' };
+    job.promise = cutDriveFind(name).then(id => id && (job.stage = 'fetching the saved cut from Drive', cutDriveFetch(id, file)));
+    cutJobs.set(name, job);
+    job.promise.catch(e => console.warn('social cut: Drive lookup failed —', e.message)).finally(() => cutJobs.delete(name));
+    return { status: 'working', stage: job.stage };
+  }
+  return { status: 'working', stage: CUT_WAITING };
 }
 const cutWanted = f => f['Media'] === 'Video' && !!f['Video URL'] && f['Video version'] !== 'Original video';
-const cutForRow = f => cutStatus(f['Video URL'], f['EB Number'] || '', f['Pin Title'] || '');
+const cutForRow = f => cutStatus(f['Video URL']);
 
 // GET /marketing/cut/:id — the social cut for a queue row; EB Master polls it for the preview.
 app.get('/marketing/cut/:id', async (req, res) => {
@@ -3792,19 +3660,59 @@ app.get('/marketing/cut/:id', async (req, res) => {
   if (!rec) return res.status(404).json({ error: 'queue row not found' });
   const f = rec.fields || {};
   if (f['Media'] !== 'Video' || !f['Video URL']) return res.json({ status: 'none' });
-  if (req.query.retry === '1') cutFailed.delete(cutName(f['Video URL']));
   res.json(cutForRow(f));
 });
 
-// Render puts an idle server to sleep, which would kill a cut halfway, so while one is being
-// made the server visits itself every 10 minutes.
-setInterval(() => { if (cutJobs.size && SERVER_URL) fetch(SERVER_URL + '/marketing/media/awake').catch(() => {}); }, 10 * 60 * 1000);
-// Drafts and approved posts waiting for their cut get it (made, or fetched back from Drive after
-// a restart) without anyone opening the card first.
-setTimeout(() => mktRecords().then(rs => rs.forEach(r => {
-  const f = r.fields || {};
-  if ((f['Status'] === 'Draft' || f['Status'] === 'Approved') && cutWanted(f)) cutForRow(f);
-})).catch(() => {}), 60 * 1000);
+// GET /marketing/cut-jobs — for the video maker: the listing videos that still need a cut,
+// approved posts first (soonest slot first), then drafts (newest first).
+app.get('/marketing/cut-jobs', async (req, res) => {
+  if (!cutAuthorized(req)) return res.status(403).json({ error: 'not allowed' });
+  try {
+    const rows = (await mktRecords()).map(r => r.fields || {})
+      .filter(f => (f['Status'] === 'Draft' || f['Status'] === 'Approved') && cutWanted(f));
+    const rank = f => f['Status'] === 'Approved' ? [0, Date.parse(f['Scheduled for'] || '') || 0] : [1, -(Date.parse(f['Drafted'] || '') || 0)];
+    rows.sort((a, b) => rank(a)[0] - rank(b)[0] || rank(a)[1] - rank(b)[1]);
+    const jobs = [], seen = new Set();
+    for (const f of rows) {
+      const name = cutName(f['Video URL']);
+      if (seen.has(name)) continue;
+      seen.add(name);
+      if (fs.existsSync(path.join(BRAND_DIR, name)) || cutFailed.has(name)) continue;
+      if (await cutDriveFind(name).catch(() => null)) continue; // fetched when its card or post asks
+      jobs.push({ name, src: f['Video URL'], eb: f['EB Number'] || '' });
+      if (jobs.length >= (+req.query.limit || 8)) break;
+    }
+    res.json({ jobs });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /marketing/cut-upload/:name — a finished cut (the MP4 as the body). Kept on disk and
+// saved to Drive under the piece's EB number and title.
+app.post('/marketing/cut-upload/:name', express.raw({ type: 'video/mp4', limit: '60mb' }), async (req, res) => {
+  if (!cutAuthorized(req)) return res.status(403).json({ error: 'not allowed' });
+  const name = req.params.name;
+  if (!/^[a-f0-9]{32}\.mp4$/.test(name) || !Buffer.isBuffer(req.body) || req.body.length < 10000) return res.status(400).json({ error: 'bad cut' });
+  try {
+    const f = ((await mktRecords().catch(() => [])).map(r => r.fields || {}).find(x => x['Video URL'] && cutName(x['Video URL']) === name)) || {};
+    const file = path.join(BRAND_DIR, name), tmp = file + '.part';
+    fs.writeFileSync(tmp, req.body);
+    fs.renameSync(tmp, file);
+    cutFailed.delete(name);
+    console.log(`social cut: received ${name} for ${f['EB Number'] || '?'} (${Math.round(req.body.length / 1e6)} MB)`);
+    if (!cutDrive.has(name)) await cutDriveSave(file, name, f['EB Number'] || '', f['Pin Title'] || '')
+      .catch(e => console.warn('social cut: not saved to Drive —', e.message));
+    res.json({ ok: true, url: brandUrl(name), driveId: cutDrive.get(name) || null });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /marketing/cut-failed/:name — the video maker found no usable footage; the post goes out
+// with the listing video as it is.
+app.post('/marketing/cut-failed/:name', (req, res) => {
+  if (!cutAuthorized(req)) return res.status(403).json({ error: 'not allowed' });
+  if (!/^[a-f0-9]{32}\.mp4$/.test(req.params.name)) return res.status(400).json({ error: 'bad name' });
+  cutFailed.set(req.params.name, { error: String((req.body && req.body.error) || 'no usable footage').slice(0, 300), at: Date.now() });
+  res.json({ ok: true });
+});
 
 function mktChannelReady(channel) {
   if (channel === 'Instagram') return metaConnected() && !!metaAuth.igId;
@@ -3891,7 +3799,9 @@ async function mktPostPin(id) {
     let video = f['Video URL'], videoNote = null;
     if (cutWanted(f)) {
       const cut = cutForRow(f);
-      if (cut.status === 'working') return console.log(`marketing: ${f['EB Number']} waits for its social video cut (${cut.stage})`);
+      const waited = Date.now() - (Date.parse(f['Scheduled for'] || f['Status changed'] || '') || 0);
+      if (cut.status === 'working' && waited < CUT_MAX_WAIT_MS) return console.log(`marketing: ${f['EB Number']} waits for its social video cut (${cut.stage})`);
+      if (cut.status === 'working') cut.error = 'it was still not ready after 3 hours';
       if (cut.status === 'ready') video = cut.url;
       else videoNote = 'Posted the listing video as it is — the 15-second cut failed: ' + cut.error;
     }

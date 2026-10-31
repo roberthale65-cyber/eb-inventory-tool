@@ -1,0 +1,32 @@
+# Makes the 15-second social cuts of listing videos (scripts/social-cut-worker.js) and sends them
+# to the server. GitHub's runners have the memory and CPU the motion smoothing needs; the Render
+# instance doesn't.
+name: Social video cuts
+
+on:
+  schedule:
+    - cron: '7,37 * * * *' # every 30 minutes
+  workflow_dispatch:
+
+concurrency:
+  group: social-cuts
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  cut:
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - run: node scripts/social-cut-worker.js
+        env:
+          SOCIAL_CUT_KEY: ${{ secrets.SOCIAL_CUT_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SERVER_URL: ${{ vars.SERVER_URL }}
