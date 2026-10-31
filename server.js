@@ -4252,8 +4252,12 @@ async function mktCheckView() {
   const weekStart = Date.parse(dates.week + 'T00:00:00-06:00'); // close enough across DST for "this week"
   const waiting = records.filter(r => (r.fields || {})['Status'] === 'Draft').length;
   const reposts = records.filter(r => { const f = r.fields || {}; return f['Post type'] === 'Repost' && (Date.parse(f['Drafted']) || 0) >= weekStart; }).length;
+  // Pieces Patti approved or skipped this week (not the automatic skips when a piece sells).
+  // A backlog of drafts can't block the tick: reviewing some each week is the habit.
+  const reviewed = new Set(records.map(r => r.fields || {}).filter(f => (f['Status'] === 'Approved' || (f['Status'] === 'Skipped' && !/Skipped automatically/.test(f['Notes'] || '')))
+    && (Date.parse(f['Status changed']) || 0) >= weekStart).map(f => f['EB Number'])).size;
   const auto = {
-    approve: { done: waiting === 0, note: waiting ? `${waiting} draft${waiting === 1 ? '' : 's'} waiting on the To review tab` : 'Nothing waiting' },
+    approve: { done: waiting === 0 || reviewed > 0, note: [reviewed ? `${reviewed} piece${reviewed === 1 ? '' : 's'} reviewed this week` : '', waiting ? `${waiting} draft${waiting === 1 ? '' : 's'} waiting on the To review tab` : 'Nothing waiting'].filter(Boolean).join(' · ') },
     repost: { done: reposts > 0, note: reposts ? `${reposts} repost${reposts === 1 ? '' : 's'} drafted this week` : 'No reposts drafted yet this week' }
   };
   const today = (d.days || {})[dates.today] || {};
