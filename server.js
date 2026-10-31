@@ -3649,6 +3649,8 @@ const cutJobs = new Map();    // cut file name → { promise, stage }: fetching 
 const cutFailed = new Map();  // cut file name → { error, at }
 const cutDrive = new Map();   // cut file name → Drive file id
 const cutChecked = new Map(); // cut file name → when Drive was last checked for it
+const cutTries = new Map();   // cut file name → { count, error }: runs that failed and will try again
+const CUT_MAX_TRIES = 3;
 const cutAuthorized = req => {
   const got = crypto.createHash('sha256').update(String(req.get('x-cut-key') || '')).digest();
   return !!CUT_KEY && crypto.timingSafeEqual(got, crypto.createHash('sha256').update(CUT_KEY).digest());
@@ -3712,7 +3714,8 @@ function cutStatus(src) {
     job.promise.catch(e => console.warn('social cut: Drive lookup failed —', e.message)).finally(() => cutJobs.delete(name));
     return { status: 'working', stage: job.stage };
   }
-  return { status: 'working', stage: CUT_WAITING };
+  const tried = cutTries.get(name);
+  return { status: 'working', stage: tried ? `the last try failed (${tried.error}); ${CUT_WAITING}` : CUT_WAITING };
 }
 const cutWanted = f => f['Media'] === 'Video' && !!f['Video URL'] && f['Video version'] !== 'Original video';
 const cutForRow = f => cutStatus(f['Video URL']);
@@ -3768,12 +3771,18 @@ app.post('/marketing/cut-upload/:name', express.raw({ type: 'video/mp4', limit: 
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /marketing/cut-failed/:name — the video maker found no usable footage; the post goes out
-// with the listing video as it is.
+// POST /marketing/cut-failed/:name — the video maker couldn't make the cut. With retry, it tries
+// again next run (up to CUT_MAX_TRIES); otherwise, or after that, the post goes out with the
+// listing video as it is.
 app.post('/marketing/cut-failed/:name', (req, res) => {
   if (!cutAuthorized(req)) return res.status(403).json({ error: 'not allowed' });
-  if (!/^[a-f0-9]{32}\.mp4$/.test(req.params.name)) return res.status(400).json({ error: 'bad name' });
-  cutFailed.set(req.params.name, { error: String((req.body && req.body.error) || 'no usable footage').slice(0, 300), at: Date.now() });
+  const name = req.params.name;
+  if (!/^[a-f0-9]{32}\.mp4$/.test(name)) return res.status(400).json({ error: 'bad name' });
+  const error = String((req.body && req.body.error) || 'no usable footage').slice(0, 300);
+  const count = ((cutTries.get(name) || {}).count || 0) + 1;
+  if (req.body && req.body.retry && count < CUT_MAX_TRIES) cutTries.set(name, { count, error });
+  else { cutTries.delete(name); cutFailed.set(name, { error, at: Date.now() }); }
+  console.log(`social cut: ${name} failed (${error})${cutTries.has(name) ? ', will try again' : ''}`);
   res.json({ ok: true });
 });
 

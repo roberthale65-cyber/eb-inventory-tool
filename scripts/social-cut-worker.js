@@ -43,10 +43,10 @@ async function server(pathname, opts = {}) {
       console.log(`${job.eb}: done, ${cut.length.toFixed(1)} s, made in ${Math.round((Date.now() - t0) / 1000)} s (moments ${cut.moments.map(m => `${m.start}-${m.end}`).join(', ')})`);
     } catch (e) {
       console.log(`${job.eb}: failed — ${e.message}`);
-      // Claude's verdict on the footage is final; anything else (a network blip) is tried again next run.
-      if (/no footage good enough|is only \d+ s long|did not pick|too short|overlap|the cut would be/.test(e.message)) {
-        await server(`/marketing/cut-failed/${job.name}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ error: e.message }) }).catch(() => {});
-      }
+      // Claude's verdict on the footage is final; anything else (a network blip) is tried again
+      // next run, and the server gives up after a few tries.
+      const final = /no footage good enough|is only \d+ s long|did not pick|too short|overlap|the cut would be|not readable/.test(e.message);
+      await server(`/marketing/cut-failed/${job.name}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ error: e.message, retry: !final }) }).catch(() => {});
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
