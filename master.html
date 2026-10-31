@@ -322,6 +322,13 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 .mk-theme{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid var(--border);font-size:13px}
 .mk-theme .btn{flex:0 0 auto;min-width:96px}
 .mk-muted{font-size:12px;color:var(--text-muted)}
+.mk-res-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.mk-res-head .mk-plan-title{margin-bottom:0}
+.mk-res-days{display:flex;gap:6px}
+.mk-res-days .btn{font-size:12px;padding:5px 10px;min-width:0}
+.mk-res-days .btn.on{background:var(--rose);border-color:var(--rose);color:#fff}
+.mk-res-sub{font-size:12px;font-weight:800;margin:12px 0 2px}
+.mk-stat{white-space:nowrap}
 .mk-pick-filters{display:flex;gap:8px;flex-wrap:wrap}
 .mk-pick-filters .mk-input{flex:1;min-width:140px}
 .mk-pick-list{max-height:420px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px}
@@ -1466,6 +1473,7 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
     <div class="info-card rose" style="margin-bottom:12px"><strong>How this works:</strong> Every week the AI drafts a Pinterest pin, an Instagram post and a Facebook post for in-stock pieces, using the listing video when there is one and favoring the seasons shoppers are planning for. Nothing goes live until you approve it — one tap approves all three. When a piece sells, unposted drafts are skipped and live pins and Facebook posts point to similar pieces. <a href="marketing-guide.html" target="_blank" rel="noopener" style="color:inherit;font-weight:700">Open the step-by-step guide →</a></div>
     <div id="mk-connect"></div>
     <div class="btn-row" style="margin-bottom:14px"><button class="btn btn-primary btn-full" id="mk-draft-btn" onclick="mkDraft()">✨ Draft 5 new pieces</button></div>
+    <div id="mk-results"></div>
     <div id="mk-plan"></div>
     <div id="mk-picker" style="display:none"></div>
     <div id="mk-status" class="info-card teal" style="display:none"></div>
@@ -1963,9 +1971,60 @@ async function mkInit(){
   const host = document.getElementById('mk-list');
   host.innerHTML = '<div style="text-align:center;padding:36px 20px;color:var(--text-muted)">Loading drafts…</div>';
   mkLoadStatus();
+  mkLoadReport();
   mkLoadPlan();
   try { await mkLoad(); mkRender(); }
   catch(e){ host.innerHTML = '<div class="info-card rose"><strong>Couldn\'t load the marketing queue</strong>' + escHtml(e.message) + '</div>'; }
+}
+
+// ── Results: what the posts did — channel stats, shop visits from tagged links, and sales ──
+// The server keeps the report for an hour; Refresh rebuilds it.
+let mkReport = null, mkReportDays = 7;
+async function mkLoadReport(refresh){
+  const el = document.getElementById('mk-results');
+  if(!mkReport || refresh) el.innerHTML = '<div class="mk-plan-card"><div class="mk-plan-title">Results</div><div class="mk-note" style="margin-top:0">Loading results…</div></div>';
+  try {
+    const r = await fetch(SERVER_URL + '/marketing/report?days=' + mkReportDays + (refresh ? '&refresh=1' : ''));
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+    mkReport = d;
+  } catch(e){ el.innerHTML = '<div class="mk-plan-card"><div class="mk-plan-title">Results</div><div class="mk-note">Couldn\'t load results: ' + escHtml(e.message) + '</div></div>'; return; }
+  mkRenderReport();
+}
+function mkSetReportDays(n){ if(n === mkReportDays) return; mkReportDays = n; mkReport = null; mkLoadReport(); }
+const mkNum = n => Number(n || 0).toLocaleString();
+const mkPl = (n, one, many) => mkNum(n) + ' ' + (n === 1 ? one : (many || one + 's'));
+function mkRenderReport(){
+  const d = mkReport; if(!d) return;
+  const v = d.visits || {}, orders = Array.isArray(d.orders) ? d.orders : null;
+  const rows = ['Pinterest','Instagram','Facebook'].map(ch => {
+    const c = d.channels[ch] || {};
+    const eng = ch === 'Pinterest'
+      ? [mkPl(c.views, 'view'), mkPl(c.saves, 'save'), mkPl(c.clicks, 'click')]
+      : [mkPl(c.likes, 'like'), mkPl(c.comments, 'comment')].concat(ch === 'Facebook' ? [mkPl(c.shares, 'share')] : []);
+    const shop = [c.visits ? mkPl(c.visits.visits, 'shop visit') + (c.visits.carts ? ' · ' + mkPl(c.visits.carts, 'add to cart', 'adds to cart') : '') : '', orders ? mkPl(c.orders, 'order') : ''].filter(Boolean);
+    return '<div class="mk-theme"><div><b>' + ch + '</b>' + (d.connected[ch] ? '' : ' <span class="mk-ch-off">not connected</span>') +
+      ' <span class="mk-muted">' + mkPl(c.postedInWindow, 'post') + ' in the last ' + d.days + ' days</span>' +
+      '<div class="mk-muted">' + eng.map(s => '<span class="mk-stat">' + s + '</span>').join(' · ') + (shop.length ? '<br>' + shop.map(s => '<span class="mk-stat">' + s + '</span>').join(' · ') : '') + '</div></div></div>';
+  }).join('');
+  const top = (d.top || []).filter(p => p.visits || p.interactions || p.views).map(p =>
+    '<div class="mk-theme"><div><b>' + escHtml(p.sku) + '</b> <span class="mk-muted">' + escHtml(p.title) + '</span><div class="mk-muted">' +
+    [p.visits ? mkPl(p.visits, 'shop visit') : '', p.interactions ? mkPl(p.interactions, 'interaction') : '', p.views ? mkPl(p.views, 'Pinterest view') : ''].filter(Boolean).join(' · ') +
+    ' — on ' + [...new Set(p.channels)].join(', ') + '</div></div></div>').join('') || '<div class="mk-muted">No activity on recent posts yet.</div>';
+  const sales = orders === null ? '<div class="mk-muted">Couldn\'t load orders: ' + escHtml((d.orders && d.orders.error) || '') + '</div>'
+    : orders.map(o => '<div class="mk-theme"><div><b>' + escHtml(o.name) + '</b> <span class="mk-muted">' + mkDate(o.createdAt) + ' · $' + o.total.toFixed(2) + '</span>' +
+      '<div class="mk-muted">' + escHtml(o.pieces.map(p => p.sku || p.title).join(', ')) + ' · ' + (o.cameFrom === 'unknown' ? 'source not tracked' : 'came from ' + escHtml(o.cameFrom)) +
+      (o.postedBefore.length ? ' · posted on ' + escHtml(o.postedBefore.join(', ')) + ' before the sale' : '') + '</div></div></div>').join('')
+      || '<div class="mk-muted">No online orders in the last ' + d.days + ' days.</div>';
+  const errs = (d.posts || []).filter(p => p.error).length;
+  document.getElementById('mk-results').innerHTML = '<div class="mk-plan-card"><div class="mk-res-head"><div class="mk-plan-title">Results</div><div class="mk-res-days">' +
+    [7, 30].map(n => '<button class="btn' + (n === d.days ? ' on' : '') + '" onclick="mkSetReportDays(' + n + ')">' + n + ' days</button>').join('') +
+    '<button class="btn" onclick="mkLoadReport(true)" title="Fetch the latest numbers">↻</button></div></div>' +
+    '<div class="mk-note" style="margin-top:0">Likes, views and saves are totals so far for posts from the last ' + d.postDays + ' days. Shop visits and orders are for the last ' + d.days + ' days.' +
+    (v.available ? ' ' + mkPl(v.total, 'shop visit') + ' in all, from every source.' : (v.note ? ' ' + escHtml(v.note) : '')) + '</div>' +
+    rows + '<div class="mk-res-sub">Top pieces</div>' + top + '<div class="mk-res-sub">Sales</div>' + sales +
+    (errs ? '<div class="mk-note">' + mkPl(errs, 'post') + ' couldn\'t be checked (deleted, or the channel didn\'t answer).</div>' : '') +
+    '<div class="mk-note">Updated ' + new Date(d.generatedAt).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) + '</div></div>';
 }
 
 // ── Plan posts: seasonal suggestions, Patti's own picks, and a surprise mix ──
