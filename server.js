@@ -2629,7 +2629,7 @@ const AT_MARKETING_TBL = 'tblUeywr9I8jflj0O';
 // pin description, Instagram caption or Facebook post, and Pin ID / Pin URL hold the live post.
 const MKT_CHANNELS = ['Pinterest', 'Instagram', 'Facebook'];
 const mktChannel = f => (f && f['Channel']) || 'Pinterest';
-const MKT_EDITABLE_FIELDS = ['Pin Title', 'Description', 'Board', 'Alt Text', 'Status', 'Pin URL', 'Notes', 'Scheduled for', 'Logo'];
+const MKT_EDITABLE_FIELDS = ['Pin Title', 'Description', 'Board', 'Alt Text', 'Status', 'Pin URL', 'Notes', 'Scheduled for', 'Logo', 'Video version'];
 const MKT_STATUSES = ['Draft', 'Approved', 'Posted', 'Skipped'];
 // Starter boards — the AI must pick one so boards stay few and searchable.
 const PIN_BOARDS = [
@@ -2978,6 +2978,7 @@ async function mktDraftBatch(count, opts = {}) {
     records.push(...(data.records || []));
   }
   mktCacheUpsert(records);
+  records.filter(r => cutWanted(r.fields || {})).forEach(r => cutForRow(r.fields)); // ready by review time
   return { records, failed, remaining: eligible.length - pool.length };
 }
 
@@ -3082,6 +3083,7 @@ app.patch('/marketing/queue/:id', async (req, res) => {
     if (data.fields['Status'] === 'Approved' && mktIsDue(data.fields) && mktChannelReady(mktChannel(data.fields))) mktPostPin(req.params.id);
     // Otherwise brand the photo now, so it's ready (and previewable) before its slot.
     else if (data.fields['Status'] === 'Approved') mktBrandRow(data.fields).catch(() => {});
+    if ((data.fields['Status'] === 'Draft' || data.fields['Status'] === 'Approved') && cutWanted(data.fields)) cutForRow(data.fields);
     res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -3421,10 +3423,11 @@ fs.mkdirSync(BRAND_DIR, { recursive: true });
 
 // Runs ffmpeg; resolves with its log. allowFail resolves on a non-zero exit too (ffmpeg -i
 // with no output "fails" but prints the size we want).
-function ffmpeg(args, { allowFail = false, timeoutMs = 5 * 60 * 1000 } = {}) {
+function ffmpeg(args, { allowFail = false, timeoutMs = 5 * 60 * 1000, lowPriority = false } = {}) {
   return new Promise((resolve, reject) => {
     if (!FFMPEG_PATH) return reject(new Error('ffmpeg is not installed on the server'));
     const p = spawn(FFMPEG_PATH, ['-hide_banner', '-y', ...args]);
+    if (lowPriority) try { os.setPriority(p.pid, 19); } catch (e) {} // keep the app responsive
     let log = '';
     p.stderr.on('data', c => { log += c; if (log.length > 40000) log = log.slice(-20000); });
     const timer = setTimeout(() => p.kill('SIGKILL'), timeoutMs);
@@ -3545,10 +3548,10 @@ function brandCleanup() {
 brandCleanup();
 setInterval(brandCleanup, 6 * 60 * 60 * 1000);
 
-// GET /marketing/media/<file> — a branded photo, fetched by Pinterest/Instagram/Facebook and
-// shown in EB Master's preview.
+// GET /marketing/media/<file> — a branded photo or social video cut, fetched by
+// Pinterest/Instagram/Facebook and shown in EB Master's preview.
 app.get('/marketing/media/:name', (req, res) => {
-  if (!/^[a-f0-9]{32}\.jpg$/.test(req.params.name)) return res.status(404).end();
+  if (!/^[a-f0-9]{32}\.(jpg|mp4)$/.test(req.params.name)) return res.status(404).end();
   const file = path.join(BRAND_DIR, req.params.name);
   if (!fs.existsSync(file)) return res.status(404).end();
   res.sendFile(file, { maxAge: '1d' });
@@ -3563,6 +3566,237 @@ app.get('/marketing/brand/:id', async (req, res) => {
   const done = await Promise.race([job, new Promise(r => setTimeout(() => r(null), 1500))]);
   res.json(done ? { status: 'ready', ...done } : { status: 'working' });
 });
+
+// ── Social video cut ──
+// Listing videos post as a 15-second social cut, built to the rules Patti approved over four
+// review rounds (social-video-cut-rules.md, 2026-10-31): three moments (the whole piece, a close
+// look at the flowers and berries, the whole piece again), the footage slowed to 70% with motion
+// smoothing, 1-second dissolves, a light zoom on the whole-piece shots, and the white logo nearly
+// full width at the bottom for the whole video. No captions, no sound.
+// Claude picks the three moments from frames of the listing video. The cut is made in the
+// background as soon as a video post is drafted (it takes several minutes: the smoothing is slow),
+// kept on this server's disk like the branded photos, and saved to the Drive folder "Video shorts
+// optimized for Social Posting". After a restart it is fetched back from Drive, not remade.
+// Per queue row, Video version "Original video" posts the Shopify video as it is instead.
+const CUT_VERSION = 1; // bump when the recipe changes so old cuts are remade
+const CUT_SPEED = 0.7, CUT_DISSOLVE = 1, CUT_W = 1080, CUT_H = 1920;
+const CUT_LOGO_W = 1000, CUT_LOGO_BOTTOM = 170; // px in the 1080×1920 frame (Patti, round 3)
+const CUT_DRIVE_FOLDER = process.env.SOCIAL_CUT_FOLDER_ID || '10Wsw5PbSjx3GT6_iVoZpa9ajGP0P4RXU';
+const CUT_STEP_TIMEOUT_MS = 40 * 60 * 1000; // motion smoothing is single-threaded and slow
+const cutName = src => crypto.createHash('sha256').update(`${CUT_VERSION}|cut|${src}`).digest('hex').slice(0, 32) + '.mp4';
+const cutJobs = new Map();   // cut file name → { promise, stage }
+const cutFailed = new Map(); // cut file name → { error, at }
+const cutDrive = new Map();  // cut file name → Drive file id
+let cutQueue = Promise.resolve(); // one cut at a time: the Render instance is small
+
+async function cutProbe(file) {
+  const log = await ffmpeg(['-i', file], { allowFail: true });
+  const size = log.match(/Video:.*?\b(\d{2,5})x(\d{2,5})\b/), dur = log.match(/Duration: (\d+):(\d+):([\d.]+)/);
+  if (!size || !dur) throw new Error('could not read the video');
+  let w = +size[1], h = +size[2];
+  if (/rotate\s*:\s*-?(90|270)/.test(log)) [w, h] = [h, w]; // iPhone MOVs; ffmpeg auto-rotates
+  return { w, h, duration: +dur[1] * 3600 + +dur[2] * 60 + +dur[3] };
+}
+
+// Claude looks at a frame every second or two and picks the three moments.
+async function cutPickMoments(file, info, tag) {
+  if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set');
+  const step = info.duration > 60 ? 2 : 1, dir = path.join(BRAND_DIR, `frames-${tag}`);
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    await ffmpeg(['-i', file, '-vf', `fps=1/${step},scale=200:-2`, '-q:v', '5', path.join(dir, 'f%03d.jpg')]);
+    const frames = fs.readdirSync(dir).filter(n => n.endsWith('.jpg')).sort().slice(0, 90);
+    const content = [];
+    frames.forEach((n, i) => {
+      content.push({ type: 'text', text: `t=${(i * step).toFixed(0)}s` });
+      content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: fs.readFileSync(path.join(dir, n)).toString('base64') } });
+    });
+    content.push({ type: 'text', text: `These are frames from a ${info.duration.toFixed(1)}-second listing video of one handmade faux floral piece (wreath, swag, centerpiece or arrangement), one frame every ${step} s. Pick three moments of the source video for a 15-second social cut. Each moment is played at 70% speed, so the source moments must add up to 11.0–11.9 s.
+
+1. "open": the WHOLE piece, sharp and steady, about 3.2–3.6 s, usually near the start.
+2. "detail": a close look at what makes the piece beautiful: the main flowers with the berries and best textures, about 3.0 s. Never a stretch that dwells on ribbon loops, bare branches, twigs, stems or plain greenery.
+3. "close": the WHOLE piece again with a little room around it, about 4.6–5.2 s, usually near the end.
+
+Rules: the moments are in time order and don't overlap. Only steady footage: no blur, focus hunting, fast camera moves, hands or people, and skip the first and last half second. The whole piece must be complete, not cut off, in "open" and "close". Prefer moments where the camera is still or moving slowly, since the joins are dissolves.
+Each moment also gets a zoom and an anchor for the vertical 9:16 frame: zoom 1.1–1.2 on the whole-piece moments to trim empty wall (use 1.0 when zooming would cut off the ends of a wide piece), 1.0 on the detail; anchor 0–1 is where the crop sits vertically (0.5 centered, 0.55–0.6 when there is empty wall above the piece).
+If the video has no stretch good enough for one of the moments, say so instead.
+Answer with JSON only: {"ok":true,"moments":[{"start":0.0,"end":3.4,"zoom":1.1,"anchor":0.5},{...},{...}]} or {"ok":false,"reason":"..."}` });
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 400, messages: [{ role: 'user', content }] })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error((data.error && data.error.message) || 'Anthropic API error');
+    const text = (data.content && data.content[0] && data.content[0].text) || '';
+    const json = JSON.parse((text.match(/\{[\s\S]*\}/) || ['{}'])[0]);
+    if (!json.ok) throw new Error('no footage good enough for a social cut' + (json.reason ? ': ' + json.reason : ''));
+    return cutCheckMoments(json.moments, info.duration);
+  } finally {
+    fs.rm(dir, { recursive: true, force: true }, () => {});
+  }
+}
+function cutCheckMoments(moments, duration) {
+  if (!Array.isArray(moments) || moments.length !== 3) throw new Error('Claude did not pick three moments');
+  const out = moments.map(m => ({
+    start: Math.max(0.3, +m.start || 0), end: Math.min(duration - 0.3, +m.end || 0),
+    zoom: Math.min(1.25, Math.max(1, +m.zoom || 1)), anchor: Math.min(1, Math.max(0, m.anchor == null ? 0.5 : +m.anchor))
+  }));
+  out.forEach((m, i) => {
+    if (m.end - m.start < 2.5) throw new Error(`moment ${i + 1} is too short`);
+    if (i && m.start < out[i - 1].end - 0.05) throw new Error('the moments overlap');
+  });
+  const total = cutLength(out);
+  if (total < 12 || total > 16.5) throw new Error(`the cut would be ${total.toFixed(1)} s`);
+  return out;
+}
+const cutLength = ms => ms.reduce((s, m) => s + (m.end - m.start) / CUT_SPEED, 0) - CUT_DISSOLVE * (ms.length - 1);
+
+// One moment: cropped to 9:16 and zoomed, slowed with motion smoothing, scaled to 1080×1920.
+async function cutRenderMoment(file, info, m, out) {
+  const even = v => Math.max(2, Math.floor(v / 2) * 2);
+  const baseW = Math.min(info.w, info.h * 9 / 16), baseH = baseW * 16 / 9;
+  const cw = even(baseW / m.zoom), ch = even(baseH / m.zoom);
+  const x = Math.round((info.w - cw) / 2), y = Math.round((info.h - ch) * m.anchor);
+  await ffmpeg(['-ss', m.start.toFixed(2), '-t', (m.end - m.start).toFixed(2), '-i', file,
+    '-vf', `setpts=(PTS-STARTPTS)/${CUT_SPEED},crop=${cw}:${ch}:${x}:${y},minterpolate=fps=30:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,scale=${CUT_W}:${CUT_H},setsar=1`,
+    '-an', '-c:v', 'libx264', '-crf', '16', '-preset', 'fast', out], { timeoutMs: CUT_STEP_TIMEOUT_MS, lowPriority: true });
+}
+
+// The moments joined with dissolves (this ffmpeg has no xfade, so each one fades in over the
+// last on a black base), with the logo on top for the whole video.
+async function cutAssemble(parts, moments, out) {
+  const lens = moments.map(m => (m.end - m.start) / CUT_SPEED), total = cutLength(moments);
+  const lh = Math.round(CUT_LOGO_W * BRAND_LOGO_SIZE.h / BRAND_LOGO_SIZE.w / 2) * 2;
+  const chain = [`color=black:s=${CUT_W}x${CUT_H}:r=30:d=${total.toFixed(2)}[base]`];
+  let off = 0, last = 'base';
+  parts.forEach((_, i) => {
+    chain.push(`[${i}:v]setpts=PTS-STARTPTS,format=yuva420p${i ? `,fade=in:st=0:d=${CUT_DISSOLVE}:alpha=1` : ''},setpts=PTS+${off.toFixed(3)}/TB[s${i}]`);
+    chain.push(`[${last}][s${i}]overlay=eof_action=pass[v${i}]`);
+    last = `v${i}`; off += lens[i] - CUT_DISSOLVE;
+  });
+  chain.push(`[${parts.length}:v]scale=${CUT_LOGO_W}:${lh},format=rgba,fade=in:st=0:d=0.5:alpha=1[lg]`);
+  chain.push(`[${last}][lg]overlay=x=(W-w)/2:y=H-h-${CUT_LOGO_BOTTOM}:eof_action=pass,format=yuv420p[out]`);
+  await ffmpeg([...parts.flatMap(p => ['-i', p]), '-loop', '1', '-t', total.toFixed(2), '-i', BRAND_LOGO,
+    '-filter_complex', chain.join(';'), '-map', '[out]', '-t', total.toFixed(2),
+    '-c:v', 'libx264', '-preset', 'slow', '-crf', '21', '-maxrate', '7M', '-bufsize', '14M', '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', out],
+    { timeoutMs: CUT_STEP_TIMEOUT_MS, lowPriority: true });
+}
+
+// Drive keeps every cut (for other uses too), named with the full EB number.
+async function cutDriveFind(name) {
+  if (cutDrive.has(name)) return cutDrive.get(name);
+  const q = `'${CUT_DRIVE_FOLDER}' in parents and trashed = false and properties has { key='eb_social_cut' and value='${name}' }`;
+  const d = await driveRequest('/files?q=' + encodeURIComponent(q) + '&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true');
+  const id = d.files && d.files[0] && d.files[0].id;
+  if (id) cutDrive.set(name, id);
+  return id || null;
+}
+async function cutDriveSave(file, name, eb, title) {
+  const token = await getValidGoogleToken();
+  const fileName = `${eb} ${String(title || '').replace(/[\\/:*?"<>|]/g, '').trim()} - social 15s.mp4`.replace(/\s+/g, ' ');
+  const metadata = { name: fileName, parents: [CUT_DRIVE_FOLDER], properties: { eb_number: eb || '', eb_social_cut: name } };
+  const boundary = 'ebcut' + Date.now();
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: video/mp4\r\n\r\n`, 'utf8'),
+    fs.readFileSync(file), Buffer.from(`\r\n--${boundary}--`, 'utf8')
+  ]);
+  const up = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id&supportsAllDrives=true', {
+    method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': `multipart/related; boundary=${boundary}` }, body
+  });
+  if (!up.ok) throw new Error('Drive upload failed ' + up.status + ': ' + (await up.text().catch(() => '')).slice(0, 200));
+  const id = (await up.json()).id;
+  cutDrive.set(name, id);
+  return id;
+}
+async function cutDriveFetch(id, file) {
+  const token = await getValidGoogleToken();
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&supportsAllDrives=true`, { headers: { 'Authorization': 'Bearer ' + token } });
+  if (!r.ok) throw new Error(`Drive download failed (${r.status})`);
+  const tmp = file + '.part';
+  await new Promise((resolve, reject) => {
+    const out = fs.createWriteStream(tmp);
+    r.body.on('error', reject); out.on('error', reject); out.on('finish', resolve);
+    r.body.pipe(out);
+  });
+  fs.renameSync(tmp, file);
+}
+
+async function cutMake(src, name, file, eb, title, job) {
+  if (!BRAND_LOGO_SIZE) throw new Error('logo file is missing on the server');
+  const driveId = await cutDriveFind(name).catch(() => null);
+  if (driveId) {
+    job.stage = 'fetching the saved cut from Drive';
+    await cutDriveFetch(driveId, file);
+    return { url: brandUrl(name), driveId, notes: [] };
+  }
+  const tag = crypto.randomBytes(6).toString('hex');
+  const input = path.join(BRAND_DIR, `vin-${tag}.mp4`), out = path.join(BRAND_DIR, `vout-${tag}.mp4`);
+  const parts = [0, 1, 2].map(i => path.join(BRAND_DIR, `vpart-${tag}-${i}.mp4`));
+  try {
+    job.stage = 'downloading the listing video';
+    await brandDownload(src, input);
+    const info = await cutProbe(input);
+    if (info.duration < 12) throw new Error(`the listing video is only ${info.duration.toFixed(0)} s long`);
+    job.stage = 'choosing the best moments';
+    const moments = await cutPickMoments(input, info, tag);
+    for (let i = 0; i < 3; i++) {
+      job.stage = `smoothing moment ${i + 1} of 3`;
+      await cutRenderMoment(input, info, moments[i], parts[i]);
+    }
+    job.stage = 'adding the logo';
+    await cutAssemble(parts, moments, out);
+    fs.renameSync(out, file);
+    console.log(`social cut: made ${name} for ${eb} (${moments.map(m => `${m.start}-${m.end}`).join(', ')})`);
+    const notes = [];
+    const id = await cutDriveSave(file, name, eb, title).catch(e => { notes.push('Not saved to Drive: ' + e.message); return null; });
+    return { url: brandUrl(name), driveId: id, notes };
+  } finally {
+    for (const f of [input, out, ...parts]) fs.rm(f, { force: true }, () => {});
+  }
+}
+
+// The social cut for a listing video. Resolves to { status: 'ready', url, driveId, notes },
+// { status: 'working', stage } or { status: 'failed', error }; starts the job when needed.
+function cutStatus(src, eb, title) {
+  const name = cutName(src), file = path.join(BRAND_DIR, name);
+  if (fs.existsSync(file)) return { status: 'ready', url: brandUrl(name), driveId: cutDrive.get(name) || null, notes: [] };
+  const running = cutJobs.get(name);
+  if (running) return { status: 'working', stage: running.stage };
+  const failed = cutFailed.get(name);
+  if (failed && Date.now() - failed.at < 6 * 60 * 60 * 1000) return { status: 'failed', error: failed.error };
+  const job = { stage: 'waiting for the video before it' };
+  job.promise = cutQueue.then(() => cutMake(src, name, file, eb, title, job));
+  cutQueue = job.promise.catch(() => {});
+  cutJobs.set(name, job);
+  job.promise.then(() => cutFailed.delete(name), e => {
+    console.warn(`social cut: ${eb} failed —`, e.message);
+    cutFailed.set(name, { error: e.message, at: Date.now() });
+  }).finally(() => cutJobs.delete(name));
+  return { status: 'working', stage: job.stage };
+}
+const cutWanted = f => f['Media'] === 'Video' && !!f['Video URL'] && f['Video version'] !== 'Original video';
+const cutForRow = f => cutStatus(f['Video URL'], f['EB Number'] || '', f['Pin Title'] || '');
+
+// GET /marketing/cut/:id — the social cut for a queue row; EB Master polls it for the preview.
+app.get('/marketing/cut/:id', async (req, res) => {
+  const rec = (await mktRecords().catch(() => [])).find(r => r.id === req.params.id);
+  if (!rec) return res.status(404).json({ error: 'queue row not found' });
+  const f = rec.fields || {};
+  if (f['Media'] !== 'Video' || !f['Video URL']) return res.json({ status: 'none' });
+  if (req.query.retry === '1') cutFailed.delete(cutName(f['Video URL']));
+  res.json(cutForRow(f));
+});
+
+// Render puts an idle server to sleep, which would kill a cut halfway, so while one is being
+// made the server visits itself every 10 minutes.
+setInterval(() => { if (cutJobs.size && SERVER_URL) fetch(SERVER_URL + '/marketing/media/awake').catch(() => {}); }, 10 * 60 * 1000);
+// Drafts and approved posts waiting for their cut get it (made, or fetched back from Drive after
+// a restart) without anyone opening the card first.
+setTimeout(() => mktRecords().then(rs => rs.forEach(r => {
+  const f = r.fields || {};
+  if ((f['Status'] === 'Draft' || f['Status'] === 'Approved') && cutWanted(f)) cutForRow(f);
+})).catch(() => {}), 60 * 1000);
 
 function mktChannelReady(channel) {
   if (channel === 'Instagram') return metaConnected() && !!metaAuth.igId;
@@ -3644,9 +3878,18 @@ async function mktPostPin(id) {
     const f = rec.fields || {};
     if (f['Status'] !== 'Approved' || f['Pin ID']) return;
     const channel = mktChannel(f);
-    // Post the logo-branded photo; the row keeps the Shopify original. Videos post as they are.
+    // Post the logo-branded photo and the social video cut; the row keeps the Shopify originals.
+    // A cut still being made holds the post until a later tick; a failed cut posts the original.
+    let video = f['Video URL'], videoNote = null;
+    if (cutWanted(f)) {
+      const cut = cutForRow(f);
+      if (cut.status === 'working') return console.log(`marketing: ${f['EB Number']} waits for its social video cut (${cut.stage})`);
+      if (cut.status === 'ready') video = cut.url;
+      else videoNote = 'Posted the listing video as it is — the 15-second cut failed: ' + cut.error;
+    }
     const media = await mktBrandRow(f);
-    const g = { ...f, 'Image URL': media.image };
+    if (videoNote) media.notes.push(videoNote);
+    const g = { ...f, 'Image URL': media.image, 'Video URL': video };
     const post = await (channel === 'Instagram' ? mktPublishInstagram(g) : channel === 'Facebook' ? mktPublishFacebook(g) : mktPublishPinterest(g));
     const fields = { 'Status': 'Posted', 'Status changed': new Date().toISOString(), 'Pin ID': post.id, 'Pin URL': post.url, 'Post error': '' };
     const notes = [...media.notes, post.note].filter(Boolean);
