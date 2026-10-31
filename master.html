@@ -2118,6 +2118,7 @@ function mkRender(){
     return;
   }
   host.innerHTML = pieces.map(mkPieceHtml).join('');
+  pieces.forEach(mkLoadCut);
 }
 
 // One card per piece: shared photo/video, then a block per channel.
@@ -2126,14 +2127,20 @@ function mkPieceHtml(rows){
   const isVideo = rows.some(r => r.fields['Media'] === 'Video' && r.fields['Video URL']);
   const vf = (rows.find(r => r.fields['Media'] === 'Video' && r.fields['Video URL']) || rows[0]).fields;
   const br = mkBranded[eb] || {}; // the photo logo preview, once loaded
+  const open = st === 'Draft' || st === 'Approved';
+  const cut = (open && vf['Video version'] !== 'Original video' && mkCuts[eb]) || {};
   const media = isVideo
-    ? '<video class="mk-img" src="' + escHtml(vf['Video URL']) + '" poster="' + escHtml(vf['Image URL'] || '') + '" muted playsinline controls preload="none"></video><span class="mk-media-tag">VIDEO</span>'
+    ? '<video class="mk-img" src="' + escHtml(cut.url || vf['Video URL']) + '" poster="' + escHtml(vf['Image URL'] || '') + '" muted playsinline controls loop preload="none"></video><span class="mk-media-tag">' + (cut.url ? '15 s CUT' : 'VIDEO') + '</span>'
     : '<a href="' + escHtml(f0['Product URL'] || '#') + '" target="_blank" title="Open the product page"><img class="mk-img" src="' + escHtml(br.image || f0['Image URL'] || '') + '" alt="' + escHtml(f0['Alt Text'] || '') + '" loading="lazy"></a>';
   const logo = (!isVideo && (st === 'Draft' || st === 'Approved'))
     ? '<div class="mk-logo">Logo <select onchange="mkSetLogo(\'' + escHtml(eb) + '\', this.value)">' +
         MK_LOGO_OPTS.map(([v, label]) => '<option value="' + v + '"' + ((f0['Logo'] || 'Auto') === v ? ' selected' : '') + '>' + label + '</option>').join('') +
       '</select><button class="btn mk-small" onclick="mkPreviewLogo(\'' + escHtml(eb) + '\')">Preview</button>' +
       '<span>' + escHtml(br.status || '') + '</span></div>'
+    : (isVideo && open)
+    ? '<div class="mk-logo">Video <select onchange="mkSetVideoVersion(\'' + escHtml(eb) + '\', this.value)">' +
+        MK_VIDEO_OPTS.map(([v, label]) => '<option value="' + v + '"' + ((vf['Video version'] || 'Social cut') === v ? ' selected' : '') + '>' + label + '</option>').join('') +
+      '</select><span>' + (vf['Video version'] === 'Original video' ? 'Posts the listing video as it is.' : mkCutStatus(eb)) + '</span></div>'
     : '';
   let group = '';
   if(st === 'Draft'){
@@ -2271,6 +2278,48 @@ async function mkPreviewLogo(eb){
     await new Promise(r => setTimeout(r, 5000));
   }
   show({ status: 'Still working. Tap Preview again in a minute.' });
+}
+// The 15-second social cut the server makes from each listing video (Patti's approved recipe).
+// It takes a while, so the card shows where it's at and checks back every 30 seconds.
+const MK_VIDEO_OPTS = [['Social cut', '15-second social cut'], ['Original video', 'Original listing video']];
+const mkCuts = {}; // EB number → { status, url, stage, error } from the server
+const mkCutPolling = new Set();
+function mkCutStatus(eb){
+  const c = mkCuts[eb];
+  if(!c) return 'Checking…';
+  if(c.status === 'ready') return 'Ready — this is what posts.' + (c.notes && c.notes.length ? ' (' + c.notes.join(' ') + ')' : '');
+  if(c.status === 'working') return 'Making it (' + c.stage + '). This takes a while; approved posts wait for it.';
+  if(c.status === 'failed') return 'Couldn\'t make it: ' + c.error + '. The original video will post instead.';
+  return '';
+}
+async function mkLoadCut(rows){
+  const row = rows.find(r => r.fields['Media'] === 'Video' && r.fields['Video URL']);
+  if(!row) return;
+  const f = row.fields, eb = f['EB Number'];
+  if(!(f['Status'] === 'Draft' || f['Status'] === 'Approved') || f['Video version'] === 'Original video') return;
+  if(mkCutPolling.has(eb) || (mkCuts[eb] && mkCuts[eb].status !== 'working')) return;
+  mkCutPolling.add(eb);
+  try {
+    for(let i = 0; i < 240; i++){
+      const r = await fetch(SERVER_URL + '/marketing/cut/' + row.id);
+      const d = await r.json().catch(()=>({}));
+      if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+      const changed = JSON.stringify(mkCuts[eb]) !== JSON.stringify(d);
+      mkCuts[eb] = d;
+      if(changed && mkTab !== 'Posted' && mkTab !== 'Skipped') mkRender();
+      if(d.status !== 'working') return;
+      await new Promise(res => setTimeout(res, 30000));
+    }
+  } catch(e){ mkCuts[eb] = { status: 'failed', error: e.message }; mkRender(); }
+  finally { mkCutPolling.delete(eb); }
+}
+async function mkSetVideoVersion(eb, value){
+  const rows = mkRecords.filter(r => r.fields['EB Number'] === eb && (r.fields['Status'] === 'Draft' || r.fields['Status'] === 'Approved'));
+  try {
+    for(const r of rows) await mkSave(r.id, { ...mkCardFields(r.id), 'Video version': value }, { render:false });
+    delete mkCuts[eb];
+    mkRender(); mkStatusMsg('Video for ' + escHtml(eb) + ': <b>' + escHtml(MK_VIDEO_OPTS.find(o => o[0] === value)[1]) + '</b>.');
+  } catch(e){ mkRender(); mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
 }
 async function mkPostNow(id){
   try { await mkSave(id, { 'Scheduled for': new Date().toISOString() }); mkStatusMsg('Posting now — it moves to <b>Posted</b> when it\'s live.'); }
