@@ -2015,6 +2015,11 @@ async function mkCheckToggle(key, on){
   catch(e){ Object.assign(it, was); alert('Couldn\'t save that tick: ' + e.message); }
   mkRenderCheck();
 }
+async function mkCheckReview(id, status){
+  try { const d = await mkCheckCall('PATCH', '', { review: id, status }); mkCheck = { ...mkCheck, ...d, draftsError: mkCheck.draftsError }; }
+  catch(e){ alert('Couldn\'t save that: ' + e.message); }
+  mkRenderCheck();
+}
 async function mkCheckRedraft(btn){
   btn.disabled = true; btn.textContent = 'Writing…';
   try { mkCheck = await mkCheckCall('POST', '/redraft'); }
@@ -2041,17 +2046,30 @@ function mkRenderCheck(){
       mkCheckDraftBlock('For groups that don’t allow selling', dr.groupQuestion) + '</details>' : '',
     outreach: dr && dr.outreach.length ? '<details><summary>Drafted messages</summary>' + dr.outreach.map(o => mkCheckDraftBlock(o.who, o.message)).join('') + '</details>' : ''
   };
+  for (const it of c.items) if (it.help) extra[it.key] = '<details><summary>How?</summary><div class="mk-draft">' + escHtml(it.help) + '</div></details>';
   const row = it => '<label class="mk-chk' + (it.done ? ' done' : '') + '"><input type="checkbox"' + (it.done ? ' checked' : '') + ' onchange="mkCheckToggle(\'' + it.key + '\', this.checked)">' +
     '<div class="mk-chk-body"><span class="mk-chk-label">' + escHtml(it.label) + '</span>' + (it.note ? '<div class="mk-muted">' + escHtml(it.note) + '</div>' : '') + '</div></label>' +
     (extra[it.key] ? '<div style="margin:-4px 0 6px 28px">' + extra[it.key] + '</div>' : '');
-  const day = c.items.filter(i => i.when === 'day'), week = c.items.filter(i => i.when === 'week');
+  const day = c.items.filter(i => i.when === 'day'), week = c.items.filter(i => i.when === 'week'), month = c.items.filter(i => i.when === 'month');
   const done = week.filter(i => i.done).length;
+  // Buyers to ask for a review, each with the message to copy and Asked / Skip.
+  const rv = c.reviews;
+  const reviews = c.reviewsError ? '<div class="mk-note">Couldn\'t load buyers to ask: ' + escHtml(c.reviewsError) + '</div>'
+    : !rv ? '' : (rv.pending.map(p => '<div class="mk-chk" style="display:block"><b>' + escHtml(p.label) + '</b> <span class="mk-muted">' + escHtml(p.when) + (p.firstName ? ' · ' + escHtml(p.firstName) : '') + '</span>' +
+        '<div class="mk-muted">' + escHtml(p.piece) + (p.adminUrl ? ' · <a href="' + escHtml(p.adminUrl) + '" target="_blank" rel="noopener" style="color:var(--rose)">Open order for their email</a>' : '') + '</div>' +
+        '<details><summary>Message to send</summary>' + mkCheckDraftBlock('Review request', p.message) + '</details>' +
+        '<div class="mk-actions" style="margin-top:8px"><button class="btn mk-small" onclick="mkCheckReview(\'' + escHtml(p.id) + '\', \'asked\')">✓ Asked</button><button class="btn mk-small" onclick="mkCheckReview(\'' + escHtml(p.id) + '\', \'skipped\')">Skip</button></div></div>').join('')
+      || '<div class="mk-chk" style="display:block"><span class="mk-muted">No one to ask right now. Buyers show up here a few days after their piece arrives.</span></div>') +
+      '<div class="mk-note">' + (rv.askedCount ? rv.askedCount + ' asked recently. ' : '') + 'Ask every buyer, not only the happy ones, and never offer anything in return. ' +
+      (rv.linkIsGoogle ? 'The link goes to your Google reviews.' : 'The link goes to Facebook recommendations until the Google profile is verified.') + '</div>';
   document.getElementById('mk-check').innerHTML = '<div class="mk-plan-card"><div class="mk-res-head"><div class="mk-plan-title">This week</div><span class="mk-muted">' + done + ' of ' + week.length + ' done · week of ' + mkDate(c.week + 'T12:00:00') + '</span></div>' +
     '<div class="mk-res-sub">Every day</div>' + day.map(row).join('') +
     '<div class="mk-res-sub">This week</div>' + week.map(row).join('') +
     (c.draftsError ? '<div class="mk-note">Couldn\'t write this week\'s posts: ' + escHtml(c.draftsError) + '</div>' : '') +
     '<div class="mk-res-sub">Every order</div><div class="mk-chk" style="display:block">Put a thank-you card in the box asking the buyer to share a photo. Ask before reposting it.' +
     '<details><summary>Card text</summary>' + mkCheckDraftBlock('Thank-you card', c.thanksCard) + '</details></div>' +
+    '<div class="mk-res-sub">Ask for a review' + (rv && rv.pending.length ? ' (' + rv.pending.length + ')' : '') + '</div>' + reviews +
+    (month.length ? '<div class="mk-res-sub">This month</div>' + month.map(row).join('') : '') +
     (dr ? '<div class="mk-actions"><button class="btn mk-small" onclick="mkCheckRedraft(this)">↻ Write new drafts</button></div>' : '') + '</div>';
 }
 
