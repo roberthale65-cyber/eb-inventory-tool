@@ -3586,6 +3586,10 @@ const CUT_STEP_TIMEOUT_MS = 40 * 60 * 1000; // motion smoothing is single-thread
 // ffmpeg otherwise starts a thread per CPU it sees on Render's host, and their frame buffers
 // push the 512 MB instance out of memory.
 const CUT_THREADS = ['-threads', '2'];
+// Making cuts here restarted the 512 MB instance even at 2 threads (2026-10-31), taking the
+// whole app down. Until they're made elsewhere, the server only uses cuts already saved in
+// Drive; set SOCIAL_CUT_ON_SERVER=1 to make them here again.
+const CUT_ON_SERVER = process.env.SOCIAL_CUT_ON_SERVER === '1';
 const cutName = src => crypto.createHash('sha256').update(`${CUT_VERSION}|cut|${src}`).digest('hex').slice(0, 32) + '.mp4';
 const cutJobs = new Map();   // cut file name → { promise, stage }
 const cutFailed = new Map(); // cut file name → { error, at }
@@ -3733,6 +3737,7 @@ async function cutMake(src, name, file, eb, title, job) {
     await cutDriveFetch(driveId, file);
     return { url: brandUrl(name), driveId, notes: [] };
   }
+  if (!CUT_ON_SERVER) throw new Error('15-second cuts are paused for now');
   const tag = crypto.randomBytes(6).toString('hex');
   const input = path.join(BRAND_DIR, `vin-${tag}.mp4`), out = path.join(BRAND_DIR, `vout-${tag}.mp4`);
   const parts = [0, 1, 2].map(i => path.join(BRAND_DIR, `vpart-${tag}-${i}.mp4`));
