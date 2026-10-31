@@ -3583,6 +3583,9 @@ const CUT_SPEED = 0.7, CUT_DISSOLVE = 1, CUT_W = 1080, CUT_H = 1920;
 const CUT_LOGO_W = 1000, CUT_LOGO_BOTTOM = 170; // px in the 1080×1920 frame (Patti, round 3)
 const CUT_DRIVE_FOLDER = process.env.SOCIAL_CUT_FOLDER_ID || '10Wsw5PbSjx3GT6_iVoZpa9ajGP0P4RXU';
 const CUT_STEP_TIMEOUT_MS = 40 * 60 * 1000; // motion smoothing is single-threaded and slow
+// ffmpeg otherwise starts a thread per CPU it sees on Render's host, and their frame buffers
+// push the 512 MB instance out of memory.
+const CUT_THREADS = ['-threads', '2'];
 const cutName = src => crypto.createHash('sha256').update(`${CUT_VERSION}|cut|${src}`).digest('hex').slice(0, 32) + '.mp4';
 const cutJobs = new Map();   // cut file name → { promise, stage }
 const cutFailed = new Map(); // cut file name → { error, at }
@@ -3604,7 +3607,7 @@ async function cutPickMoments(file, info, tag) {
   const step = info.duration > 60 ? 2 : 1, dir = path.join(BRAND_DIR, `frames-${tag}`);
   fs.mkdirSync(dir, { recursive: true });
   try {
-    await ffmpeg(['-i', file, '-vf', `fps=1/${step},scale=200:-2`, '-q:v', '5', path.join(dir, 'f%03d.jpg')]);
+    await ffmpeg([...CUT_THREADS, '-i', file, '-vf', `fps=1/${step},scale=200:-2`, '-q:v', '5', ...CUT_THREADS, path.join(dir, 'f%03d.jpg')], { lowPriority: true });
     const frames = fs.readdirSync(dir).filter(n => n.endsWith('.jpg')).sort().slice(0, 90);
     const content = [];
     frames.forEach((n, i) => {
@@ -3658,9 +3661,9 @@ async function cutRenderMoment(file, info, m, out) {
   const baseW = Math.min(info.w, info.h * 9 / 16), baseH = baseW * 16 / 9;
   const cw = even(baseW / m.zoom), ch = even(baseH / m.zoom);
   const x = Math.round((info.w - cw) / 2), y = Math.round((info.h - ch) * m.anchor);
-  await ffmpeg(['-ss', m.start.toFixed(2), '-t', (m.end - m.start).toFixed(2), '-i', file,
+  await ffmpeg([...CUT_THREADS, '-ss', m.start.toFixed(2), '-t', (m.end - m.start).toFixed(2), '-i', file,
     '-vf', `setpts=(PTS-STARTPTS)/${CUT_SPEED},crop=${cw}:${ch}:${x}:${y},minterpolate=fps=30:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,scale=${CUT_W}:${CUT_H},setsar=1`,
-    '-an', '-c:v', 'libx264', '-crf', '16', '-preset', 'fast', out], { timeoutMs: CUT_STEP_TIMEOUT_MS, lowPriority: true });
+    '-an', '-c:v', 'libx264', '-crf', '16', '-preset', 'fast', ...CUT_THREADS, out], { timeoutMs: CUT_STEP_TIMEOUT_MS, lowPriority: true });
 }
 
 // The moments joined with dissolves (this ffmpeg has no xfade, so each one fades in over the
@@ -3677,9 +3680,9 @@ async function cutAssemble(parts, moments, out) {
   });
   chain.push(`[${parts.length}:v]scale=${CUT_LOGO_W}:${lh},format=rgba,fade=in:st=0:d=0.5:alpha=1[lg]`);
   chain.push(`[${last}][lg]overlay=x=(W-w)/2:y=H-h-${CUT_LOGO_BOTTOM}:eof_action=pass,format=yuv420p[out]`);
-  await ffmpeg([...parts.flatMap(p => ['-i', p]), '-loop', '1', '-t', total.toFixed(2), '-i', BRAND_LOGO,
+  await ffmpeg(['-filter_complex_threads', '1', ...parts.flatMap(p => [...CUT_THREADS, '-i', p]), '-loop', '1', '-t', total.toFixed(2), '-i', BRAND_LOGO,
     '-filter_complex', chain.join(';'), '-map', '[out]', '-t', total.toFixed(2),
-    '-c:v', 'libx264', '-preset', 'slow', '-crf', '21', '-maxrate', '7M', '-bufsize', '14M', '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', out],
+    '-c:v', 'libx264', '-preset', 'slow', '-crf', '21', '-maxrate', '7M', '-bufsize', '14M', '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', ...CUT_THREADS, out],
     { timeoutMs: CUT_STEP_TIMEOUT_MS, lowPriority: true });
 }
 
