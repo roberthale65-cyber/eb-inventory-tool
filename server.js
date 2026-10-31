@@ -4156,10 +4156,22 @@ const MKT_CHECK_ITEMS = [
   { key: 'repost', when: 'week', label: 'Check Results, then repost the top 1–2 pieces (Pick pieces)', auto: true },
   { key: 'groups', when: 'week', label: 'Post in 2–3 local Facebook groups, then answer replies' },
   { key: 'personal', when: 'week', label: 'Share one behind-the-scenes post: the workbench, a piece in progress, a craft show' },
-  { key: 'outreach', when: 'week', label: 'Send 1–2 messages to a local shop, realtor or decorator' }
+  { key: 'outreach', when: 'week', label: 'Send 1–2 messages to a local shop, realtor or decorator' },
+  { key: 'invite', when: 'week', label: 'Invite people who reacted to recent Facebook posts to like the Page',
+    help: 'On Facebook (the app or Meta Business Suite), open one of this week’s Page posts and tap the reactions count. Tap Invite next to anyone who doesn’t follow the Page yet. Do the same on 2–3 posts.' },
+  { key: 'answer', when: 'week', label: 'Answer any new reviews or recommendations, good or bad, with a short thank-you' },
+  { key: 'newsletter', when: 'month', label: 'Send a short email newsletter: new pieces and this season’s theme', note: 'Needs the email sign-up turned on in Shopify first' },
+  { key: 'events', when: 'month', label: 'Craft show or event coming up? Make a Facebook event, share it in local groups, and bring an email sign-up sheet' },
+  { key: 'share', when: 'month', label: 'Ask a happy buyer if you can share their photo or kind words in a post' }
 ];
+// Asking every buyer for a review once their piece has arrived. Google's rules: ask everyone
+// (not only happy buyers) and never offer anything in return. REVIEW_LINK switches the link to
+// the Google review link once the Business Profile is verified.
+const MKT_REVIEW_LINK = process.env.REVIEW_LINK || 'https://www.facebook.com/789880204199643/reviews';
+const MKT_REVIEW_DAYS = 45; // how far back to look for buyers not asked yet
+const mktReviewCache = { at: 0, list: null };
 const MKT_THANKS_CARD = 'Thank you for bringing one of my pieces home. I hope it brings you joy for years to come. I’d love to see where it landed: share a photo and tag @eternalbloomsbypatti on Instagram or Facebook.\n— Patti\nEternal Blooms by Patti · Florals that bloom forever.';
-const mktCheck = { loaded: false, data: { week: '', done: {}, days: {}, drafts: null } };
+const mktCheck = { loaded: false, data: { week: '', done: {}, days: {}, drafts: null, month: '', monthDone: {}, asked: {} } };
 let mktCheckDrafting = null;
 // Today's date and this week's Monday in Central time, as YYYY-MM-DD.
 function mktCheckDates(now = new Date()) {
@@ -4182,12 +4194,66 @@ async function mktCheckSave() {
   }) });
 }
 // A new week clears the weekly ticks and the daily ticks of earlier weeks.
-function mktCheckRoll({ week }) {
-  const d = mktCheck.data;
-  if (d.week === week) return false;
-  d.week = week; d.done = {};
-  for (const day of Object.keys(d.days || {})) if (day < week) delete d.days[day];
-  return true;
+function mktCheckRoll({ week, today }) {
+  const d = mktCheck.data, month = today.slice(0, 7);
+  let changed = false;
+  if (d.month !== month) { d.month = month; d.monthDone = {}; changed = true; }
+  if (d.week !== week) {
+    d.week = week; d.done = {}; changed = true;
+    for (const day of Object.keys(d.days || {})) if (day < week) delete d.days[day];
+    // Review asks are kept a while past the look-back window, then dropped.
+    const cutoff = new Date(Date.parse(today) - (MKT_REVIEW_DAYS + 30) * MKT_DAY_MS).toISOString().slice(0, 10);
+    for (const [id, a] of Object.entries(d.asked || {})) if (String(a.at || '') < cutoff) delete d.asked[id];
+  }
+  return changed;
+}
+// Buyers to ask for a review: Shopify orders a few days after delivery (a week after shipping
+// when there's no delivery scan, a day after pickup), and craft-show or direct sales recorded
+// in Airtable a couple of days after the sale. Kept for 10 minutes.
+async function mktReviewCandidates() {
+  if (mktReviewCache.list && Date.now() - mktReviewCache.at < 10 * 60 * 1000) return mktReviewCache.list;
+  const now = Date.now(), since = new Date(now - MKT_REVIEW_DAYS * MKT_DAY_MS).toISOString().slice(0, 10);
+  const fields = 'name legacyResourceId cancelledAt displayFinancialStatus lineItems(first:5){nodes{sku title}} fulfillments(first:5){createdAt deliveredAt} shippingLine{title}';
+  // The buyer's first name is protected customer data; without access the list still works.
+  const q = extra => shopifyGraphql(`query($q:String!){orders(first:50,sortKey:CREATED_AT,reverse:true,query:$q){nodes{${fields} ${extra}}}}`, { q: 'created_at:>=' + since });
+  let d = await q('billingAddress{firstName} customer{firstName}');
+  if (d.errors || !d.data) d = await q('');
+  if (d.errors) throw new Error('Shopify orders: ' + d.errors[0].message);
+  const out = [];
+  for (const o of (d.data && d.data.orders && d.data.orders.nodes) || []) {
+    if (o.cancelledAt || /REFUNDED|VOIDED/.test(o.displayFinancialStatus || '')) continue;
+    const items = o.lineItems.nodes.filter(l => !/^TEST/i.test(l.sku || ''));
+    if (!items.length || !o.fulfillments.length) continue;
+    const f = o.fulfillments[o.fulfillments.length - 1];
+    const pickup = /pickup|local/i.test((o.shippingLine && o.shippingLine.title) || '');
+    const ready = f.deliveredAt ? Date.parse(f.deliveredAt) + 3 * MKT_DAY_MS : Date.parse(f.createdAt) + (pickup ? 1 : 7) * MKT_DAY_MS;
+    if (ready > now) continue;
+    out.push({
+      id: 'order:' + o.name, kind: 'online', label: 'Order ' + o.name,
+      firstName: ((o.customer && o.customer.firstName) || (o.billingAddress && o.billingAddress.firstName) || '').replace(/^./, ch => ch.toUpperCase()),
+      piece: items[0].title, sku: items[0].sku || '',
+      when: f.deliveredAt ? 'delivered ' + f.deliveredAt.slice(0, 10) : (pickup ? 'picked up ' : 'shipped ') + f.createdAt.slice(0, 10),
+      adminUrl: `https://admin.shopify.com/store/${String(SHOPIFY_STORE).replace('.myshopify.com', '')}/orders/${o.legacyResourceId}`
+    });
+  }
+  await invEnsure();
+  for (const r of invRecords()) {
+    const f = r.fields || {}, sold = Date.parse(f['Date sold'] || '');
+    if (f['Status'] !== 'Sold' || !sold || !f['Sales channel'] || f['Sales channel'] === 'Shopify') continue;
+    if (sold < now - MKT_REVIEW_DAYS * MKT_DAY_MS || sold + 2 * MKT_DAY_MS > now) continue;
+    out.push({ id: 'sale:' + r.id, kind: 'inperson', label: f['Sales channel'], firstName: '', piece: f['Draft Title'] || f['Reference name'] || 'piece', sku: f['EB Number'] || '', when: 'sold ' + f['Date sold'] });
+  }
+  mktReviewCache.list = out; mktReviewCache.at = now;
+  return out;
+}
+// The message Patti copies. One short ask, the link, no incentive.
+function mktReviewMessage(c) {
+  const hi = c.firstName ? `Hi ${c.firstName},` : 'Hi there,';
+  const piece = String(c.piece || 'piece').split(/ with | – | - /)[0].trim();
+  const opener = c.kind === 'online'
+    ? `this is Patti from Eternal Blooms. I hope your ${piece} arrived safely and is settling in nicely.`
+    : `this is Patti from Eternal Blooms. Thank you again for taking home the ${piece}. I hope you’re enjoying it.`;
+  return `${hi} ${opener} If you have a minute, would you leave a short review? It really helps other people find my little shop:\n${MKT_REVIEW_LINK}\nThank you so much.\n— Patti`;
 }
 // The piece the group post features: in season if possible, otherwise any piece with a photo.
 async function mktCheckPiece() {
@@ -4252,17 +4318,32 @@ async function mktCheckView() {
   const weekStart = Date.parse(dates.week + 'T00:00:00-06:00'); // close enough across DST for "this week"
   const waiting = records.filter(r => (r.fields || {})['Status'] === 'Draft').length;
   const reposts = records.filter(r => { const f = r.fields || {}; return f['Post type'] === 'Repost' && (Date.parse(f['Drafted']) || 0) >= weekStart; }).length;
+  // Pieces Patti approved or skipped this week (not the automatic skips when a piece sells).
+  // A backlog of drafts can't block the tick: reviewing some each week is the habit.
+  const reviewed = new Set(records.map(r => r.fields || {}).filter(f => (f['Status'] === 'Approved' || (f['Status'] === 'Skipped' && !/Skipped automatically/.test(f['Notes'] || '')))
+    && (Date.parse(f['Status changed']) || 0) >= weekStart).map(f => f['EB Number'])).size;
   const auto = {
-    approve: { done: waiting === 0, note: waiting ? `${waiting} draft${waiting === 1 ? '' : 's'} waiting on the To review tab` : 'Nothing waiting' },
+    approve: { done: waiting === 0 || reviewed > 0, note: [reviewed ? `${reviewed} piece${reviewed === 1 ? '' : 's'} reviewed this week` : '', waiting ? `${waiting} draft${waiting === 1 ? '' : 's'} waiting on the To review tab` : 'Nothing waiting'].filter(Boolean).join(' · ') },
     repost: { done: reposts > 0, note: reposts ? `${reposts} repost${reposts === 1 ? '' : 's'} drafted this week` : 'No reposts drafted yet this week' }
   };
   const today = (d.days || {})[dates.today] || {};
+  let reviews = null, reviewsError = null;
+  try {
+    const asked = d.asked || {};
+    const all = await mktReviewCandidates();
+    reviews = {
+      link: MKT_REVIEW_LINK, linkIsGoogle: /google|g\.page/i.test(MKT_REVIEW_LINK),
+      pending: all.filter(c => !asked[c.id]).map(c => ({ ...c, message: mktReviewMessage(c) })),
+      askedCount: all.filter(c => asked[c.id] && asked[c.id].status === 'asked').length
+    };
+  } catch (e) { reviewsError = e.message; }
   return {
     week: dates.week, today: dates.today,
     items: MKT_CHECK_ITEMS.map(it => {
-      const ticked = it.when === 'day' ? !!today[it.key] : !!d.done[it.key];
-      return { ...it, done: ticked || !!(auto[it.key] && auto[it.key].done), ticked, note: auto[it.key] ? auto[it.key].note : '' };
+      const ticked = it.when === 'day' ? !!today[it.key] : it.when === 'month' ? !!(d.monthDone || {})[it.key] : !!d.done[it.key];
+      return { ...it, done: ticked || !!(auto[it.key] && auto[it.key].done), ticked, note: auto[it.key] ? auto[it.key].note : (it.note || '') };
     }),
+    month: d.month, reviews, reviewsError,
     drafts: d.drafts && d.drafts.week === dates.week ? d.drafts : null,
     thanksCard: MKT_THANKS_CARD
   };
@@ -4280,14 +4361,20 @@ app.get('/marketing/checklist', async (req, res) => {
 });
 // PATCH /marketing/checklist { item, done } — tick or untick; daily items count for today.
 app.patch('/marketing/checklist', async (req, res) => {
-  const { item, done } = req.body || {};
+  const { item, done, review, status } = req.body || {};
   const it = MKT_CHECK_ITEMS.find(i => i.key === item);
-  if (!it) return res.status(400).json({ error: 'unknown item: ' + item });
+  if (!it && !review) return res.status(400).json({ error: 'unknown item: ' + item });
+  if (review && !['asked', 'skipped', null].includes(status)) return res.status(400).json({ error: 'status must be asked, skipped or null' });
   try {
     await mktCheckLoad();
     const dates = mktCheckDates(), d = mktCheck.data;
     mktCheckRoll(dates);
-    if (it.when === 'day') { d.days = d.days || {}; d.days[dates.today] = { ...(d.days[dates.today] || {}), [item]: !!done }; }
+    if (review) {
+      d.asked = d.asked || {};
+      if (status) d.asked[review] = { status, at: dates.today }; else delete d.asked[review];
+    }
+    else if (it.when === 'day') { d.days = d.days || {}; d.days[dates.today] = { ...(d.days[dates.today] || {}), [item]: !!done }; }
+    else if (it.when === 'month') { d.monthDone = d.monthDone || {}; d.monthDone[item] = !!done; }
     else d.done[item] = !!done;
     await mktCheckSave();
     res.json(await mktCheckView());
