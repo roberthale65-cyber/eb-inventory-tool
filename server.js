@@ -713,7 +713,8 @@ app.get('/auth', (req, res) => {
   // and the callback only holds the new token IN MEMORY: paste it into Render's
   // SHOPIFY_TOKEN or it's lost on the next restart/deploy.
   // write_publications lets a new listing publish itself to Google, Facebook and Shop.
-  const scopes = 'read_products,write_products,read_inventory,write_inventory,read_orders,read_customers,read_shipping,write_shipping,read_publications,write_publications';
+  // read_reports lets the Marketing results report count shop visits from each channel.
+  const scopes = 'read_products,write_products,read_inventory,write_inventory,read_orders,read_customers,read_shipping,write_shipping,read_publications,write_publications,read_reports';
   const authUrl = `https://${SHOPIFY_STORE}/admin/oauth/authorize?client_id=${SHOPIFY_API_KEY}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
   res.redirect(authUrl);
 });
@@ -3996,6 +3997,149 @@ async function mktSoldSweep() {
   }).map(r => String(r.fields['EB Number']).trim()));
   for (const sku of skus) await mktHandleSold(sku).catch(e => console.warn(`marketing: sold sweep for ${sku} failed —`, e.message));
 }
+
+// ── Results report ──
+// What the posts did: per-post stats from each channel (Pinterest views/saves/clicks; Instagram
+// and Facebook likes, comments, shares), shop visits by channel and piece from the tagged links
+// (needs the read_reports scope — without it the report says so and skips visits), and orders
+// with the visit that led to them. Kept for an hour; ?refresh=1 rebuilds it.
+const MKT_REPORT_POST_DAYS = 30; // posts this recent get their stats looked up
+const mktReportCache = new Map(); // days → { at, data }
+let shopScopesCache = { at: 0, list: null };
+async function shopGrantedScopes() {
+  if (shopScopesCache.list && Date.now() - shopScopesCache.at < 10 * 60 * 1000) return shopScopesCache.list;
+  const r = await fetch(`https://${SHOPIFY_STORE}/admin/oauth/access_scopes.json`, { headers: { 'X-Shopify-Access-Token': shopifyAccessToken } });
+  const d = await r.json().catch(() => ({}));
+  shopScopesCache = { at: Date.now(), list: (d.access_scopes || []).map(s => s.handle) };
+  return shopScopesCache.list;
+}
+// The channel a visit or order came from: the tagged link first, then the referring site.
+function mktVisitChannel(utmSource, referrer) {
+  const s = String(utmSource || '').toLowerCase(), ref = String(referrer || '').toLowerCase();
+  if (s === 'ig' || s === 'instagram' || (!s && ref.includes('instagram'))) return 'Instagram';
+  if (s === 'facebook' || s === 'fb' || (!s && ref.includes('facebook'))) return 'Facebook';
+  if (s === 'pinterest' || (!s && ref.includes('pinterest'))) return 'Pinterest';
+  return null;
+}
+async function mktPostStats(f, now) {
+  const id = String(f['Pin ID'] || ''), channel = mktChannel(f);
+  if (channel === 'Pinterest') {
+    if (!pinConnected()) return null;
+    const day = d => d.toISOString().slice(0, 10);
+    const posted = new Date(Math.max(Date.parse(f['Status changed']) || now, now - 89 * MKT_DAY_MS));
+    const d = await pinApi(`/pins/${id}/analytics?start_date=${day(posted)}&end_date=${day(new Date(now))}&metric_types=IMPRESSION,SAVE,PIN_CLICK,OUTBOUND_CLICK`);
+    const m = (d.all && d.all.summary_metrics) || {};
+    return { views: m.IMPRESSION || 0, saves: m.SAVE || 0, clicks: (m.PIN_CLICK || 0) + (m.OUTBOUND_CLICK || 0), shopClicks: m.OUTBOUND_CLICK || 0 };
+  }
+  if (!metaConnected()) return null;
+  const access_token = metaAuth.pageToken;
+  if (channel === 'Instagram') {
+    const d = await metaApi('/' + id, { params: { fields: 'like_count,comments_count', access_token } });
+    return { likes: d.like_count || 0, comments: d.comments_count || 0 };
+  }
+  const total = x => (x && x.summary && x.summary.total_count) || 0;
+  if (!id.includes('_')) { // a Page video: its id isn't a post id
+    const d = await metaApi('/' + id, { params: { fields: 'likes.limit(0).summary(true),comments.limit(0).summary(true)', access_token } });
+    return { likes: total(d.likes), comments: total(d.comments) };
+  }
+  const d = await metaApi('/' + id, { params: { fields: 'reactions.limit(0).summary(true),comments.limit(0).summary(true),shares', access_token } });
+  return { likes: total(d.reactions), comments: total(d.comments), shares: (d.shares && d.shares.count) || 0 };
+}
+async function mktShopVisits(days) {
+  const scopes = await shopGrantedScopes();
+  if (!scopes.includes('read_reports')) return { available: false, note: 'Shop visits need the read_reports permission on the Shopify app. Orders below still show where buyers came from.' };
+  const q = `FROM sessions SHOW sessions, sessions_with_cart_additions, sessions_that_completed_checkout GROUP BY referrer_source, referrer_name, utm_source, utm_content SINCE -${days}d UNTIL today`;
+  const d = await shopifyGraphql(`query($q:String!){shopifyqlQuery(query:$q){parseErrors tableData{rows}}}`, { q });
+  const res = d.data && d.data.shopifyqlQuery;
+  if (!res || (res.parseErrors || []).length || !res.tableData) return { available: false, note: 'Shopify didn’t return visits: ' + ((res && res.parseErrors && res.parseErrors[0]) || (d.errors && d.errors[0] && d.errors[0].message) || 'unknown error') };
+  const out = { available: true, total: 0, byChannel: {}, byPiece: {} };
+  for (const r of res.tableData.rows || []) {
+    const n = +r.sessions || 0, carts = +r.sessions_with_cart_additions || 0, orders = +r.sessions_that_completed_checkout || 0;
+    out.total += n;
+    const ch = mktVisitChannel(r.utm_source, r.referrer_source === 'social' ? r.referrer_name : '');
+    if (!ch) continue;
+    const c = out.byChannel[ch] = out.byChannel[ch] || { visits: 0, carts: 0, checkouts: 0 };
+    c.visits += n; c.carts += carts; c.checkouts += orders;
+    const sku = /^EB-/i.test(r.utm_content || '') ? r.utm_content.toUpperCase() : null;
+    if (sku) { const p = out.byPiece[sku] = out.byPiece[sku] || { visits: 0, carts: 0 }; p.visits += n; p.carts += carts; }
+  }
+  return out;
+}
+async function mktShopOrders(days, postedBySku) {
+  const since = new Date(Date.now() - days * MKT_DAY_MS).toISOString().slice(0, 10);
+  const d = await shopifyGraphql(`query($q:String!){orders(first:50,sortKey:CREATED_AT,reverse:true,query:$q){nodes{name createdAt cancelledAt totalPriceSet{shopMoney{amount}} lineItems(first:10){nodes{sku title}} customerJourneySummary{firstVisit{source utmParameters{source content}} lastVisit{source utmParameters{source content}}}}}}`, { q: 'created_at:>=' + since });
+  if (d.errors) throw new Error('Shopify orders: ' + d.errors[0].message);
+  return ((d.data && d.data.orders && d.data.orders.nodes) || []).filter(o => !o.cancelledAt).map(o => {
+    const j = o.customerJourneySummary || {}, last = j.lastVisit || {}, first = j.firstVisit || {};
+    const utm = last.utmParameters || first.utmParameters || {};
+    const skus = o.lineItems.nodes.map(l => l.sku).filter(Boolean);
+    const at = Date.parse(o.createdAt);
+    return {
+      name: o.name, createdAt: o.createdAt, total: +(o.totalPriceSet.shopMoney.amount || 0),
+      pieces: o.lineItems.nodes.map(l => ({ sku: l.sku || '', title: l.title })),
+      cameFrom: mktVisitChannel(utm.source, last.source || first.source) || last.source || first.source || 'unknown',
+      taggedPiece: utm.content || null,
+      // Channels each sold piece was posted on before the order, whatever the buyer's last click was.
+      postedBefore: [...new Set(skus.flatMap(s => (postedBySku[s] || []).filter(p => p.at < at).map(p => p.channel)))]
+    };
+  });
+}
+async function mktBuildReport(days) {
+  const now = Date.now(), records = await mktRecords();
+  const posted = records.map(r => r.fields || {}).filter(f => f['Status'] === 'Posted' && f['Pin ID']);
+  const postedBySku = {};
+  for (const f of posted) (postedBySku[String(f['EB Number'] || '').trim()] = postedBySku[String(f['EB Number'] || '').trim()] || []).push({ channel: mktChannel(f), at: Date.parse(f['Status changed']) || 0 });
+  const recent = posted.filter(f => now - (Date.parse(f['Status changed']) || 0) <= MKT_REPORT_POST_DAYS * MKT_DAY_MS);
+  // A few lookups at a time so the channels' rate limits aren't hit.
+  const posts = [];
+  for (let i = 0; i < recent.length; i += 5) {
+    posts.push(...await Promise.all(recent.slice(i, i + 5).map(async f => {
+      const p = { sku: f['EB Number'], channel: mktChannel(f), title: f['Pin Title'] || '', postedAt: f['Status changed'], url: f['Pin URL'] || '', type: f['Post type'] || 'New', theme: f['Theme'] || '' };
+      try { p.stats = await mktPostStats(f, now); } catch (e) { p.error = e.message; }
+      return p;
+    })));
+  }
+  const [visits, orders] = await Promise.all([
+    mktShopVisits(days).catch(e => ({ available: false, note: 'Couldn’t load visits: ' + e.message })),
+    mktShopOrders(days, postedBySku).catch(e => ({ error: e.message }))
+  ]);
+  const channels = {};
+  for (const ch of MKT_CHANNELS) {
+    const mine = posts.filter(p => p.channel === ch), sum = k => mine.reduce((n, p) => n + ((p.stats && p.stats[k]) || 0), 0);
+    channels[ch] = {
+      postedInWindow: posted.filter(f => mktChannel(f) === ch && now - (Date.parse(f['Status changed']) || 0) <= days * MKT_DAY_MS).length,
+      postsTracked: mine.length, views: sum('views'), saves: sum('saves'), clicks: sum('clicks'), likes: sum('likes'), comments: sum('comments'), shares: sum('shares'),
+      visits: visits.available ? (visits.byChannel[ch] || { visits: 0, carts: 0, checkouts: 0 }) : null,
+      orders: Array.isArray(orders) ? orders.filter(o => o.cameFrom === ch).length : null
+    };
+  }
+  // Pieces ranked by shop visits from their posts, then by interactions across channels.
+  const pieces = {};
+  for (const p of posts) {
+    const x = pieces[p.sku] = pieces[p.sku] || { sku: p.sku, title: p.title, channels: [], interactions: 0, views: 0, visits: 0 };
+    x.channels.push(p.channel);
+    const s = p.stats || {};
+    x.interactions += (s.saves || 0) + (s.clicks || 0) + (s.likes || 0) + (s.comments || 0) + (s.shares || 0);
+    x.views += s.views || 0;
+    if (p.channel === 'Pinterest' && p.title) x.title = p.title;
+  }
+  if (visits.available) for (const [sku, v] of Object.entries(visits.byPiece)) if (pieces[sku]) pieces[sku].visits = v.visits;
+  const top = Object.values(pieces).sort((a, b) => (b.visits - a.visits) || (b.interactions - a.interactions) || (b.views - a.views)).slice(0, 5);
+  return { days, generatedAt: new Date(now).toISOString(), postDays: MKT_REPORT_POST_DAYS, channels, top, posts, visits, orders,
+    connected: { Pinterest: pinConnected(), Instagram: metaConnected(), Facebook: metaConnected() } };
+}
+// GET /marketing/report?days=7 — the Results card on the Marketing screen.
+app.get('/marketing/report', async (req, res) => {
+  if (!shopifyAccessToken) return res.status(401).json({ error: 'Shopify not authorized — visit /auth' });
+  const days = Math.max(1, Math.min(90, parseInt(req.query.days || 7, 10) || 7));
+  const hit = mktReportCache.get(days);
+  if (hit && req.query.refresh !== '1' && Date.now() - hit.at < 60 * 60 * 1000) return res.json(hit.data);
+  try {
+    const data = await mktBuildReport(days);
+    mktReportCache.set(days, { at: Date.now(), data });
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 app.listen(PORT, () => {
   console.log(`EB server running on port ${PORT}`);
