@@ -1497,6 +1497,28 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 const BASE_ID    = 'appHw4SEE5RNT8tCV';
 const TABLE_ID   = 'tbl29ndzXDXXU8f7x';
 const SERVER_URL = 'https://eb-shopify-server.onrender.com';
+// The server's passcode (its APP_KEY): asked for once per device and sent with every call to the
+// server. A wrong or missing one gets a 401 that asks again; requests that fail together share
+// one prompt.
+const EB_KEY_STORE = 'eb-app-key';
+let ebKeyPrompt = null;
+function ebAppKey(){ try { return localStorage.getItem(EB_KEY_STORE) || ''; } catch(e){ return ''; } }
+function ebAskAppKey(){
+  if(!ebKeyPrompt) ebKeyPrompt = new Promise(resolve => setTimeout(() => {
+    const k = (prompt('Enter the EB Master passcode (you only need to do this once on this device):') || '').trim();
+    if(k){ try { localStorage.setItem(EB_KEY_STORE, k); } catch(e){} }
+    ebKeyPrompt = null; resolve(!!k);
+  }, 0));
+  return ebKeyPrompt;
+}
+const ebFetch = window.fetch.bind(window);
+window.fetch = async function(url, opts){
+  if(typeof url !== 'string' || !url.startsWith(SERVER_URL)) return ebFetch(url, opts);
+  const send = () => ebFetch(url, { ...(opts || {}), headers: { ...((opts && opts.headers) || {}), 'x-app-key': ebAppKey() } });
+  const res = await send();
+  if(res.status !== 401 || !(await res.clone().json().catch(() => ({}))).appKey) return res;
+  return (await ebAskAppKey()) ? send() : res;
+};
 const SHOPIFY_BASE = 'https://eternalbloomsbypatti.com/products/';
 const DEFAULT_COST_PCT = 66; // Default cost as % of price — change here to update the global default
 const LISTABLE_STATUSES = ['In stock','Photographed','Ready to list'];
@@ -1940,6 +1962,7 @@ let mkPin = { configured: false, connected: false, username: null };
 let mkMeta = { configured: false, connected: false, pageName: null, igUsername: null, instagram: false };
 const MK_TABS = [['Draft','To review'],['Approved','Approved'],['Posted','Posted'],['Skipped','Skipped']];
 const MK_POLL_MS = 8000;
+const MK_CUT_POLL_MS = 2 * 60 * 1000;
 const MK_CHANNELS = ['Pinterest','Instagram','Facebook'];
 const MK_CH_ICON = { Pinterest:'📌', Instagram:'📷', Facebook:'👍' };
 const MK_TITLE_MAX = 100, MK_DESC_MAX = { Pinterest: 500, Instagram: 2200, Facebook: 2000 };
@@ -2251,6 +2274,7 @@ function mkSchedulePoll(){
   if(!posting) return;
   mkPollTimer = setTimeout(async () => {
     if(!document.getElementById('screen-marketing').classList.contains('active')) return;
+    if(document.hidden) return mkSchedulePoll();
     try { await mkLoad(); mkRender(); } catch(e) { mkSchedulePoll(); }
   }, MK_POLL_MS);
 }
@@ -2434,8 +2458,9 @@ async function mkPreviewLogo(eb){
   }
   show({ status: 'Still working. Tap Preview again in a minute.' });
 }
-// The 15-second social cut the server makes from each listing video (Patti's approved recipe).
-// It takes a while, so the card shows where it's at and checks back every 30 seconds.
+// The 15-second social cut the video maker (a GitHub Action) makes from each listing video
+// (Patti's approved recipe). It takes a while, so the card shows where it's at and checks back
+// every 2 minutes while Marketing is open.
 const MK_VIDEO_OPTS = [['Social cut', '15-second social cut'], ['Original video', 'Original listing video']];
 const mkCuts = {}; // EB number → { status, url, stage, error } from the server
 const mkCutPolling = new Set();
@@ -2455,7 +2480,14 @@ async function mkLoadCut(rows){
   if(mkCutPolling.has(eb) || (mkCuts[eb] && mkCuts[eb].status !== 'working')) return;
   mkCutPolling.add(eb);
   try {
-    for(let i = 0; i < 240; i++){
+    for(let i = 0; i < 60; i++){
+      // Checks only while Marketing is on screen (the next render starts it again); the video
+      // maker runs every half hour at best, so every 2 minutes is plenty.
+      if(i){
+        await new Promise(res => setTimeout(res, MK_CUT_POLL_MS));
+        while(document.hidden) await new Promise(res => setTimeout(res, 5000));
+        if(!document.getElementById('screen-marketing').classList.contains('active')) return;
+      }
       const r = await fetch(SERVER_URL + '/marketing/cut/' + row.id);
       const d = await r.json().catch(()=>({}));
       if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
@@ -2463,7 +2495,6 @@ async function mkLoadCut(rows){
       mkCuts[eb] = d;
       if(changed && mkTab !== 'Posted' && mkTab !== 'Skipped') mkRender();
       if(d.status !== 'working') return;
-      await new Promise(res => setTimeout(res, 30000));
     }
   } catch(e){ mkCuts[eb] = { status: 'failed', error: e.message }; mkRender(); }
   finally { mkCutPolling.delete(eb); }
@@ -3550,7 +3581,15 @@ function npLoadRecordForEdit(){
   npResetInferenceState(); // loaded values → delta baseline (don't propagate them as "new")
   btn.disabled=false;
 }
-function npPrimaryAction(){ return npMode==='edit' ? npSaveEdit() : npGenerateEB(); }
+// One at a time: a second tap while Assign EB is saving would work out the same next number and
+// create a duplicate piece.
+let npPrimaryBusy=false;
+async function npPrimaryAction(){
+  if(npPrimaryBusy) return;
+  npPrimaryBusy=true;
+  try { return await (npMode==='edit' ? npSaveEdit() : npGenerateEB()); }
+  finally { npPrimaryBusy=false; }
+}
 
 // Map a Type label to its default Shopify product category. Add-on returns ''
 // (no default — selected manually on Shopify). Wreath → Wreaths; all other
@@ -5089,9 +5128,14 @@ function populateMSSelect(){const listed=sortPiecesByEB(allRecords.filter(r=>r.f
 function msSelectChannel(el,channel){document.querySelectorAll('#screen-sold .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');msSelectedChannel=channel;}
 async function msConfirmSale(){if(!msSelectedRecord||!msSelectedChannel){alert('Select a piece and sale channel.');return;}const salePrice=document.getElementById('ms-sale-price').value.trim();const saleDate=document.getElementById('ms-sale-date').value;const btn=document.getElementById('ms-confirm-btn');btn.disabled=true;btn.textContent='⏳ Recording...';setStatus('ms','Marking as sold...','loading');try{await markSold(msSelectedRecord,msSelectedChannel,salePrice,saleDate);const result=document.getElementById('ms-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(msSelectedRecord.fields['EB Number'])+'</strong> marked as sold via '+msSelectedChannel+'.';btn.textContent='✓ Done!';setStatus('ms','Sale recorded ✓','success');populateHomeStats();populateMSSelect();populateLPSelect();populateCFInventory();setTimeout(()=>hideStatus('ms'),4000);}catch(e){setStatus('ms','Error: '+e.message,'error');btn.disabled=false;btn.textContent='✓ Mark as sold';}}
 // What the buyer paid goes to Gross sale amount ($); the listed Price ($) is left as-is.
-async function markSold(record,channel,salePrice,saleDate){const f=record.fields;const atFields={'Status':'Sold','Sales channel':channel};if(salePrice)atFields['Gross sale amount ($)']=parseFloat(salePrice);if(saleDate)atFields['Date sold']=saleDate;await atWriteNow(record.id,atFields);Object.assign(f,atFields);try{await fetch(SERVER_URL+'/mark-sold',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shopify_url:f['Shopify URL'],eb_number:f['EB Number']})});}catch(e){console.warn('Shopify mark sold failed:',e.message);}
+async function markSold(record,channel,salePrice,saleDate){const f=record.fields;const atFields={'Status':'Sold','Sales channel':channel};if(salePrice)atFields['Gross sale amount ($)']=parseFloat(salePrice);if(saleDate)atFields['Date sold']=saleDate;await atWriteNow(record.id,atFields);Object.assign(f,atFields);
   // Sold → move this piece's Drive folder into "Sold" (non-fatal, background).
-  driveMoveFolder(f['Drive Folder ID'],'sold');}
+  driveMoveFolder(f['Drive Folder ID'],'sold');
+  // Shopify must hear about it too, or the piece stays buyable online: a failure is shown, and
+  // tapping Mark as sold again retries (both steps are safe to repeat).
+  let problem=null;
+  try{const r=await fetch(SERVER_URL+'/mark-sold',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shopify_url:f['Shopify URL'],eb_number:f['EB Number']})});const d=await r.json().catch(()=>({}));if(!r.ok||d.error)problem=d.error||('HTTP '+r.status);else if(f['Shopify URL']&&/not found/i.test(d.note||''))problem='no Shopify product has SKU '+f['EB Number'];}catch(e){problem=e.message;}
+  if(problem)throw new Error('Saved as Sold here, but Shopify wasn\'t updated ('+problem+'). It may still be buyable online. Tap Mark as sold again to retry.');}
 
 // ── SALE & CLEARANCE ──────────────────────────────────────────────────────────
 // Mark a LISTED piece Sale (temporary discount) or Clearance (permanent markdown):
