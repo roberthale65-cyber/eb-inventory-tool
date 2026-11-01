@@ -295,7 +295,13 @@ function shopifyGraphql(query, variables){
     method: 'POST',
     headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, variables })
-  }).then(r => r.json());
+  }).then(async r => {
+    // A throttled or rejected call (429, 401, 5xx) comes back as errors, so callers that check
+    // .errors don't mistake it for "no product with that SKU".
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) body.errors = [{ message: `Shopify HTTP ${r.status}` }].concat(body.errors || []);
+    return body;
+  });
 }
 
 // Resolve display labels to metaobject GIDs for a metaobject type, reusing existing
@@ -1504,6 +1510,7 @@ app.post('/mark-sale', async (req, res) => {
       `query($q:String!){ productVariants(first:10, query:$q){ edges { node { id sku price compareAtPrice product { id legacyResourceId handle tags } } } } }`,
       { q: `sku:${JSON.stringify(String(eb_number))}` }
     );
+    if (lookup.errors) return res.status(502).json({ error: 'Shopify lookup failed: ' + JSON.stringify(lookup.errors).slice(0, 300) });
     const edges = (((lookup || {}).data || {}).productVariants || {}).edges || [];
     const node = edges.map(e => e.node).find(n => n && n.sku === eb_number && n.product);
     if (!node) return res.json({ success: true, note: 'Product not found in Shopify — Airtable updated only' });
@@ -1544,13 +1551,18 @@ app.post('/mark-sale', async (req, res) => {
 
     // 4) Tags: keep exactly one of Sale/Clearance (or neither on remove). Remove first,
     //    then add, so switching Sale↔Clearance never leaves both tags on the product.
+    // A failed tag change leaves the piece out of (or stuck in) the Sale/Clearance collection, so
+    // it's reported; the price change above stands and running it again is safe.
+    const tagErrs = [];
+    const tagCheck = (d, op) => tagErrs.push(...(d.errors || []), ...((d.data && d.data[op] && d.data[op].userErrors) || []));
     const removeTags = ['Sale', 'Clearance'].filter(t => t !== addTag);
     if (removeTags.length) {
-      await shopifyGraphql(`mutation($id: ID!, $tags: [String!]!){ tagsRemove(id: $id, tags: $tags){ userErrors { field message } } }`, { id: productGid, tags: removeTags });
+      tagCheck(await shopifyGraphql(`mutation($id: ID!, $tags: [String!]!){ tagsRemove(id: $id, tags: $tags){ userErrors { field message } } }`, { id: productGid, tags: removeTags }), 'tagsRemove');
     }
     if (addTag) {
-      await shopifyGraphql(`mutation($id: ID!, $tags: [String!]!){ tagsAdd(id: $id, tags: $tags){ userErrors { field message } } }`, { id: productGid, tags: [addTag] });
+      tagCheck(await shopifyGraphql(`mutation($id: ID!, $tags: [String!]!){ tagsAdd(id: $id, tags: $tags){ userErrors { field message } } }`, { id: productGid, tags: [addTag] }), 'tagsAdd');
     }
+    if (tagErrs.length) return res.status(502).json({ error: 'Price updated, but the Sale/Clearance tag was not: ' + tagErrs.map(e => e.message).join(', ') + '. Try again.' });
 
     res.json({ success: true, product_id: productId, handle, action: act, price: newPrice, compare_at_price: newCompareAt, tag: addTag });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -2149,8 +2161,10 @@ app.post('/resync-attributes', async (req, res) => {
   if (!sku) return res.status(400).json({ error: 'sku required' });
   try {
     // 1. Find product + variant + current shopify-namespace metafields by SKU
-    const lookup = await shopifyGraphql(`query($q:String!){productVariants(first:1,query:$q){edges{node{id sku inventoryItem{id} product{id metafields(first:50,namespace:"shopify"){edges{node{key value}}}}}}}}`, { q: `sku:${sku}` });
-    const node = lookup?.data?.productVariants?.edges?.[0]?.node;
+    // Exact SKU only: variant search splits on hyphens, so the first hit can be another piece.
+    const lookup = await shopifyGraphql(`query($q:String!){productVariants(first:10,query:$q){edges{node{id sku inventoryItem{id} product{id metafields(first:50,namespace:"shopify"){edges{node{key value}}}}}}}}`, { q: `sku:${JSON.stringify(String(sku))}` });
+    if (lookup.errors) return res.status(502).json({ error: 'Shopify lookup failed: ' + JSON.stringify(lookup.errors).slice(0, 300) });
+    const node = (lookup?.data?.productVariants?.edges || []).map(e => e.node).find(n => n && n.sku === String(sku));
     if (!node) return res.status(404).json({ error: 'No Shopify product found for SKU ' + sku });
     const productId = node.product.id;                 // already a GID
     const inventoryItemId = node.inventoryItem && node.inventoryItem.id;
@@ -3684,6 +3698,30 @@ const cutDrive = new Map();   // cut file name → Drive file id
 const cutChecked = new Map(); // cut file name → when Drive was last checked for it
 const cutTries = new Map();   // cut file name → { count, error }: runs that failed and will try again
 const CUT_MAX_TRIES = 3;
+// Failures and retry counts are kept in Server State too: before (to 2026-11-01) a restart forgot
+// them, and the video maker remade cuts Claude had already turned down — a paid call each time.
+const CUT_STATE_KEY = 'social-cut-failures';
+let cutStateLoading = null;
+function cutStateLoad() {
+  if (!AIRTABLE_TOKEN) return Promise.resolve();
+  if (!cutStateLoading) cutStateLoading = airtableReq(`${AT_STATE_TBL}?maxRecords=1&filterByFormula=${encodeURIComponent(`{Key}='${CUT_STATE_KEY}'`)}`, { source: 'cut:load' })
+    .then(data => {
+      const rec = (data.records || [])[0];
+      const saved = rec && rec.fields['Value'] ? JSON.parse(rec.fields['Value']) : {};
+      for (const [k, v] of Object.entries(saved.failed || {})) if (!cutFailed.has(k)) cutFailed.set(k, v);
+      for (const [k, v] of Object.entries(saved.tries || {})) if (!cutTries.has(k) && !cutFailed.has(k)) cutTries.set(k, v);
+    })
+    .catch(e => { cutStateLoading = null; console.warn('social cut: could not load saved failures —', e.message); });
+  return cutStateLoading;
+}
+function cutStateSave() {
+  // Newest 200, errors cut short: Airtable's long text holds 100,000 characters.
+  const failed = [...cutFailed].sort((a, b) => b[1].at - a[1].at).slice(0, 200).map(([k, v]) => [k, { error: String(v.error).slice(0, 200), at: v.at }]);
+  return airtableReq(AT_STATE_TBL, { method: 'PATCH', source: 'cut:save', body: JSON.stringify({
+    performUpsert: { fieldsToMergeOn: ['Key'] },
+    records: [{ fields: { 'Key': CUT_STATE_KEY, 'Value': JSON.stringify({ failed: Object.fromEntries(failed), tries: Object.fromEntries(cutTries) }), 'Updated': new Date().toISOString() } }]
+  }) }).catch(e => console.warn('social cut: could not save failures —', e.message));
+}
 const cutAuthorized = req => {
   const got = crypto.createHash('sha256').update(String(req.get('x-cut-key') || '')).digest();
   return !!CUT_KEY && crypto.timingSafeEqual(got, crypto.createHash('sha256').update(CUT_KEY).digest());
@@ -3767,6 +3805,7 @@ app.get('/marketing/cut/:id', async (req, res) => {
 app.get('/marketing/cut-jobs', async (req, res) => {
   if (!cutAuthorized(req)) return res.status(403).json({ error: 'not allowed' });
   try {
+    await cutStateLoad();
     const rows = (await mktRecords()).map(r => r.fields || {})
       .filter(f => (f['Status'] === 'Draft' || f['Status'] === 'Approved') && cutWanted(f));
     const rank = f => f['Status'] === 'Approved' ? [0, Date.parse(f['Scheduled for'] || '') || 0] : [1, -(Date.parse(f['Drafted'] || '') || 0)];
@@ -3796,7 +3835,8 @@ app.post('/marketing/cut-upload/:name', express.raw({ type: 'video/mp4', limit: 
     const file = path.join(BRAND_DIR, name), tmp = file + '.part';
     fs.writeFileSync(tmp, req.body);
     fs.renameSync(tmp, file);
-    cutFailed.delete(name);
+    const hadFailed = cutFailed.delete(name);
+    if (cutTries.delete(name) || hadFailed) cutStateSave();
     console.log(`social cut: received ${name} for ${f['EB Number'] || '?'} (${Math.round(req.body.length / 1e6)} MB)`);
     if (!cutDrive.has(name)) await cutDriveSave(file, name, f['EB Number'] || '', f['Pin Title'] || '')
       .catch(e => console.warn('social cut: not saved to Drive —', e.message));
@@ -3807,15 +3847,17 @@ app.post('/marketing/cut-upload/:name', express.raw({ type: 'video/mp4', limit: 
 // POST /marketing/cut-failed/:name — the video maker couldn't make the cut. With retry, it tries
 // again next run (up to CUT_MAX_TRIES); otherwise, or after that, the post goes out with the
 // listing video as it is.
-app.post('/marketing/cut-failed/:name', (req, res) => {
+app.post('/marketing/cut-failed/:name', async (req, res) => {
   if (!cutAuthorized(req)) return res.status(403).json({ error: 'not allowed' });
   const name = req.params.name;
   if (!/^[a-f0-9]{32}\.mp4$/.test(name)) return res.status(400).json({ error: 'bad name' });
   const error = String((req.body && req.body.error) || 'no usable footage').slice(0, 300);
+  await cutStateLoad();
   const count = ((cutTries.get(name) || {}).count || 0) + 1;
   if (req.body && req.body.retry && count < CUT_MAX_TRIES) cutTries.set(name, { count, error });
   else { cutTries.delete(name); cutFailed.set(name, { error, at: Date.now() }); }
   console.log(`social cut: ${name} failed (${error})${cutTries.has(name) ? ', will try again' : ''}`);
+  await cutStateSave();
   res.json({ ok: true });
 });
 
@@ -3890,11 +3932,24 @@ async function mktPublishFacebook(f) {
 // Post one approved queue row to its channel. A video that fails falls back to a photo so an
 // approved post always goes out; the reason is kept in Notes and Media switches to Photo.
 const mktPosting = new Set();
+// An approved video post holds (up to CUT_MAX_WAIT_MS) while its social cut is still being made.
+function mktWaitingForCut(f) {
+  if (!cutWanted(f)) return false;
+  const cut = cutForRow(f);
+  const waited = Date.now() - (Date.parse(f['Scheduled for'] || f['Status changed'] || '') || 0);
+  if (cut.status !== 'working' || waited >= CUT_MAX_WAIT_MS) return false;
+  console.log(`marketing: ${f['EB Number']} waits for its social video cut (${cut.stage})`);
+  return true;
+}
 async function mktPostPin(id) {
   if (mktPosting.has(id)) return;
   mktPosting.add(id);
   const save = async fields => { const d = await airtableReq(`${AT_MARKETING_TBL}/${id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) }); mktCacheUpsert([d]); return d; };
   try {
+    // A post still waiting for its cut is decided from the copy in hand: the 5-minute tick used to
+    // reload the whole queue from Airtable each time just to find out it was still waiting.
+    const held = (mktCache.records || []).find(r => r.id === id);
+    if (held && mktWaitingForCut(held.fields || {})) return;
     const rec = (await mktRecords()).find(r => r.id === id) || await airtableReq(`${AT_MARKETING_TBL}/${id}`);
     const f = rec.fields || {};
     if (f['Status'] !== 'Approved' || f['Pin ID']) return;
@@ -3903,9 +3958,8 @@ async function mktPostPin(id) {
     // A cut still being made holds the post until a later tick; a failed cut posts the original.
     let video = f['Video URL'], videoNote = null;
     if (cutWanted(f)) {
+      if (mktWaitingForCut(f)) return;
       const cut = cutForRow(f);
-      const waited = Date.now() - (Date.parse(f['Scheduled for'] || f['Status changed'] || '') || 0);
-      if (cut.status === 'working' && waited < CUT_MAX_WAIT_MS) return console.log(`marketing: ${f['EB Number']} waits for its social video cut (${cut.stage})`);
       if (cut.status === 'working') cut.error = 'it was still not ready after 3 hours';
       if (cut.status === 'ready') video = cut.url;
       else videoNote = 'Posted the listing video as it is — the 15-second cut failed: ' + cut.error;
@@ -4430,4 +4484,5 @@ app.listen(PORT, () => {
   pinLoadAuth().catch(e => console.warn('Pinterest: could not load the saved connection —', e.message));
   metaLoadAuth().catch(e => console.warn('Meta: could not load the saved connection —', e.message));
   if (AIRTABLE_TOKEN) mktRecords().catch(e => console.warn('marketing: could not load the queue —', e.message));
+  cutStateLoad();
 });
