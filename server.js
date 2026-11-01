@@ -776,6 +776,10 @@ app.get('/auth/callback', async (req, res) => {
 });
 
 // ── Google Drive OAuth ────────────────────────────────────────
+// The Drive sign-in pages are open (they're opened as pages, which can't carry the passcode), so
+// the callback checks the state it issued and that the new account can see EB's Drive before it
+// replaces the connection: a stranger's own Google account can't take over (review, 2026-11-01).
+const driveOauthStates = new Map(); // state → issued-at
 app.get('/drive-auth', (req, res) => {
   const state = crypto.randomBytes(16).toString('hex');
   const redirectUri = `${SERVER_URL}/drive-auth/callback`;
@@ -788,12 +792,17 @@ app.get('/drive-auth', (req, res) => {
     + '&access_type=offline'
     + '&prompt=consent'
     + '&state=' + state;
+  driveOauthStates.set(state, Date.now());
   res.redirect(authUrl);
 });
 
 app.get('/drive-auth/callback', async (req, res) => {
-  const { code, error } = req.query;
+  const { code, error, state } = req.query;
   if (error) return res.status(400).send('Google auth error: ' + error);
+  const issued = driveOauthStates.get(state);
+  driveOauthStates.delete(state);
+  for (const [k, at] of driveOauthStates) if (Date.now() - at > 15 * 60 * 1000) driveOauthStates.delete(k);
+  if (!issued || Date.now() - issued > 15 * 60 * 1000) return res.status(400).send('This sign-in link has expired. Start again from EB Master.');
   try {
     const redirectUri = `${SERVER_URL}/drive-auth/callback`;
     const r = await fetch('https://oauth2.googleapis.com/token', {
@@ -809,6 +818,8 @@ app.get('/drive-auth/callback', async (req, res) => {
     });
     const d = await r.json();
     if (d.access_token) {
+      const sees = await fetch(`https://www.googleapis.com/drive/v3/files/${CUT_DRIVE_FOLDER}?fields=id&supportsAllDrives=true`, { headers: { 'Authorization': 'Bearer ' + d.access_token } });
+      if (!sees.ok) return res.status(403).send('That Google account cannot see the Eternal Blooms Drive folders, so Drive was not reconnected. Sign in with the account that owns them.');
       googleAccessToken  = d.access_token;
       if (d.refresh_token) googleRefreshToken = d.refresh_token;  // prompt=consent returns one each time; never overwrite with undefined
       googleTokenExpiry  = Date.now() + (d.expires_in || 3600) * 1000;
@@ -2826,7 +2837,7 @@ Both: sentence case, no emoji, no price or sale wording, 0–3 relevant hashtags
 // The app reads the queue on every open (for the home-screen badge), so keep a short-lived
 // copy like the inventory cache; writes through this server update it in place.
 const MKT_FRESH_MS = 5 * 60 * 1000;
-const mktCache = { records: null, at: 0, loading: null };
+const mktCache = { records: null, at: 0, loading: null, savedDuringLoad: new Map() };
 // Requests that arrive while a reload is running share it: without this, every card's poll that
 // landed in the reload's second or two started its own full reload (5,000+ Airtable calls a day,
 // 2026-11-01). A failed reload keeps serving the old copy and tries again a minute later.
@@ -2843,18 +2854,27 @@ async function mktRecords({ force = false } = {}) {
   if (!force && mktCache.records && Date.now() - mktCache.at < MKT_FRESH_MS) return mktCache.records;
   if (!mktCache.loading) {
     mktCache.loading = mktFetchAll()
-      .then(records => { mktCache.records = records; mktCache.at = Date.now(); return records; })
+      .then(records => {
+        // Rows saved while this reload was running are newer than what it fetched: put them back,
+        // or a just-posted row reads as Approved again and posts twice (review, 2026-11-01).
+        for (const r of mktCache.savedDuringLoad.values()) {
+          const i = records.findIndex(x => x.id === r.id);
+          if (i >= 0) records[i] = r; else records.unshift(r);
+        }
+        mktCache.records = records; mktCache.at = Date.now(); return records;
+      })
       .catch(e => {
         if (!mktCache.records) throw e;
         console.warn('marketing: queue reload failed, using the last copy —', e.message);
         mktCache.at = Date.now() - MKT_FRESH_MS + 60 * 1000;
         return mktCache.records;
       })
-      .finally(() => { mktCache.loading = null; });
+      .finally(() => { mktCache.loading = null; mktCache.savedDuringLoad.clear(); });
   }
   return mktCache.loading;
 }
 function mktCacheUpsert(recs) {
+  if (mktCache.loading) for (const r of recs) mktCache.savedDuringLoad.set(r.id, r);
   if (!mktCache.records) return;
   for (const r of recs) {
     const i = mktCache.records.findIndex(x => x.id === r.id);
@@ -3709,7 +3729,7 @@ const CUT_DRIVE_RECHECK_MS = 10 * 60 * 1000;
 const CUT_GH_TOKEN = process.env.GITHUB_DISPATCH_TOKEN || '';
 const CUT_GH_REPO = process.env.GITHUB_REPO || 'roberthale65-cyber/eb-inventory-tool';
 const CUT_KICK_GAP_MS = 5 * 60 * 1000; // a run already going queues one more; no need to ask more often
-let cutKickedAt = 0;
+let cutKickedAt = 0, cutKickOk = false;
 function cutKick(why) {
   if (!CUT_GH_TOKEN || !CUT_KEY || Date.now() - cutKickedAt < CUT_KICK_GAP_MS) return;
   cutKickedAt = Date.now();
@@ -3718,24 +3738,28 @@ function cutKick(why) {
     headers: { 'Authorization': 'Bearer ' + CUT_GH_TOKEN, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json', 'User-Agent': 'eb-shopify-server' },
     body: JSON.stringify({ ref: 'main' })
   }).then(async r => {
-    if (r.status === 204) return console.log(`social cut: started the video maker (${why})`);
+    cutKickOk = r.status === 204;
+    if (cutKickOk) return console.log(`social cut: started the video maker (${why})`);
     cutKickedAt = Date.now() - CUT_KICK_GAP_MS + 60 * 60 * 1000; // a bad token: try again in an hour, not every 5 minutes
     console.warn(`social cut: could not start the video maker (GitHub ${r.status}) — ${(await r.text().catch(() => '')).slice(0, 200)}`);
-  }).catch(e => console.warn('social cut: could not start the video maker —', e.message));
+  }).catch(e => { cutKickOk = false; console.warn('social cut: could not start the video maker —', e.message); });
 }
-const CUT_WAITING = CUT_GH_TOKEN
+// Says "started" only when GitHub accepted the last request (a rejected token falls back to the schedule).
+const cutWaiting = () => cutKickOk
   ? 'waiting for the video maker, which has been started (a cut is usually ready within about 30 minutes)'
   : 'waiting for the video maker, which runs every 30 minutes';
 const cutJobs = new Map();    // cut file name → { promise, stage }: fetching a saved cut from Drive
-const cutFailed = new Map();  // cut file name → { error, at }
+const cutFailed = new Map();  // cut file name → { error, at, final }: final = Claude's verdict on the footage
 const cutDrive = new Map();   // cut file name → Drive file id
 const cutChecked = new Map(); // cut file name → when Drive was last checked for it
-const cutTries = new Map();   // cut file name → { count, error }: runs that failed and will try again
+const cutTries = new Map();   // cut file name → { count, error, at }: runs that failed and will try again
 const CUT_MAX_TRIES = 3;
 // Failures and retry counts are kept in Server State too: before (to 2026-11-01) a restart forgot
 // them, and the video maker remade cuts Claude had already turned down — a paid call each time.
 const CUT_STATE_KEY = 'social-cut-failures';
-let cutStateLoading = null;
+let cutStateLoading = null, cutStateLoaded = false;
+const CUT_RETRY_GAP_MS = 30 * 60 * 1000;      // a failed try waits this long before the next
+const CUT_GIVEUP_KEEP_MS = 24 * 60 * 60 * 1000; // failures that weren't Claude's verdict (outages) are retried after a day
 function cutStateLoad() {
   if (!AIRTABLE_TOKEN) return Promise.resolve();
   if (!cutStateLoading) cutStateLoading = airtableReq(`${AT_STATE_TBL}?maxRecords=1&filterByFormula=${encodeURIComponent(`{Key}='${CUT_STATE_KEY}'`)}`, { source: 'cut:load' })
@@ -3744,13 +3768,16 @@ function cutStateLoad() {
       const saved = rec && rec.fields['Value'] ? JSON.parse(rec.fields['Value']) : {};
       for (const [k, v] of Object.entries(saved.failed || {})) if (!cutFailed.has(k)) cutFailed.set(k, v);
       for (const [k, v] of Object.entries(saved.tries || {})) if (!cutTries.has(k) && !cutFailed.has(k)) cutTries.set(k, v);
+      cutStateLoaded = true;
     })
     .catch(e => { cutStateLoading = null; console.warn('social cut: could not load saved failures —', e.message); });
   return cutStateLoading;
 }
 function cutStateSave() {
+  // Without the saved list in memory, a save would replace it with only today's failures.
+  if (!cutStateLoaded) return cutStateLoad().then(() => cutStateLoaded ? cutStateSave() : console.warn('social cut: failures not saved (saved list could not be loaded)'));
   // Newest 200, errors cut short: Airtable's long text holds 100,000 characters.
-  const failed = [...cutFailed].sort((a, b) => b[1].at - a[1].at).slice(0, 200).map(([k, v]) => [k, { error: String(v.error).slice(0, 200), at: v.at }]);
+  const failed = [...cutFailed].sort((a, b) => b[1].at - a[1].at).slice(0, 200).map(([k, v]) => [k, { error: String(v.error).slice(0, 200), at: v.at, final: !!v.final }]);
   return airtableReq(AT_STATE_TBL, { method: 'PATCH', source: 'cut:save', body: JSON.stringify({
     performUpsert: { fieldsToMergeOn: ['Key'] },
     records: [{ fields: { 'Key': CUT_STATE_KEY, 'Value': JSON.stringify({ failed: Object.fromEntries(failed), tries: Object.fromEntries(cutTries) }), 'Updated': new Date().toISOString() } }]
@@ -3803,12 +3830,21 @@ async function cutDriveFetch(id, file) {
 // The social cut for a listing video: { status: 'ready', url }, { status: 'working', stage } or
 // { status: 'failed', error }. A cut not on disk is looked for in Drive (at most every 10
 // minutes); one not there yet waits for the video maker.
+// A cut that failed for good — or gave up after outages, which gets another chance after a day.
+function cutFailure(name) {
+  const f = cutFailed.get(name);
+  if (f && f.final === false && Date.now() - f.at > CUT_GIVEUP_KEEP_MS) { cutFailed.delete(name); cutStateSave(); return null; }
+  return f || null;
+}
+// A failed try is retried after CUT_RETRY_GAP_MS, not at the next run: on-demand runs come minutes
+// apart, and three quick retries in a short outage would use them all up.
+const cutRetryDue = name => { const t = cutTries.get(name); return !t || Date.now() - (t.at || 0) >= CUT_RETRY_GAP_MS; };
 function cutStatus(src) {
   const name = cutName(src), file = path.join(BRAND_DIR, name);
   if (fs.existsSync(file)) return { status: 'ready', url: brandUrl(name) };
   const running = cutJobs.get(name);
   if (running) return { status: 'working', stage: running.stage };
-  const failed = cutFailed.get(name);
+  const failed = cutFailure(name);
   if (failed) return { status: 'failed', error: failed.error };
   if (!CUT_KEY) return { status: 'failed', error: '15-second cuts are paused for now' };
   if (Date.now() - (cutChecked.get(name) || 0) > CUT_DRIVE_RECHECK_MS) {
@@ -3820,8 +3856,8 @@ function cutStatus(src) {
     return { status: 'working', stage: job.stage };
   }
   const tried = cutTries.get(name);
-  cutKick('a cut is still wanted');
-  return { status: 'working', stage: tried ? `the last try failed (${tried.error}); ${CUT_WAITING}` : CUT_WAITING };
+  if (cutRetryDue(name)) cutKick('a cut is still wanted');
+  return { status: 'working', stage: tried ? `the last try failed (${tried.error}); ${cutWaiting()}` : cutWaiting() };
 }
 const cutWanted = f => f['Media'] === 'Video' && !!f['Video URL'] && f['Video version'] !== 'Original video';
 const cutForRow = f => cutStatus(f['Video URL']);
@@ -3850,7 +3886,7 @@ app.get('/marketing/cut-jobs', async (req, res) => {
       const name = cutName(f['Video URL']);
       if (seen.has(name)) continue;
       seen.add(name);
-      if (fs.existsSync(path.join(BRAND_DIR, name)) || cutFailed.has(name)) continue;
+      if (fs.existsSync(path.join(BRAND_DIR, name)) || cutFailure(name) || !cutRetryDue(name)) continue;
       if (await cutDriveFind(name).catch(() => null)) continue; // fetched when its card or post asks
       jobs.push({ name, src: f['Video URL'], eb: f['EB Number'] || '' });
       if (jobs.length >= (+req.query.limit || 8)) break;
@@ -3889,8 +3925,9 @@ app.post('/marketing/cut-failed/:name', async (req, res) => {
   const error = String((req.body && req.body.error) || 'no usable footage').slice(0, 300);
   await cutStateLoad();
   const count = ((cutTries.get(name) || {}).count || 0) + 1;
-  if (req.body && req.body.retry && count < CUT_MAX_TRIES) cutTries.set(name, { count, error });
-  else { cutTries.delete(name); cutFailed.set(name, { error, at: Date.now() }); }
+  const retry = !!(req.body && req.body.retry);
+  if (retry && count < CUT_MAX_TRIES) cutTries.set(name, { count, error, at: Date.now() });
+  else { cutTries.delete(name); cutFailed.set(name, { error, at: Date.now(), final: !retry }); }
   console.log(`social cut: ${name} failed (${error})${cutTries.has(name) ? ', will try again' : ''}`);
   await cutStateSave();
   res.json({ ok: true });

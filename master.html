@@ -1501,12 +1501,17 @@ const SERVER_URL = 'https://eb-shopify-server.onrender.com';
 // server. A wrong or missing one gets a 401 that asks again; requests that fail together share
 // one prompt.
 const EB_KEY_STORE = 'eb-app-key';
-let ebKeyPrompt = null;
+let ebKeyPrompt = null, ebKeyDeclined = false;
 function ebAppKey(){ try { return localStorage.getItem(EB_KEY_STORE) || ''; } catch(e){ return ''; } }
+// Cancel stops the asking until the page is reloaded (the background checks would otherwise ask
+// every few seconds). Only plain keyboard characters can travel in a header.
 function ebAskAppKey(){
+  if(ebKeyDeclined) return Promise.resolve(false);
   if(!ebKeyPrompt) ebKeyPrompt = new Promise(resolve => setTimeout(() => {
-    const k = (prompt('Enter the EB Master passcode (you only need to do this once on this device):') || '').trim();
+    let k = (prompt('Enter the EB Master passcode (you only need to do this once on this device):') || '').trim();
+    if(k && !/^[ -~]+$/.test(k)){ alert('The passcode can only use plain letters, numbers and symbols. Please type it again.'); k = ''; }
     if(k){ try { localStorage.setItem(EB_KEY_STORE, k); } catch(e){} }
+    else ebKeyDeclined = true;
     ebKeyPrompt = null; resolve(!!k);
   }, 0));
   return ebKeyPrompt;
@@ -2274,7 +2279,9 @@ function mkSchedulePoll(){
   if(!posting) return;
   mkPollTimer = setTimeout(async () => {
     if(!document.getElementById('screen-marketing').classList.contains('active')) return;
-    if(document.hidden) return mkSchedulePoll();
+    // Not while someone is typing in a card: redrawing it closes the keyboard on a phone.
+    const typing = document.activeElement && document.getElementById('mk-list').contains(document.activeElement);
+    if(document.hidden || typing) return mkSchedulePoll();
     try { await mkLoad(); mkRender({ keepTyped: true }); } catch(e) { mkSchedulePoll(); }
   }, MK_POLL_MS);
 }
@@ -2500,7 +2507,7 @@ async function mkLoadCut(rows){
       if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
       const changed = JSON.stringify(mkCuts[eb]) !== JSON.stringify(d);
       mkCuts[eb] = d;
-      if(changed && mkTab !== 'Posted' && mkTab !== 'Skipped') mkRender();
+      if(changed && mkTab !== 'Posted' && mkTab !== 'Skipped') mkRender({ keepTyped: true });
       if(d.status !== 'working') return;
     }
   } catch(e){ mkCuts[eb] = { status: 'failed', error: e.message }; mkRender(); }
@@ -3657,7 +3664,14 @@ function npKeepDraftOnDevice(why){
   alert('Not saved to Airtable yet: ' + why + '.\n\nThe draft is kept on this device. Open New Piece here to continue it.');
   goHome();
 }
+// Shares Assign EB's one-at-a-time guard: it also assigns an EB number.
 async function npSaveAndExitStep1() {
+  if(npPrimaryBusy) return;
+  npPrimaryBusy=true;
+  try { return await npSaveAndExitStep1Now(); }
+  finally { npPrimaryBusy=false; }
+}
+async function npSaveAndExitStep1Now() {
   // Only runs from Step 1 before EB has been assigned.
   // If an EB number already exists (edit mode or resumed), just WIP-save and go home.
   if (npCurrentRecordId || npCurrentEB) { wipSaveNP(); goHome(); return; }
@@ -6252,7 +6266,7 @@ function wipShowBanner(screenId) {
   if (!banner) return;
   const saved = key === 'np' && npMode !== 'edit' && !npCurrentRecordId ? WIP.load('np') : null;
   if (!saved || !saved.kept || saved.ebNumber) { banner.style.display = 'none'; return; }
-  banner.innerHTML = '<strong>Unsaved new piece on this device</strong>' + escHtml(saved.refName || 'Untitled draft')
+  banner.innerHTML = '<strong>Unsaved new piece on this device:</strong> ' + escHtml(saved.refName || 'Untitled draft')
     + ' — kept by Save and exit ' + escHtml(new Date(saved.ts).toLocaleDateString()) + '. '
     + '<a href="#" onclick="wipRestore(\'np\');return false" style="color:inherit;font-weight:700">Continue it →</a> · '
     + '<a href="#" onclick="if(confirm(\'Discard this draft?\'))wipDiscard(\'np\');return false" style="color:inherit">Discard</a>';
