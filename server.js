@@ -6,20 +6,39 @@ const fetch   = (...args) => import('node-fetch').then(({default: f}) => f(...ar
 const FormData = require('form-data'); // streaming multipart for staged video uploads
  
 const app = express();
-// Capture the raw request body ONLY for Shopify webhook routes, so we can verify
-// the HMAC signature (JSON parsing otherwise discards the exact bytes Shopify signed).
-// Scoped by path to avoid holding large image-upload buffers in memory.
-app.use(express.json({limit: '150mb', verify: (req, res, buf) => {
-  if (req.url && req.url.startsWith('/webhooks/')) req.rawBody = buf;
-}}));
 app.use(cors({
   origin: [
     'https://roberthale65-cyber.github.io',
     'https://eternalbloomsbypatti.com',
     'https://eternalbloomsdesigns.com',
     'null'
-  ]
+  ],
+  maxAge: 2 * 60 * 60 // the passcode header makes every call preflight; let browsers remember it
 }));
+// Passcode: the server URL is public (it's in master.html), so with APP_KEY set every route
+// except the ones below needs EB Master's passcode in the x-app-key header. Checked before the
+// body is read, so a stranger can't make the server parse a 150 MB upload either. Without
+// APP_KEY the server stays open, as before.
+const APP_KEY = process.env.APP_KEY || '';
+const APP_OPEN = [
+  /^\/(health|version|airtable-usage)$/,                       // read-only status
+  /^\/(auth|drive-auth|pinterest-auth|meta-auth)(\/callback)?$/, // OAuth: opened as pages, checked by each provider
+  /^\/webhooks\//,                                            // Shopify, checked by HMAC
+  /^\/marketing\/media\//,                                     // fetched by Pinterest, Instagram and Facebook
+  /^\/marketing\/(cut-jobs|cut-upload\/|cut-failed\/)/        // the video maker, checked by SOCIAL_CUT_KEY
+];
+const sameSecret = (a, b) => crypto.timingSafeEqual(crypto.createHash('sha256').update(String(a)).digest(), crypto.createHash('sha256').update(String(b)).digest());
+app.use((req, res, next) => {
+  if (!APP_KEY || req.method === 'OPTIONS' || APP_OPEN.some(re => re.test(req.path))) return next();
+  if (sameSecret(req.get('x-app-key') || '', APP_KEY)) return next();
+  res.status(401).json({ error: 'EB Master passcode needed', appKey: true });
+});
+// Capture the raw request body ONLY for Shopify webhook routes, so we can verify
+// the HMAC signature (JSON parsing otherwise discards the exact bytes Shopify signed).
+// Scoped by path to avoid holding large image-upload buffers in memory.
+app.use(express.json({limit: '150mb', verify: (req, res, buf) => {
+  if (req.url && req.url.startsWith('/webhooks/')) req.rawBody = buf;
+}}));
 // Tag every request so each Airtable call made while serving it is counted against its
 // route (see airtableReq / GET /airtable-usage). Record ids are folded to :id.
 const atCallCtx = new AsyncLocalStorage();
@@ -733,7 +752,7 @@ app.get('/auth/callback', async (req, res) => {
     const tokenData = await tokenRes.json();
     if (tokenData.access_token) {
       shopifyAccessToken = tokenData.access_token;
-      console.log('✓ Shopify OAuth complete. Set this in Render → SHOPIFY_TOKEN =', shopifyAccessToken);
+      console.log('✓ Shopify OAuth complete. Copy the token from the callback page into Render → SHOPIFY_TOKEN (not logged: logs are not a place for secrets).');
       res.send(`<html><head><meta charset="utf-8">
         <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
         <style>body{font-family:'Poppins',system-ui,sans-serif;background:#fbfaf9;color:#2b2622;padding:48px 40px;max-width:560px;margin:0 auto;line-height:1.7}h2{font-family:'DM Serif Display',Georgia,serif;font-weight:400;color:#bb8588;font-size:28px;margin-bottom:10px}p{color:#5b5248;font-size:14px}code{display:block;word-break:break-all;background:#f3f3f6;border:1px solid #e9e6e2;padding:10px 12px;border-radius:6px;font-size:13px;margin:8px 0;font-family:ui-monospace,Menlo,monospace}.warn{font-size:12px;color:#7a4a0a;background:#fefbec;border:1px solid #eea211;border-radius:6px;padding:10px 12px;margin-top:16px}</style>
@@ -787,7 +806,7 @@ app.get('/drive-auth/callback', async (req, res) => {
       googleAccessToken  = d.access_token;
       if (d.refresh_token) googleRefreshToken = d.refresh_token;  // prompt=consent returns one each time; never overwrite with undefined
       googleTokenExpiry  = Date.now() + (d.expires_in || 3600) * 1000;
-      console.log('✓ Google Drive OAuth complete. Set this in Render → GOOGLE_REFRESH_TOKEN =', googleRefreshToken);
+      console.log('✓ Google Drive OAuth complete. Copy the refresh token from the callback page into Render → GOOGLE_REFRESH_TOKEN (not logged).');
       res.send(`<html><head><meta charset="utf-8">
         <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
         <style>body{font-family:'Poppins',system-ui,sans-serif;background:#fbfaf9;color:#2b2622;padding:48px 40px;max-width:560px;margin:0 auto;line-height:1.7}h2{font-family:'DM Serif Display',Georgia,serif;font-weight:400;color:#bb8588;font-size:28px;margin-bottom:10px}p{color:#5b5248;font-size:14px}code{display:block;word-break:break-all;background:#f3f3f6;border:1px solid #e9e6e2;padding:10px 12px;border-radius:6px;font-size:13px;margin:8px 0;font-family:ui-monospace,Menlo,monospace}.warn{font-size:12px;color:#7a4a0a;background:#fefbec;border:1px solid #eea211;border-radius:6px;padding:10px 12px;margin-top:16px}.muted{font-size:12px;color:#aea498;margin-top:20px}a{color:#bb8588}</style>
@@ -1422,27 +1441,28 @@ app.post('/mark-sold', async (req, res) => {
   if (!shopify_url && !eb_number) return res.status(400).json({ error: 'shopify_url or eb_number required' });
   if (eb_number) mktHandleSoldSoon(String(eb_number).trim()); // background: pins for this piece
   try {
-    let productId = null;
-    if (eb_number) {
-      const searchRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/products.json?fields=id,variants&limit=250`, { headers: { 'X-Shopify-Access-Token': shopifyAccessToken } });
-      const searchData = await searchRes.json();
-      for (const p of (searchData.products||[])) {
-        if (p.variants && p.variants.some(v => v.sku === eb_number)) { productId = p.id; break; }
-      }
-    }
-    if (!productId) return res.json({ success: true, note: 'Product not found in Shopify — Airtable updated only' });
-    const variantRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/products/${productId}.json`, { headers: { 'X-Shopify-Access-Token': shopifyAccessToken } });
-    const variantData = await variantRes.json();
-    const inventoryItemId = variantData.product?.variants?.[0]?.inventory_item_id;
-    const locRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/locations.json`, { headers: { 'X-Shopify-Access-Token': shopifyAccessToken } });
-    const locData = await locRes.json();
-    const locationId = locData.locations?.[0]?.id;
-    if (locationId && inventoryItemId) {
-      await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/inventory_levels/set.json`, {
-        method: 'POST',
-        headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ location_id: locationId, inventory_item_id: inventoryItemId, available: 0 })
-      });
+    // Find the variant by EXACT SKU — one query instead of downloading the catalogue, and it
+    // finds pieces past the first 250 products. Variant search tokenizes on hyphens, so only
+    // equality counts (same guard as /mark-sale and publish).
+    if (!eb_number) return res.json({ success: true, note: 'No EB number — Airtable updated only' });
+    const lookup = await shopifyGraphql(
+      `query($q:String!){ productVariants(first:10, query:$q){ edges { node { sku product { legacyResourceId } inventoryItem { id inventoryLevels(first:10) { edges { node { location { id } } } } } } } } }`,
+      { q: `sku:${JSON.stringify(String(eb_number))}` }
+    );
+    if (lookup.errors) return res.status(502).json({ error: 'Shopify lookup failed: ' + JSON.stringify(lookup.errors).slice(0, 300) });
+    const node = ((((lookup.data || {}).productVariants || {}).edges) || []).map(e => e.node).find(n => n && n.sku === eb_number);
+    if (!node) return res.json({ success: true, note: 'Product not found in Shopify — Airtable updated only' });
+    const productId = Number(node.product.legacyResourceId);
+    // Set available to 0 at every location it's stocked at. REST inventory_levels/set.json
+    // silently no-ops on 2026-04, which is what this route used before (see /create-product).
+    const quantities = node.inventoryItem.inventoryLevels.edges.map(e => ({ inventoryItemId: node.inventoryItem.id, locationId: e.node.location.id, quantity: 0, changeFromQuantity: null }));
+    if (quantities.length) {
+      const inv = await shopifyGraphql(
+        `mutation invSet($input:InventorySetQuantitiesInput!,$idem:String!){inventorySetQuantities(input:$input)@idempotent(key:$idem){userErrors{code field message}}}`,
+        { input: { name: 'available', reason: 'correction', quantities }, idem: crypto.randomUUID() }
+      );
+      const invErrs = (inv.errors || []).concat((inv.data && inv.data.inventorySetQuantities && inv.data.inventorySetQuantities.userErrors) || []);
+      if (invErrs.length) return res.status(502).json({ error: 'Shopify inventory not set to 0: ' + invErrs.map(e => e.message).join(', '), product_id: productId });
     }
     const soldCollectionId = await getCollectionId('sold-portfolio');
     if (soldCollectionId) {
@@ -2792,12 +2812,24 @@ Both: sentence case, no emoji, no price or sale wording, 0–3 relevant hashtags
 // The app reads the queue on every open (for the home-screen badge), so keep a short-lived
 // copy like the inventory cache; writes through this server update it in place.
 const MKT_FRESH_MS = 5 * 60 * 1000;
-const mktCache = { records: null, at: 0 };
+const mktCache = { records: null, at: 0, loading: null };
+// Requests that arrive while a reload is running share it: without this, every card's poll that
+// landed in the reload's second or two started its own full reload (5,000+ Airtable calls a day,
+// 2026-11-01). A failed reload keeps serving the old copy and tries again a minute later.
 async function mktRecords({ force = false } = {}) {
   if (!force && mktCache.records && Date.now() - mktCache.at < MKT_FRESH_MS) return mktCache.records;
-  mktCache.records = await mktFetchAll();
-  mktCache.at = Date.now();
-  return mktCache.records;
+  if (!mktCache.loading) {
+    mktCache.loading = mktFetchAll()
+      .then(records => { mktCache.records = records; mktCache.at = Date.now(); return records; })
+      .catch(e => {
+        if (!mktCache.records) throw e;
+        console.warn('marketing: queue reload failed, using the last copy —', e.message);
+        mktCache.at = Date.now() - MKT_FRESH_MS + 60 * 1000;
+        return mktCache.records;
+      })
+      .finally(() => { mktCache.loading = null; });
+  }
+  return mktCache.loading;
 }
 function mktCacheUpsert(recs) {
   if (!mktCache.records) return;
