@@ -2830,6 +2830,15 @@ const mktCache = { records: null, at: 0, loading: null };
 // Requests that arrive while a reload is running share it: without this, every card's poll that
 // landed in the reload's second or two started its own full reload (5,000+ Airtable calls a day,
 // 2026-11-01). A failed reload keeps serving the old copy and tries again a minute later.
+// Social post and checklist drafts use Haiku (2026-11-01, was Sonnet 4.5): short copy from a
+// fixed brief, at about 1/30 of the cost. Haiku 5.5 thinks first (low effort keeps that brief), so
+// the answer is read from the text blocks, not content[0], and max_tokens leaves room for thinking.
+const MKT_DRAFT_MODEL = 'claude-haiku-5-5';
+function claudeText(data) {
+  if (data.stop_reason === 'max_tokens') throw new Error('Claude ran out of room before finishing the draft');
+  if (data.stop_reason === 'refusal') throw new Error('Claude declined to write this draft');
+  return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+}
 async function mktRecords({ force = false } = {}) {
   if (!force && mktCache.records && Date.now() - mktCache.at < MKT_FRESH_MS) return mktCache.records;
   if (!mktCache.loading) {
@@ -2967,11 +2976,11 @@ Return ONLY valid JSON, no code fences: {"title": "...", "description": "...", "
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 700, messages: [{ role: 'user', content }] })
+    body: JSON.stringify({ model: MKT_DRAFT_MODEL, max_tokens: 4000, output_config: { effort: 'low' }, messages: [{ role: 'user', content }] })
   });
   const data = await r.json();
   if (!r.ok) throw new Error((data.error && data.error.message) || 'Anthropic API error');
-  const raw = (data.content && data.content[0] && data.content[0].text || '').trim();
+  const raw = claudeText(data).trim();
   const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
   const parsed = JSON.parse((s >= 0 && e > s) ? raw.slice(s, e + 1).replace(/\r?\n/g, ' ') : raw);
   return {
@@ -3008,11 +3017,11 @@ Return ONLY valid JSON, no code fences: {"instagram": "...", "facebook": "..."}`
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 900, messages: [{ role: 'user', content }] })
+    body: JSON.stringify({ model: MKT_DRAFT_MODEL, max_tokens: 4000, output_config: { effort: 'low' }, messages: [{ role: 'user', content }] })
   });
   const data = await r.json();
   if (!r.ok) throw new Error((data.error && data.error.message) || 'Anthropic API error');
-  const raw = (data.content && data.content[0] && data.content[0].text || '').trim();
+  const raw = claudeText(data).trim();
   const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
   const parsed = JSON.parse((s >= 0 && e > s) ? raw.slice(s, e + 1).replace(/\r?\n/g, ' ') : raw);
   return {
@@ -3088,6 +3097,7 @@ async function mktDraftBatch(count, opts = {}) {
     records.push(...(data.records || []));
   }
   mktCacheUpsert(records);
+  if (records.some(r => cutWanted(r.fields || {}))) cutKick('new video drafts');
   records.filter(r => cutWanted(r.fields || {})).forEach(r => cutForRow(r.fields)); // ready by review time
   return { records, failed, remaining: eligible.length - pool.length };
 }
@@ -3691,7 +3701,31 @@ const CUT_KEY = process.env.SOCIAL_CUT_KEY || '';
 const CUT_DRIVE_FOLDER = process.env.SOCIAL_CUT_FOLDER_ID || '10Wsw5PbSjx3GT6_iVoZpa9ajGP0P4RXU';
 const CUT_MAX_WAIT_MS = 3 * 60 * 60 * 1000;
 const CUT_DRIVE_RECHECK_MS = 10 * 60 * 1000;
-const CUT_WAITING = 'waiting for the video maker, which runs every 30 minutes';
+// The video maker is started as soon as a cut is wanted (cutKick) rather than left to GitHub's
+// half-hourly schedule, which GitHub treats as best effort: runs came 3 to 7 hours apart
+// (2026-11-01) and approved posts went out with the uncut video. Needs GITHUB_DISPATCH_TOKEN, a
+// fine-grained token for this repository with Actions: read and write. The schedule stays as a
+// backup; without the token only the schedule runs, as before.
+const CUT_GH_TOKEN = process.env.GITHUB_DISPATCH_TOKEN || '';
+const CUT_GH_REPO = process.env.GITHUB_REPO || 'roberthale65-cyber/eb-inventory-tool';
+const CUT_KICK_GAP_MS = 5 * 60 * 1000; // a run already going queues one more; no need to ask more often
+let cutKickedAt = 0;
+function cutKick(why) {
+  if (!CUT_GH_TOKEN || !CUT_KEY || Date.now() - cutKickedAt < CUT_KICK_GAP_MS) return;
+  cutKickedAt = Date.now();
+  fetch(`https://api.github.com/repos/${CUT_GH_REPO}/actions/workflows/social-cuts.yml/dispatches`, {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + CUT_GH_TOKEN, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json', 'User-Agent': 'eb-shopify-server' },
+    body: JSON.stringify({ ref: 'main' })
+  }).then(async r => {
+    if (r.status === 204) return console.log(`social cut: started the video maker (${why})`);
+    cutKickedAt = Date.now() - CUT_KICK_GAP_MS + 60 * 60 * 1000; // a bad token: try again in an hour, not every 5 minutes
+    console.warn(`social cut: could not start the video maker (GitHub ${r.status}) — ${(await r.text().catch(() => '')).slice(0, 200)}`);
+  }).catch(e => console.warn('social cut: could not start the video maker —', e.message));
+}
+const CUT_WAITING = CUT_GH_TOKEN
+  ? 'waiting for the video maker, which has been started (a cut is usually ready within about 30 minutes)'
+  : 'waiting for the video maker, which runs every 30 minutes';
 const cutJobs = new Map();    // cut file name → { promise, stage }: fetching a saved cut from Drive
 const cutFailed = new Map();  // cut file name → { error, at }
 const cutDrive = new Map();   // cut file name → Drive file id
@@ -3780,12 +3814,13 @@ function cutStatus(src) {
   if (Date.now() - (cutChecked.get(name) || 0) > CUT_DRIVE_RECHECK_MS) {
     cutChecked.set(name, Date.now());
     const job = { stage: 'checking Drive for the saved cut' };
-    job.promise = cutDriveFind(name).then(id => id && (job.stage = 'fetching the saved cut from Drive', cutDriveFetch(id, file)));
+    job.promise = cutDriveFind(name).then(id => id ? (job.stage = 'fetching the saved cut from Drive', cutDriveFetch(id, file)) : cutKick('a cut is wanted'));
     cutJobs.set(name, job);
     job.promise.catch(e => console.warn('social cut: Drive lookup failed —', e.message)).finally(() => cutJobs.delete(name));
     return { status: 'working', stage: job.stage };
   }
   const tried = cutTries.get(name);
+  cutKick('a cut is still wanted');
   return { status: 'working', stage: tried ? `the last try failed (${tried.error}); ${CUT_WAITING}` : CUT_WAITING };
 }
 const cutWanted = f => f['Media'] === 'Video' && !!f['Video URL'] && f['Video version'] !== 'Original video';
@@ -4373,11 +4408,11 @@ Return ONLY valid JSON, no code fences: {"group_post": "...", "group_question": 
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 1500, messages: [{ role: 'user', content: prompt }] })
+    body: JSON.stringify({ model: MKT_DRAFT_MODEL, max_tokens: 4000, output_config: { effort: 'low' }, messages: [{ role: 'user', content: prompt }] })
   });
   const data = await r.json();
   if (!r.ok) throw new Error((data.error && data.error.message) || 'Anthropic API error');
-  const raw = (data.content && data.content[0] && data.content[0].text || '').trim();
+  const raw = claudeText(data).trim();
   const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
   const parsed = JSON.parse(s >= 0 && e > s ? raw.slice(s, e + 1) : raw);
   return {

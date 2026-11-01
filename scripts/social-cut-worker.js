@@ -1,5 +1,6 @@
 // Makes the 15-second social cuts the server is waiting for. Runs in the "Social video cuts"
-// GitHub Action every 30 minutes (.github/workflows/social-cuts.yml): asks the server which
+// GitHub Action, started by the server when a cut is wanted, with a 30-minute schedule as backup
+// (.github/workflows/social-cuts.yml): asks the server which
 // listing videos need a cut, makes each one with lib/social-cut.js, and sends it back. The server
 // saves it to Drive and posts it. A video Claude finds no good footage in is reported back, so the
 // post goes out with the listing video as it is.
