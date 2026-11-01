@@ -2275,7 +2275,7 @@ function mkSchedulePoll(){
   mkPollTimer = setTimeout(async () => {
     if(!document.getElementById('screen-marketing').classList.contains('active')) return;
     if(document.hidden) return mkSchedulePoll();
-    try { await mkLoad(); mkRender(); } catch(e) { mkSchedulePoll(); }
+    try { await mkLoad(); mkRender({ keepTyped: true }); } catch(e) { mkSchedulePoll(); }
   }, MK_POLL_MS);
 }
 function mkStatusMsg(msg, type){
@@ -2284,7 +2284,10 @@ function mkStatusMsg(msg, type){
   el.className = 'info-card ' + (type || 'teal'); el.style.display = 'block'; el.innerHTML = msg;
 }
 
-function mkRender(){
+// keepTyped (the background refresh): carry over text typed into cards but not saved yet, and
+// the cursor, instead of wiping them when the list is redrawn.
+function mkRender(opts){
+  const keepTyped = opts && opts.keepTyped;
   document.getElementById('mk-tabs').innerHTML = MK_TABS.map(([k,label]) => {
     return '<button class="mk-tab' + (mkTab===k?' active':'') + '" onclick="mkSetTab(\'' + k + '\')">' + label + ' (' + mkPieces(k).length + ')</button>';
   }).join('');
@@ -2296,7 +2299,11 @@ function mkRender(){
     host.innerHTML = '<div style="text-align:center;padding:30px 16px;color:var(--text-muted);font-size:14px">' + empty + '</div>';
     return;
   }
+  const typed = {}, active = document.activeElement, focus = keepTyped && active && host.contains(active) && active.id ? { id: active.id, start: active.selectionStart, end: active.selectionEnd } : null;
+  if(keepTyped) host.querySelectorAll('input[id],textarea[id]').forEach(el => { if(el.value !== el.defaultValue) typed[el.id] = el.value; });
   host.innerHTML = pieces.map(mkPieceHtml).join('');
+  for(const id in typed){ const el = document.getElementById(id); if(el){ el.value = typed[id]; el.dispatchEvent(new Event('input')); } }
+  if(focus){ const el = document.getElementById(focus.id); if(el){ el.focus(); try { el.setSelectionRange(focus.start, focus.end); } catch(e){} } }
   pieces.forEach(mkLoadCut);
 }
 
@@ -3643,6 +3650,13 @@ function npBuildFieldsFromForm(){
   return {fields,seasons};
 }
 
+// Save and exit without an EB number: the draft stays in this browser only (it used to look saved
+// but was never offered back).
+function npKeepDraftOnDevice(why){
+  wipSaveNP(); WIP.save('np', { ...WIP.load('np'), kept: true });
+  alert('Not saved to Airtable yet: ' + why + '.\n\nThe draft is kept on this device. Open New Piece here to continue it.');
+  goHome();
+}
 async function npSaveAndExitStep1() {
   // Only runs from Step 1 before EB has been assigned.
   // If an EB number already exists (edit mode or resumed), just WIP-save and go home.
@@ -3651,12 +3665,13 @@ async function npSaveAndExitStep1() {
   const refName = (document.getElementById('np-ref-name')||{}).value||'';
   const seasons  = npGetChecks('np-season');
   if (!refName || seasons.length === 0) {
-    // Not enough data to write to Airtable — fall back to localStorage-only WIP save.
-    wipSaveNP(); goHome(); return;
+    // Not enough data to write to Airtable — keep it on this device and say so; New Piece
+    // offers it back next time (wipShowBanner).
+    npKeepDraftOnDevice('it needs a Reference name and at least one season before it can get an EB number'); return;
   }
   // Enough data: auto-generate EB and write to Airtable before exiting.
   // Same folder as an existing piece → keep the draft local instead of making a duplicate.
-  if (!npConfirmFolderNotDuplicate()) { wipSaveNP(); goHome(); return; }
+  if (!npConfirmFolderNotDuplicate()) { npKeepDraftOnDevice('its Drive folder already belongs to another piece'); return; }
   setStatus('np','Saving to Airtable before exit...','loading');
   const year   = document.getElementById('np-year').value;
   const type   = document.getElementById('np-type').value;
@@ -4378,7 +4393,7 @@ async function lpDriveLinkRename(){
 
 // ── Square crop (1:1) — crops the chosen region instead of padding with white ──
 // crop = {sx,sy,sSize} in source-pixel coords; falls back to a centered square.
-function lpCropToSquare(dataUrl,crop,targetSize,maxKB){return new Promise(resolve=>{const img=new Image();img.onload=()=>{const natW=img.naturalWidth,natH=img.naturalHeight;let sSize,sx,sy;if(crop&&crop.sSize){sSize=Math.min(crop.sSize,natW,natH);sx=crop.sx;sy=crop.sy;}else{sSize=Math.min(natW,natH);sx=(natW-sSize)/2;sy=(natH-sSize)/2;}sx=Math.max(0,Math.min(sx,natW-sSize));sy=Math.max(0,Math.min(sy,natH-sSize));const canvas=document.createElement('canvas');canvas.width=targetSize;canvas.height=targetSize;const ctx=canvas.getContext('2d');ctx.drawImage(img,sx,sy,sSize,sSize,0,0,targetSize,targetSize);let quality=0.88;const tryExport=()=>{canvas.toBlob(blob=>{(blob.size/1024<=maxKB||quality<=0.5)?resolve(blob):(quality-=0.08,tryExport());},'image/jpeg',quality);};tryExport();};img.src=dataUrl;});}
+function lpCropToSquare(dataUrl,crop,targetSize,maxKB){return new Promise((resolve,reject)=>{const img=new Image();img.onerror=()=>reject(new Error('the browser could not open this photo (HEIC or damaged file?)'));img.onload=()=>{const natW=img.naturalWidth,natH=img.naturalHeight;let sSize,sx,sy;if(crop&&crop.sSize){sSize=Math.min(crop.sSize,natW,natH);sx=crop.sx;sy=crop.sy;}else{sSize=Math.min(natW,natH);sx=(natW-sSize)/2;sy=(natH-sSize)/2;}sx=Math.max(0,Math.min(sx,natW-sSize));sy=Math.max(0,Math.min(sy,natH-sSize));const canvas=document.createElement('canvas');canvas.width=targetSize;canvas.height=targetSize;const ctx=canvas.getContext('2d');ctx.drawImage(img,sx,sy,sSize,sSize,0,0,targetSize,targetSize);let quality=0.88;const tryExport=()=>{canvas.toBlob(blob=>{if(!blob)return reject(new Error('the photo could not be resized'));(blob.size/1024<=maxKB||quality<=0.5)?resolve(blob):(quality-=0.08,tryExport());},'image/jpeg',quality);};tryExport();};img.src=dataUrl;});}
 
 // ── Persistent crop store ────────────────────────────────────
 // Crops survive across sessions, keyed by Drive file ID (stable through the
@@ -4569,7 +4584,7 @@ async function lpPublish(){
   // Persist any buffered edits before the long Shopify step (non-fatal, as before).
   try{ await flushWrites(lpSelectedRecord.id); }catch(e){ console.warn('Pre-publish Airtable flush failed (kept locally):',e.message); }
   setStatus('lp','Optimizing photos for Shopify...','loading');
-  const images=[];
+  const images=[],photoFails=[];
   let squaresSaved=0;
   // Rename the originals in Drive to EB_NN (bytes untouched), in listing order.
   if(lpLoadedFolderId){
@@ -4580,7 +4595,13 @@ async function lpPublish(){
     }catch(e){console.warn('Original rename skipped:',e.message);}
   }
   // Generate the square crop for each photo, save it to Drive (EB_square_NN), and send it to Shopify.
-  for(let i=0;i<lpPhotoItems.length;i++){try{btn.textContent='⏳ Photo '+(i+1)+' of '+lpPhotoItems.length+'…';await lpEnsureDriveBytes(lpPhotoItems[i]);const squareBlob=await lpCropToSquare(lpPhotoItems[i].dataUrl,lpPhotoItems[i].crop,2048,300);const squareDataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(squareBlob);});const b64=squareDataUrl.split(',')[1];const squareName=sku+'_square_'+String(i+1).padStart(2,'0')+'.jpg';if(lpLoadedFolderId){try{const ur=await fetch(SERVER_URL+'/drive-upload-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folderId:lpLoadedFolderId,name:squareName,dataBase64:b64,mimeType:'image/jpeg',ebNumber:sku,sourceFileId:lpPhotoItems[i].driveFileId})});if(ur.ok)squaresSaved++;else console.warn('Square not saved to Drive ('+squareName+'):',await ur.text().catch(()=>''));}catch(ue){console.warn('Square upload failed ('+squareName+'):',ue.message);}}images.push({data:b64,filename:squareName});}catch(imgErr){console.warn('Skipping photo '+i+':',imgErr.message);}}
+  for(let i=0;i<lpPhotoItems.length;i++){try{btn.textContent='⏳ Photo '+(i+1)+' of '+lpPhotoItems.length+'…';await lpEnsureDriveBytes(lpPhotoItems[i]);const squareBlob=await lpCropToSquare(lpPhotoItems[i].dataUrl,lpPhotoItems[i].crop,2048,300);const squareDataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(squareBlob);});const b64=squareDataUrl.split(',')[1];const squareName=sku+'_square_'+String(i+1).padStart(2,'0')+'.jpg';if(lpLoadedFolderId){try{const ur=await fetch(SERVER_URL+'/drive-upload-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folderId:lpLoadedFolderId,name:squareName,dataBase64:b64,mimeType:'image/jpeg',ebNumber:sku,sourceFileId:lpPhotoItems[i].driveFileId})});if(ur.ok)squaresSaved++;else console.warn('Square not saved to Drive ('+squareName+'):',await ur.text().catch(()=>''));}catch(ue){console.warn('Square upload failed ('+squareName+'):',ue.message);}}images.push({data:b64,filename:squareName});}catch(imgErr){console.warn('Skipping photo '+i+':',imgErr.message);photoFails.push('Photo '+(i+1)+': '+imgErr.message);}}
+  // A photo that couldn't be prepared used to be skipped silently, so a listing could go out
+  // short of photos (or with none). Now it says so and lets you stop.
+  if(photoFails.length&&(!images.length||!confirm(photoFails.length+' of '+lpPhotoItems.length+' photos couldn\'t be prepared:\n\n'+photoFails.join('\n')+'\n\nPublish with the other '+images.length+'?'))){
+    setStatus('lp',images.length?'Publish cancelled. Fix or remove the photos above, then publish again.':'No photos could be prepared, so nothing was published: '+photoFails.join('; '),'error');
+    btn.disabled=false;btn.textContent='↑ Publish listing to Shopify';return;
+  }
   btn.textContent='⏳ Publishing...';setStatus('lp','Publishing to Shopify...','loading');
   try {
     const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),180000);
@@ -6225,8 +6246,17 @@ function wipShowBanner(screenId) {
   // Resume banner intentionally disabled (2026-06-30): the Add/Edit selector now
   // covers resuming an existing or in-progress piece, so the "Continue where you
   // left off" prompt added confusion. WIP still saves silently as a safety net.
+  // Exception (2026-11-01): a new-piece draft kept on the device by Save and exit has no EB
+  // number and no record, so the selector can't bring it back. Offer that one.
   const banner = document.getElementById(key+'-wip-banner');
-  if (banner) banner.style.display = 'none';
+  if (!banner) return;
+  const saved = key === 'np' && npMode !== 'edit' && !npCurrentRecordId ? WIP.load('np') : null;
+  if (!saved || !saved.kept || saved.ebNumber) { banner.style.display = 'none'; return; }
+  banner.innerHTML = '<strong>Unsaved new piece on this device</strong>' + escHtml(saved.refName || 'Untitled draft')
+    + ' — kept by Save and exit ' + escHtml(new Date(saved.ts).toLocaleDateString()) + '. '
+    + '<a href="#" onclick="wipRestore(\'np\');return false" style="color:inherit;font-weight:700">Continue it →</a> · '
+    + '<a href="#" onclick="if(confirm(\'Discard this draft?\'))wipDiscard(\'np\');return false" style="color:inherit">Discard</a>';
+  banner.style.display = 'block';
 }
 function wipLabel(key, saved) {
   if(key==='lp')return saved.ebNumber?'Listing for '+saved.ebNumber+(saved.step?' · Step '+saved.step+' of 4':''):'Listing in progress';
@@ -6238,7 +6268,7 @@ function wipLabel(key, saved) {
   return 'In progress';
 }
 function wipDiscard(key) { WIP.clear(key); const banner=document.getElementById(key+'-wip-banner'); if(banner)banner.style.display='none'; }
-function wipRestore(key) { const banner=document.getElementById(key+'-wip-banner'); if(banner)banner.style.display='none'; const saved=WIP.load(key); if(!saved)return; if(key==='lp')wipRestoreLP(saved); if(key==='np')wipRestoreNP(saved); if(key==='cost')wipRestoreCost(saved); }
+function wipRestore(key) { const banner=document.getElementById(key+'-wip-banner'); if(banner)banner.style.display='none'; const saved=WIP.load(key); if(!saved)return; if(key==='lp')wipRestoreLP(saved); if(key==='np'){wipRestoreNP(saved);if(saved.kept){delete saved.kept;WIP.save('np',saved);}} if(key==='cost')wipRestoreCost(saved); }
 function wipRestoreLP(saved) {
   const recId = saved.ebRecordId || saved.ebNumber;
   if (recId) {
