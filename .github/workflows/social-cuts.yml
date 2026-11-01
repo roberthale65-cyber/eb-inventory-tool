@@ -1,6 +1,7 @@
 # Makes the 15-second social cuts of listing videos (scripts/social-cut-worker.js) and sends them
 # to the server. GitHub's runners have the memory and CPU the motion smoothing needs; the Render
-# instance doesn't.
+# instance doesn't. The server starts it (workflow_dispatch) as soon as a cut is wanted; the
+# schedule below is only a backup, since GitHub runs scheduled jobs late or not at all when busy.
 name: Social video cuts
 
 on:
