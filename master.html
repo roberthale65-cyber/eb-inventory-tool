@@ -191,6 +191,7 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .photo-badge{position:absolute;top:4px;left:4px;font-size:9px;font-weight:800;padding:2px 6px;border-radius:99px;background:var(--gold);color:#fff}
 .photo-remove{position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.5);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;padding:0}
 .photo-remove:hover{background:rgba(220,38,38,0.9)}
+.photo-move{position:absolute;right:4px;bottom:24px;font-size:9px;font-weight:800;padding:3px 8px;border-radius:99px;background:rgba(0,0,0,0.55);color:#fff;border:none;cursor:pointer;line-height:1.3}
 .photo-crop-btn{position:absolute;left:4px;bottom:24px;font-size:9px;font-weight:800;padding:3px 8px;border-radius:99px;background:rgba(0,0,0,0.55);color:#fff;border:none;cursor:pointer;line-height:1.3}
 .photo-crop-btn.set{background:var(--sage)}
 .photo-card-footer-opt{padding:4px 6px;font-size:9px;color:var(--text-muted);font-family:'Courier New',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -296,6 +297,7 @@ button:active{transform:scale(.97)}
 .mk-card.approved{border-left-color:var(--teal)}.mk-card.posted{border-left-color:var(--green-text);opacity:.85}
 .mk-img{width:96px;height:144px;object-fit:cover;border-radius:8px;flex-shrink:0;background:var(--ivory-dark);display:block}
 .mk-media{position:relative;flex-shrink:0}
+.mk-card.has-video{flex-direction:column}.mk-card.has-video .mk-media{align-self:center;width:100%;max-width:360px}.mk-card.has-video .mk-img{width:100%;height:auto;max-height:480px;object-fit:contain;background:#000}
 .mk-media-tag{position:absolute;left:6px;top:6px;font-size:10px;font-weight:800;padding:2px 7px;border-radius:99px;background:rgba(43,38,34,.72);color:#fff;letter-spacing:.03em}
 .mk-posting{font-size:12px;font-weight:700;color:var(--teal);margin-top:10px}
 .mk-err{font-size:12px;color:var(--red-text);background:var(--red-bg);border-radius:8px;padding:8px 10px;margin-top:10px;line-height:1.5}
@@ -335,6 +337,7 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 .mk-chk-body{flex:1;min-width:0}
 #mk-check details{margin-top:6px}
 #mk-check summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--rose)}
+
 .mk-draft{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--ivory-dark);border-radius:8px;padding:9px 10px;margin-top:6px;font-size:12.5px;line-height:1.5}
 .mk-draft-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;font-size:12px;font-weight:700}
 .mk-draft-head .btn{font-size:12px;padding:4px 10px;min-width:0}
@@ -463,6 +466,15 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 .pv-workflow[open]>summary::after{transform:rotate(90deg)}
 .pv-steps{margin:0;padding:0 16px 14px 34px;color:var(--text);font-size:13px;line-height:1.7}
 .pv-steps li{margin-bottom:4px}
+/* Touch screens (iPhone, iPad): tap targets of about 44 px. Last, so it wins over the sizes above. */
+@media (pointer:coarse){
+  #mk-check summary{padding:12px 0;font-size:13px}
+  .mk-chk input{width:24px;height:24px}
+  .mk-draft-head .btn,.mk-actions .btn.mk-small{padding:11px 16px;font-size:13px;min-height:44px}
+  .mk-logo select,.mk-video select{min-height:40px;font-size:14px}
+  .photo-remove{width:30px;height:30px;font-size:14px}
+  .photo-crop-btn,.photo-move{padding:7px 11px;font-size:11px}
+}
 </style>
 </head>
 <body>
@@ -2054,9 +2066,24 @@ async function mkCheckRedraft(btn){
   catch(e){ alert('Couldn\'t write new drafts: ' + e.message); }
   mkRenderCheck();
 }
+// Copies text, falling back to the older copy command where the Clipboard API is missing or
+// refuses (older iPads, Facebook/Instagram's in-app browsers). Call it straight from the tap.
+function ebCopyNow(text){
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
+    document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy'); ta.remove(); return ok;
+  } catch(e){ return false; }
+}
+function ebCopy(text){
+  text = String(text == null ? '' : text);
+  if(!(navigator.clipboard && navigator.clipboard.writeText)) return Promise.resolve(ebCopyNow(text));
+  try { return navigator.clipboard.writeText(text).then(() => true, () => ebCopyNow(text)); }
+  catch(e){ return Promise.resolve(ebCopyNow(text)); }
+}
 async function mkCheckCopy(btn, text){
-  let ok = false;
-  try { ok = await navigator.clipboard.writeText(text).then(() => true, () => false); } catch(e){}
+  const ok = await ebCopy(text);
   const o = btn.textContent; btn.textContent = ok ? '✓ Copied' : 'Copy failed'; setTimeout(() => { btn.textContent = o; }, 1800);
 }
 const mkCheckTexts = [];
@@ -2275,14 +2302,19 @@ function mkSetTab(t){ if(t === mkTab) return; mkTab = t; mkRender(); mkNavPush()
 // While approved posts are going out, refresh so they move to Posted (or show the error).
 function mkSchedulePoll(){
   clearTimeout(mkPollTimer);
-  const posting = mkRecords.some(r => r.fields['Status'] === 'Approved' && !r.fields['Post error'] && mkDue(r.fields) && mkConnected(mkChannel(r.fields)));
+  // A due post waiting for its video cut can wait hours: that needs no 8-second refresh (each redraw
+  // could swallow a tap on a phone or iPad).
+  const waitingForCut = r => r.fields['Media'] === 'Video' && r.fields['Video version'] !== 'Original video' && (mkCuts[r.fields['EB Number']] || {}).status === 'working';
+  const posting = mkRecords.some(r => r.fields['Status'] === 'Approved' && !r.fields['Post error'] && mkDue(r.fields) && mkConnected(mkChannel(r.fields)) && !waitingForCut(r));
   if(!posting) return;
   mkPollTimer = setTimeout(async () => {
     if(!document.getElementById('screen-marketing').classList.contains('active')) return;
     // Not while someone is typing in a card: redrawing it closes the keyboard on a phone.
     const typing = document.activeElement && document.getElementById('mk-list').contains(document.activeElement);
     if(document.hidden || typing) return mkSchedulePoll();
-    try { await mkLoad(); mkRender({ keepTyped: true }); } catch(e) { mkSchedulePoll(); }
+    const sig = () => JSON.stringify(mkRecords.map(r => [r.id, r.fields['Status'], r.fields['Post error'], r.fields['Pin ID']]));
+    const before = sig();
+    try { await mkLoad(); if(sig() !== before) mkRender({ keepTyped: true }); else mkSchedulePoll(); } catch(e) { mkSchedulePoll(); }
   }, MK_POLL_MS);
 }
 function mkStatusMsg(msg, type){
@@ -2323,7 +2355,7 @@ function mkPieceHtml(rows){
   const open = st === 'Draft' || st === 'Approved';
   const cut = (open && vf['Video version'] !== 'Original video' && mkCuts[eb]) || {};
   const media = isVideo
-    ? '<video class="mk-img" src="' + escHtml(cut.url || vf['Video URL']) + '" poster="' + escHtml(vf['Image URL'] || '') + '" muted playsinline controls loop preload="none"></video><span class="mk-media-tag">' + (cut.url ? '15 s CUT' : 'VIDEO') + '</span>'
+    ? '<video class="mk-img" src="' + escHtml(cut.url || vf['Video URL']) + '" poster="' + escHtml(vf['Image URL'] || '') + '" muted playsinline controls controlslist="nodownload noplaybackrate noremoteplayback" disablepictureinpicture loop preload="none"></video><span class="mk-media-tag">' + (cut.url ? '15 s CUT' : 'VIDEO') + '</span>'
     : '<a href="' + escHtml(f0['Product URL'] || '#') + '" target="_blank" title="Open the product page"><img class="mk-img" src="' + escHtml(br.image || f0['Image URL'] || '') + '" alt="' + escHtml(f0['Alt Text'] || '') + '" loading="lazy"></a>';
   const logo = (!isVideo && (st === 'Draft' || st === 'Approved'))
     ? '<div class="mk-logo">Logo <select onchange="mkSetLogo(\'' + escHtml(eb) + '\', this.value)">' +
@@ -2346,7 +2378,7 @@ function mkPieceHtml(rows){
     .sort((a, b) => String(b.fields['Status changed'] || '').localeCompare(String(a.fields['Status changed'] || '')));
   const history = posted.length ? '<div class="mk-history">Posted before: ' + posted.slice(0, 6).map(r => MK_CH_ICON[mkChannel(r.fields)] + ' ' + mkDate(r.fields['Status changed']) + (r.fields['Theme'] ? ' (' + escHtml(r.fields['Theme']) + ')' : '')).join(' · ') + '</div>' : '';
   const chips = [f0['Post type'] === 'Repost' ? '<span class="mk-chip repost">Repost</span>' : (f0['Post type'] === 'New' ? '<span class="mk-chip">New</span>' : ''), f0['Theme'] ? '<span class="mk-chip theme">' + escHtml(f0['Theme']) + '</span>' : ''].join('');
-  return '<div class="mk-card ' + st.toLowerCase() + '">' +
+  return '<div class="mk-card ' + st.toLowerCase() + (isVideo ? ' has-video' : '') + '">' +
     '<div class="mk-media">' + media + '</div>' +
     '<div class="mk-body">' +
       '<div class="rd-eb">' + escHtml(eb) + chips + '</div>' + history + logo +
@@ -2562,8 +2594,8 @@ async function mkPost(id){
     '&media=' + encodeURIComponent(rec.fields['Image URL'] || '') + '&description=' + encodeURIComponent(f['Description']);
   window.open(url, '_blank');
   let copy;
-  try { copy = navigator.clipboard.writeText(f['Pin Title']); } catch(e) { copy = Promise.reject(e); }
-  const copied = await copy.then(() => true, () => false);
+  copy = ebCopy(f['Pin Title']);
+  const copied = await copy;
   mkStatusMsg('<strong>Pinterest is open in a new tab</strong>' + (copied ? 'The title is copied — paste it into the title box. ' : 'Copy the title from this card into the title box. ') +
     'Pick the board <b>' + escHtml(f['Board'] || '') + '</b>, publish, then come back and tap <b>Mark as posted</b>.');
   // Keep any last-second edits.
@@ -2577,7 +2609,7 @@ async function mkCopy(id){
   const rec = mkRecords.find(x => x.id === id); if(!rec) return;
   const f = mkCardFields(id), ch = mkChannel(rec.fields);
   let copied;
-  try { copied = await navigator.clipboard.writeText(f['Description']).then(() => true, () => false); } catch(e){ copied = false; }
+  copied = await ebCopy(f['Description']);
   mkStatusMsg((copied ? '<strong>Text copied</strong>' : '<strong>Copy the text from the card</strong>') + 'Post it on ' + ch + ' with this piece\'s ' + (rec.fields['Media'] === 'Video' ? 'video' : 'photo') + ', then come back and tap <b>Mark as posted</b>.');
   if(f['Description'] !== (rec.fields['Description']||'')){
     try { await mkSave(id, f); } catch(e){ mkStatusMsg('<strong>Couldn\'t save your edits</strong>' + escHtml(e.message), 'rose'); }
@@ -4274,7 +4306,7 @@ async function lpCleanupField(fieldId){
   try{ const res=await fetch(SERVER_URL+'/cleanup-text',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:current})}); const data=await res.json(); if(data.text){if(isRich)el.innerHTML=data.text;else el.value=data.text;} if(cleanBtn){cleanBtn.textContent='✓ Done';setTimeout(()=>{cleanBtn.disabled=false;cleanBtn.textContent='✓ Fix';},2000);} }
   catch(e){ if(cleanBtn){cleanBtn.disabled=false;cleanBtn.textContent='✓ Fix';} }
 }
-function lpCopyField(vid,bid){navigator.clipboard.writeText(document.getElementById(vid).textContent.trim()).then(()=>{const b=document.getElementById(bid),o=b.textContent;b.textContent='✓';b.classList.add('copied');setTimeout(()=>{b.textContent=o;b.classList.remove('copied');},2000);});}
+function lpCopyField(vid,bid){ebCopy(document.getElementById(vid).textContent.trim()).then(ok=>{if(!ok)return;const b=document.getElementById(bid),o=b.textContent;b.textContent='✓';b.classList.add('copied');setTimeout(()=>{b.textContent=o;b.classList.remove('copied');},2000);});}
 
 // ── Description WYSIWYG editor (rich toolbar + HTML source toggle) ──
 // The contenteditable #lp-desc is the canonical source (everything reads its innerHTML).
@@ -4366,7 +4398,7 @@ function lpRenderPhotos(){
   const btns=document.getElementById('lp-photo-btns'); if(btns)btns.style.display=count>0?'flex':'none';
   const pill=document.getElementById('lp-photo-count-pill'); if(pill){pill.textContent=count+'/15';pill.style.background=count<8?'var(--gold)':'var(--sage)';}
   const lbl=document.getElementById('lp-photo-count-label'); if(lbl)lbl.textContent=count+' photo'+(count!==1?'s':'')+' selected'+(count<8?' — aim for 8+':' ✓');
-  if(grid)grid.innerHTML=lpPhotoItems.map((item,i)=>'<div class="photo-card-opt" id="lpc-'+i+'" draggable="true" ondragstart="lpPhotoDragStart('+i+')" ondragover="lpPhotoDragOver(event,'+i+')" ondragleave="lpPhotoDragLeave('+i+')" ondrop="lpPhotoDrop(event,'+i+')"><span class="photo-badge">'+(i===0?'HERO':i+1)+'</span><button class="photo-remove" onclick="lpRemovePhoto('+i+')">✕</button><img src="'+(item.thumbnailLink||item.dataUrl||'')+'" alt="photo '+(i+1)+'" referrerpolicy="no-referrer"'+(item.thumbnailLink?driveThumbOri(item):'')+'><button class="photo-crop-btn'+(item.cropped?' set':'')+'" onclick="lpOpenCrop('+i+')">'+(item.cropped?'✓ Square':'◻ Crop')+'</button><div class="photo-card-footer-opt">'+escHtml(item.name||'')+'</div></div>').join('');
+  if(grid)grid.innerHTML=lpPhotoItems.map((item,i)=>'<div class="photo-card-opt" id="lpc-'+i+'" draggable="true" ondragstart="lpPhotoDragStart('+i+')" ondragover="lpPhotoDragOver(event,'+i+')" ondragleave="lpPhotoDragLeave('+i+')" ondrop="lpPhotoDrop(event,'+i+')"><span class="photo-badge">'+(i===0?'HERO':i+1)+'</span><button class="photo-remove" onclick="lpRemovePhoto('+i+')">✕</button>'+(i>0?'<button class="photo-move" onclick="lpMovePhoto('+i+',-1)" title="Move earlier" aria-label="Move photo earlier">◀ Move</button>':'')+'<img src="'+(item.thumbnailLink||item.dataUrl||'')+'" alt="photo '+(i+1)+'" referrerpolicy="no-referrer"'+(item.thumbnailLink?driveThumbOri(item):'')+'><button class="photo-crop-btn'+(item.cropped?' set':'')+'" onclick="lpOpenCrop('+i+')">'+(item.cropped?'✓ Square':'◻ Crop')+'</button><div class="photo-card-footer-opt">'+escHtml(item.name||'')+'</div></div>').join('');
   lpUpdatePublishSummary();
 }
 function lpRemovePhoto(i){lpPhotoItems.splice(i,1);lpDriveLinked=false;lpSelectionStoreSync();lpRenderDriveGrid();lpRenderPhotos();}
@@ -4374,6 +4406,7 @@ function lpClearPhotos(){lpPhotoItems=[];lpDriveLinked=false;lpSelectionStoreSyn
 function lpPhotoDragStart(i){lpDragSrcIdx=i;document.getElementById('lpc-'+i).classList.add('dragging');}
 function lpPhotoDragOver(e,i){e.preventDefault();if(i!==lpDragSrcIdx)document.getElementById('lpc-'+i).classList.add('drag-over');}
 function lpPhotoDragLeave(i){document.getElementById('lpc-'+i).classList.remove('drag-over');}
+function lpMovePhoto(i,d){const j=i+d;if(j<0||j>=lpPhotoItems.length)return;const moved=lpPhotoItems.splice(i,1)[0];lpPhotoItems.splice(j,0,moved);lpDriveLinked=false;lpSelectionStoreSync();lpRenderDriveGrid();lpRenderPhotos();}
 function lpPhotoDrop(e,i){e.preventDefault();document.getElementById('lpc-'+i).classList.remove('drag-over');if(lpDragSrcIdx===null||lpDragSrcIdx===i){lpDragSrcIdx=null;return;}const moved=lpPhotoItems.splice(lpDragSrcIdx,1)[0];lpPhotoItems.splice(i,0,moved);lpDragSrcIdx=null;lpDriveLinked=false;lpSelectionStoreSync();lpRenderDriveGrid();lpRenderPhotos();}
 
 // Fetch full image bytes from Drive on demand (for AI vision + Shopify upload).
