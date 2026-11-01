@@ -2297,7 +2297,7 @@ async function mkLoadStatus(){
   else if(mkMeta.configured) cards.push('<div class="info-card amber"><strong>📷👍 Connect Facebook & Instagram once</strong>Then approved posts go out by themselves. <a href="' + SERVER_URL + '/meta-auth" target="_blank" onclick="setTimeout(mkLoadStatus,15000)" style="color:inherit;font-weight:700">Connect Facebook & Instagram →</a> (pick the Eternal Blooms Page, then come back here)</div>');
   else cards.push('<div class="info-card amber"><strong>📷👍 Facebook & Instagram aren\'t linked yet</strong>Until they are, approved posts wait under <b>Approved</b>; use <b>Copy text</b> to post them by hand.</div>');
   document.getElementById('mk-connect').innerHTML = cards.join('');
-  if(document.getElementById('screen-marketing').classList.contains('active') && mkRecords.length) mkRender();
+  if(document.getElementById('screen-marketing').classList.contains('active') && mkRecords.length) mkRender({ keepTyped: true });
 }
 function mkSetTab(t){ if(t === mkTab) return; mkTab = t; mkRender(); mkNavPush(); }
 // While approved posts are going out, refresh so they move to Posted (or show the error).
@@ -2329,7 +2329,10 @@ let mkRenderPending = false;
 // Something on the list a redraw would interrupt: a playing video, or a card field being typed in.
 function mkListBusy(){
   const host = document.getElementById('mk-list'), a = document.activeElement;
-  return !!(host && ((a && host.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) || [...host.querySelectorAll('video')].some(v => !v.paused && !v.ended)));
+  // A video counts while playing and for a minute after it stops, so it isn't swapped back to its
+  // poster while someone is looking at it.
+  const watching = v => (!v.paused && !v.ended) || Date.now() - (+v.dataset.pausedAt || 0) < 60000;
+  return !!(host && ((a && host.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) || [...host.querySelectorAll('video')].some(watching)));
 }
 function mkRender(opts){
   const keepTyped = opts && opts.keepTyped;
@@ -2368,7 +2371,9 @@ function mkPlayVideo(btn){
   v.className = 'mk-img';
   v.src = btn.dataset.src;
   v.poster = (btn.querySelector('img') || {}).src || '';
-  v.controls = true; v.loop = true; v.muted = true; v.playsInline = true;
+  // No loop: looping back to the start could stop the video instead (seen in Safari's engine).
+  v.controls = true; v.muted = true; v.playsInline = true;
+  v.addEventListener('pause', () => { v.dataset.pausedAt = Date.now(); });
   v.setAttribute('playsinline', '');
   v.setAttribute('controlslist', 'nodownload noplaybackrate noremoteplayback');
   v.setAttribute('disablepictureinpicture', '');
@@ -2572,7 +2577,7 @@ async function mkLoadCut(rows){
       if(changed && mkTab !== 'Posted' && mkTab !== 'Skipped') mkRender({ keepTyped: true });
       if(d.status !== 'working') return;
     }
-  } catch(e){ mkCuts[eb] = { status: 'failed', error: e.message }; mkRender(); }
+  } catch(e){ mkCuts[eb] = { status: 'failed', error: e.message }; mkRender({ keepTyped: true }); }
   finally { mkCutPolling.delete(eb); }
 }
 async function mkSetVideoVersion(eb, value){
