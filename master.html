@@ -298,6 +298,7 @@ button:active{transform:scale(.97)}
 .mk-img{width:96px;height:144px;object-fit:cover;border-radius:8px;flex-shrink:0;background:var(--ivory-dark);display:block}
 .mk-media{position:relative;flex-shrink:0}
 .mk-card.has-video{flex-direction:column}.mk-card.has-video .mk-media{align-self:center;width:100%;max-width:360px}.mk-card.has-video .mk-img{width:100%;height:auto;max-height:480px;object-fit:contain;background:#000}
+.mk-vid{position:relative;padding:0;border:0;cursor:pointer;overflow:hidden}.mk-vid img{width:100%;height:100%;object-fit:cover;display:block}.mk-card.has-video .mk-vid img{height:auto}.mk-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:58px;height:58px;border-radius:50%;background:rgba(43,38,34,.62);color:#fff;font-size:24px;display:flex;align-items:center;justify-content:center;padding-left:4px;pointer-events:none}
 .mk-media-tag{position:absolute;left:6px;top:6px;font-size:10px;font-weight:800;padding:2px 7px;border-radius:99px;background:rgba(43,38,34,.72);color:#fff;letter-spacing:.03em}
 .mk-posting{font-size:12px;font-weight:700;color:var(--teal);margin-top:10px}
 .mk-err{font-size:12px;color:var(--red-text);background:var(--red-bg);border-radius:8px;padding:8px 10px;margin-top:10px;line-height:1.5}
@@ -2306,15 +2307,14 @@ function mkSchedulePoll(){
   // could swallow a tap on a phone or iPad).
   const waitingForCut = r => r.fields['Media'] === 'Video' && r.fields['Video version'] !== 'Original video' && (mkCuts[r.fields['EB Number']] || {}).status === 'working';
   const posting = mkRecords.some(r => r.fields['Status'] === 'Approved' && !r.fields['Post error'] && mkDue(r.fields) && mkConnected(mkChannel(r.fields)) && !waitingForCut(r));
-  if(!posting) return;
+  if(!posting && !mkRenderPending) return;
   mkPollTimer = setTimeout(async () => {
     if(!document.getElementById('screen-marketing').classList.contains('active')) return;
-    // Not while someone is typing in a card: redrawing it closes the keyboard on a phone.
-    const typing = document.activeElement && document.getElementById('mk-list').contains(document.activeElement);
-    if(document.hidden || typing) return mkSchedulePoll();
+    // Not while someone is typing in a card (a redraw closes the keyboard on a phone) or watching a video.
+    if(document.hidden || mkListBusy()) return mkSchedulePoll();
     const sig = () => JSON.stringify(mkRecords.map(r => [r.id, r.fields['Status'], r.fields['Post error'], r.fields['Pin ID']]));
     const before = sig();
-    try { await mkLoad(); if(sig() !== before) mkRender({ keepTyped: true }); else mkSchedulePoll(); } catch(e) { mkSchedulePoll(); }
+    try { await mkLoad(); if(sig() !== before || mkRenderPending) mkRender({ keepTyped: true }); else mkSchedulePoll(); } catch(e) { mkSchedulePoll(); }
   }, MK_POLL_MS);
 }
 function mkStatusMsg(msg, type){
@@ -2325,8 +2325,16 @@ function mkStatusMsg(msg, type){
 
 // keepTyped (the background refresh): carry over text typed into cards but not saved yet, and
 // the cursor, instead of wiping them when the list is redrawn.
+let mkRenderPending = false;
+// Something on the list a redraw would interrupt: a playing video, or a card field being typed in.
+function mkListBusy(){
+  const host = document.getElementById('mk-list'), a = document.activeElement;
+  return !!(host && ((a && host.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) || [...host.querySelectorAll('video')].some(v => !v.paused && !v.ended)));
+}
 function mkRender(opts){
   const keepTyped = opts && opts.keepTyped;
+  if(keepTyped && mkListBusy()){ mkRenderPending = true; mkSchedulePoll(); return; }
+  mkRenderPending = false;
   document.getElementById('mk-tabs').innerHTML = MK_TABS.map(([k,label]) => {
     return '<button class="mk-tab' + (mkTab===k?' active':'') + '" onclick="mkSetTab(\'' + k + '\')">' + label + ' (' + mkPieces(k).length + ')</button>';
   }).join('');
@@ -2347,6 +2355,26 @@ function mkRender(opts){
 }
 
 // One card per piece: shared photo/video, then a block per channel.
+// Shopify's image server sends a smaller copy on request: a 720 px poster instead of the 2048 px
+// original (about 1/8 of the memory once decoded). Other hosts are left alone.
+function mkThumb(url){
+  url = String(url || '');
+  return /^https:\/\/cdn\.shopify\.com\/s\/files\//.test(url) ? url + (url.includes('?') ? '&' : '?') + 'width=720' : url;
+}
+// Swaps the poster for the player and starts it, inside the tap (iPhone and iPad only start video
+// from a tap).
+function mkPlayVideo(btn){
+  const v = document.createElement('video');
+  v.className = 'mk-img';
+  v.src = btn.dataset.src;
+  v.poster = (btn.querySelector('img') || {}).src || '';
+  v.controls = true; v.loop = true; v.muted = true; v.playsInline = true;
+  v.setAttribute('playsinline', '');
+  v.setAttribute('controlslist', 'nodownload noplaybackrate noremoteplayback');
+  v.setAttribute('disablepictureinpicture', '');
+  btn.replaceWith(v);
+  const p = v.play(); if(p && p.catch) p.catch(() => {});
+}
 function mkPieceHtml(rows){
   const f0 = rows[0].fields, st = f0['Status'], eb = f0['EB Number'] || '';
   const isVideo = rows.some(r => r.fields['Media'] === 'Video' && r.fields['Video URL']);
@@ -2354,9 +2382,11 @@ function mkPieceHtml(rows){
   const br = mkBranded[eb] || {}; // the photo logo preview, once loaded
   const open = st === 'Draft' || st === 'Approved';
   const cut = (open && vf['Video version'] !== 'Original video' && mkCuts[eb]) || {};
+  // Videos show as a small poster until tapped: dozens of video players with full-size posters ran
+  // the iPad out of memory (Safari blanked the page), and redraws stopped a video as it started.
   const media = isVideo
-    ? '<video class="mk-img" src="' + escHtml(cut.url || vf['Video URL']) + '" poster="' + escHtml(vf['Image URL'] || '') + '" muted playsinline controls controlslist="nodownload noplaybackrate noremoteplayback" disablepictureinpicture loop preload="none"></video><span class="mk-media-tag">' + (cut.url ? '15 s CUT' : 'VIDEO') + '</span>'
-    : '<a href="' + escHtml(f0['Product URL'] || '#') + '" target="_blank" title="Open the product page"><img class="mk-img" src="' + escHtml(br.image || f0['Image URL'] || '') + '" alt="' + escHtml(f0['Alt Text'] || '') + '" loading="lazy"></a>';
+    ? '<button type="button" class="mk-img mk-vid" data-src="' + escHtml(cut.url || vf['Video URL']) + '" onclick="mkPlayVideo(this)" aria-label="Play the video"><img src="' + escHtml(mkThumb(vf['Image URL'])) + '" alt="" loading="lazy"><span class="mk-play">▶</span></button><span class="mk-media-tag">' + (cut.url ? '15 s CUT' : 'VIDEO') + '</span>'
+    : '<a href="' + escHtml(f0['Product URL'] || '#') + '" target="_blank" title="Open the product page"><img class="mk-img" src="' + escHtml(br.image || mkThumb(f0['Image URL'])) + '" alt="' + escHtml(f0['Alt Text'] || '') + '" loading="lazy"></a>';
   const logo = (!isVideo && (st === 'Draft' || st === 'Approved'))
     ? '<div class="mk-logo">Logo <select onchange="mkSetLogo(\'' + escHtml(eb) + '\', this.value)">' +
         MK_LOGO_OPTS.map(([v, label]) => '<option value="' + v + '"' + ((f0['Logo'] || 'Auto') === v ? ' selected' : '') + '>' + label + '</option>').join('') +
