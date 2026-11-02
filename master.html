@@ -290,6 +290,17 @@ button:active{transform:scale(.97)}
 .mode-card.sale-clearance{border-top:3px solid var(--amber-border)}
 .mode-card.marketing{border-top:3px solid var(--rose)}
 .mk-count{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:99px;background:var(--rose);color:#fff;margin-left:6px;vertical-align:middle}
+.mode-card.outreach{border-top:3px solid var(--teal)}
+.or-who{font-size:14px;line-height:1.4}.or-who .mk-chip{margin-left:6px}
+.mk-card.or-card{border-left-color:var(--teal)}.mk-card.or-card.replied{border-left-color:var(--gold)}
+.or-pieces{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.or-pieces a{display:flex;flex-direction:column;width:96px;font-size:11px;color:var(--text-mid);text-decoration:none;line-height:1.3}.or-pieces img{width:96px;height:96px;object-fit:cover;border-radius:8px;margin-bottom:4px;background:var(--ivory-dark)}
+textarea.mk-input.or-body{min-height:220px}
+.or-footer{white-space:pre-wrap;font-size:11.5px;color:var(--text-muted);margin-top:6px;line-height:1.5}
+.or-reply-head{font-size:12px;font-weight:800;margin-top:10px;color:var(--teal)}
+.or-row{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px}
+.or-check{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:var(--text-muted);margin-bottom:12px}
+.or-log summary{font-size:12px;cursor:pointer;margin-top:6px;color:var(--text-mid)}
+.mk-actions a.btn{text-align:center;text-decoration:none}
 .mk-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
 .mk-tab{flex:1;min-width:90px;font-size:12px;font-weight:700;padding:9px 10px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:#fff;color:var(--text-mid);cursor:pointer}
 .mk-tab.active{background:var(--rose-bg);border-color:var(--rose);color:var(--rose)}
@@ -523,6 +534,7 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
     <div class="mode-card raw-label" onclick="goTo('screen-raw-label')"><span class="mode-icon">🧵</span><div class="mode-title">Raw material label</div><div class="mode-desc">Free-form 4×6 bin label — type up to 4 lines, big auto-sized text, print one off</div><div class="mode-arrow">→</div></div>
     <div class="mode-card craft-tag" onclick="goTo('screen-craft-tag')"><span class="mode-icon">🎪</span><div class="mode-title">Craft show tag</div><div class="mode-desc">Temporary 3×2 price tag for a show — enter an EB number, set the show price, print (no QR)</div><div class="mode-arrow">→</div></div>
     <div class="mode-card marketing" onclick="goTo('screen-marketing')"><span class="mode-icon">📌</span><div class="mode-title">Marketing<span class="mk-count" id="mk-home-count" style="display:none"></span></div><div class="mode-desc">Review Pinterest, Instagram & Facebook posts drafted from the shop — approve once, they post</div><div class="mode-arrow">→</div></div>
+    <div class="mode-card outreach" onclick="goTo('screen-outreach')"><span class="mode-icon">✉️</span><div class="mode-title">Outreach<span class="mk-count" id="or-home-count" style="display:none"></span></div><div class="mode-desc">Personal emails to realtors, salons &amp; sympathy partners. Review each draft, tap Send; replies and follow-ups are tracked for you</div><div class="mode-arrow">→</div></div>
     <div class="mode-card readiness" onclick="goTo('screen-readiness')"><span class="mode-icon">&#x1F4CB;</span><div class="mode-title">Listing readiness</div><div class="mode-desc">See what each piece is missing before it can publish to Shopify</div><div class="mode-arrow">→</div></div>
     <div class="mode-card log-cost" onclick="goTo('screen-costs')"><span class="mode-icon">&#x1F9FE;</span><div class="mode-title">Log a cost</div><div class="mode-desc">Snap a receipt, log mileage, or enter manually — saved to Airtable</div><div class="mode-arrow">→</div></div>
     <div class="mode-card resync" onclick="goTo('screen-resync')"><span class="mode-icon">&#x21BB;</span><div class="mode-title">Re-sync to Shopify</div><div class="mode-desc">Push attribute &amp; inventory updates to an already-published piece — keeps title, photos &amp; price</div><div class="mode-arrow">→</div></div>
@@ -1506,6 +1518,21 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
   </div>
 </div>
 
+<div id="screen-outreach" class="screen">
+  <div class="wizard-header">
+    <div style="display:flex;gap:6px;flex-shrink:0"><button class="hdr-nav-btn home-btn" onclick="goHome()" title="Home screen">⌂ Home</button></div>
+    <div class="wizard-title">Outreach</div>
+    <div style="width:60px"></div>
+  </div>
+  <div class="screen-body">
+    <div class="info-card teal" style="margin-bottom:12px"><strong>How this works:</strong> Each new contact gets a short first email in your voice, featuring real pieces in stock. Read it, change anything you like, and tap <b>Send</b>: it goes out from your Gmail and shows in your Sent folder. Replies are pinned at the top here. Anyone who doesn't answer gets one short follow-up by themselves, and then nothing more.</div>
+    <div id="or-top"></div>
+    <div id="or-status" class="info-card teal" style="display:none"></div>
+    <div class="mk-tabs" id="or-tabs"></div>
+    <div id="or-list"></div>
+  </div>
+</div>
+
 <script>
 const BASE_ID    = 'appHw4SEE5RNT8tCV';
 const TABLE_ID   = 'tbl29ndzXDXXU8f7x';
@@ -1688,6 +1715,7 @@ async function connectAirtable(refresh) {
     const pill = document.getElementById('server-status');
     pill.onclick = () => connectAirtable(true); pill.title = 'Tap to refresh from Airtable';
     populateHomeStats(); populateLPSelect(); populateMSSelect(); populateSASelect(); populateCFInventory();
+    orRefreshHomeCount(); // background: "N to review" / replies on the Outreach card
     mkRefreshHomeCount(); // background: "N to review" on the Marketing card (server-cached)
     reconcileDriveFolders(); // background: tidy published/sold folders out of "Listing media sorted"
   } catch(e) {
@@ -1943,6 +1971,7 @@ function goTo(screenId) {
   if(screenId==='screen-backlog') blOnScreenEnter();
   if(screenId==='screen-readiness') readinessRender();
   if(screenId==='screen-marketing') mkInit();
+  if(screenId==='screen-outreach') orInit();
   if(screenId==='screen-bin-mgmt') bmOnScreenEnter();
   if(screenId==='screen-fulfillment') ffInit();
   if(screenId==='screen-new-piece') npFolderInit();
@@ -1969,6 +1998,166 @@ window.addEventListener('popstate', e => {
 });
 history.replaceState({ screen: 'screen-home' }, '');
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+let orReplyCount = 0; // replies waiting, for the home screen banner
+// ── Outreach: personal first emails to realtors, salons and sympathy partners ──
+// Contacts live in the Airtable "Contacts" table. The server drafts each first email with real
+// in-stock pieces; Patti edits if she likes and taps Send, and the email goes out from her Gmail.
+// The server reads her inbox every few hours: replies are pinned at the top of To review, and a
+// contact with no answer gets one short follow-up by itself after the follow-up wait.
+let orData = null, orTab = 'review', orPollTimer = null;
+const OR_TABS = [['review','To review'],['sent','Sent'],['all','Everyone']];
+const OR_SENT = ['Sent','Followed up'];
+const orRecs = () => (orData && orData.records) || [];
+function orList(tab){
+  const recs = orRecs();
+  if(tab === 'review') return [...recs.filter(r => r.fields['Status'] === 'Replied'), ...recs.filter(r => r.fields['Status'] === 'Ready for review')];
+  if(tab === 'sent') return recs.filter(r => OR_SENT.includes(r.fields['Status'])).sort((a, b) => String(b.fields['Sent date'] || '').localeCompare(String(a.fields['Sent date'] || '')));
+  return recs.slice().sort((a, b) => String(a.fields['Name'] || '').localeCompare(String(b.fields['Name'] || '')));
+}
+async function orLoad(refresh){
+  const r = await fetch(SERVER_URL + '/outreach/queue' + (refresh ? '?refresh=1' : ''));
+  const d = await r.json().catch(()=>({}));
+  if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+  orData = d;
+  orUpdateHome();
+}
+function orUpdateHome(){
+  const el = document.getElementById('or-home-count'); if(!el) return;
+  const replies = orRecs().filter(r => r.fields['Status'] === 'Replied').length;
+  const n = orList('review').length;
+  el.textContent = replies ? replies + ' repl' + (replies === 1 ? 'y' : 'ies') : n + ' to review';
+  el.style.display = n ? '' : 'none';
+  orReplyCount = replies;
+  if(allRecords.length) populateHomeStats();
+}
+async function orRefreshHomeCount(){ try { await orLoad(); } catch(e){ console.warn('Outreach load failed:', e.message); } }
+async function orInit(){
+  const host = document.getElementById('or-list');
+  host.innerHTML = '<div style="text-align:center;padding:36px 20px;color:var(--text-muted)">Loading contacts…</div>';
+  try { await orLoad(); orRender(); }
+  catch(e){ host.innerHTML = '<div class="info-card rose"><strong>Couldn\'t load the contacts</strong>' + escHtml(e.message) + '</div>'; }
+}
+// While the server is drafting new emails, check back so they appear without a refresh.
+function orSchedulePoll(){
+  clearTimeout(orPollTimer);
+  if(!orData || !orData.drafting) return;
+  orPollTimer = setTimeout(async () => {
+    if(!document.getElementById('screen-outreach').classList.contains('active')) return;
+    const a = document.activeElement, host = document.getElementById('or-list');
+    if(document.hidden || (a && host.contains(a) && /^(INPUT|TEXTAREA)$/.test(a.tagName))) return orSchedulePoll();
+    try { await orLoad(); orRender(); } catch(e){ orSchedulePoll(); }
+  }, 8000);
+}
+function orStatusMsg(msg, type){
+  const el = document.getElementById('or-status');
+  if(!msg){ el.style.display = 'none'; return; }
+  el.className = 'info-card ' + (type || 'teal'); el.style.display = 'block'; el.innerHTML = msg;
+}
+function orSetTab(t){ orTab = t; orRender(); }
+function orRender(){
+  const d = orData || {}, g = d.gmail || {};
+  const top = [];
+  if(!g.connected) top.push('<div class="info-card amber"><strong>Gmail isn\'t connected yet</strong>Drafts are ready to review, but Send stays off until the server has the Gmail app password for ' + escHtml(g.address || 'Patti\'s Gmail') + ' (GMAIL_APP_PASSWORD in Render).</div>');
+  else if(!g.footerAddress) top.push('<div class="info-card amber"><strong>One more setting before sending</strong>Business emails need a mailing address in the footer (a PO box is fine). Add it as OUTREACH_ADDRESS in Render.</div>');
+  if(d.drafting) top.push('<div class="info-card teal"><strong>Drafting new emails…</strong>They\'ll appear here in a minute or two.</div>');
+  if(d.draftError) top.push('<div class="info-card rose"><strong>A draft didn\'t work</strong>' + escHtml(d.draftError) + '</div>');
+  const lc = d.lastCheck;
+  const check = g.connected ? '<div class="or-check"><span>' + (lc ? (lc.error ? 'Last inbox check failed: ' + escHtml(lc.error) : 'Inbox checked ' + mkWhen(lc.at) + (lc.replies || lc.followUps || lc.bounces ? ' · ' + [lc.replies ? lc.replies + ' repl' + (lc.replies === 1 ? 'y' : 'ies') : '', lc.followUps ? lc.followUps + ' follow-up' + (lc.followUps === 1 ? '' : 's') + ' sent' : '', lc.bounces ? lc.bounces + ' bounced' : ''].filter(Boolean).join(', ') : '')) : 'The inbox is checked every few hours.') + '</span><button class="btn mk-small" onclick="orCheck(this)">Check now</button></div>' : '';
+  document.getElementById('or-top').innerHTML = top.join('') + check;
+  document.getElementById('or-tabs').innerHTML = OR_TABS.map(([k, label]) => '<button class="mk-tab' + (orTab === k ? ' active' : '') + '" onclick="orSetTab(\'' + k + '\')">' + label + ' (' + orList(k).length + ')</button>').join('');
+  const list = orList(orTab), host = document.getElementById('or-list');
+  orSchedulePoll();
+  if(!list.length){
+    const empty = { review: 'Nothing waiting. New contacts are drafted as they\'re added.', sent: 'Nothing sent yet.', all: 'No contacts yet.' }[orTab];
+    host.innerHTML = '<div style="text-align:center;padding:30px 16px;color:var(--text-muted);font-size:14px">' + empty + '</div>';
+    return;
+  }
+  host.innerHTML = list.map(r => orTab === 'review' ? orCardHtml(r) : orRowHtml(r)).join('');
+}
+const orDate = s => s ? new Date(s + 'T12:00:00').toLocaleDateString(undefined, { month:'short', day:'numeric' }) : '';
+function orWho(f){
+  return '<div class="or-who"><strong>' + escHtml(f['Name'] || '') + '</strong>' + (f['Business'] ? ' · ' + escHtml(f['Business']) : '') +
+    (f['Segment'] ? '<span class="mk-chip">' + escHtml(f['Segment']) + '</span>' : '') + '</div>' +
+    (f['Area'] ? '<div class="mk-muted">' + escHtml(f['Area']) + '</div>' : '');
+}
+function orPiecesHtml(f){
+  const ps = (f['Featured pieces'] || []).map(id => (orData.pieces || {})[id]).filter(Boolean);
+  if(!ps.length) return '';
+  return '<div class="or-pieces">' + ps.map(p => '<a href="' + escHtml(p.url || '#') + '" target="_blank" title="' + escHtml(p.title) + '">' +
+    (p.image ? '<img src="' + escHtml(mkThumb(p.image)) + '" alt="" loading="lazy">' : '') + '<span>' + escHtml(p.title) + (p.inStock ? '' : ' (no longer in stock)') + '</span></a>').join('') + '</div>';
+}
+function orCardHtml(r){
+  const f = r.fields, id = r.id, g = (orData && orData.gmail) || {};
+  if(f['Status'] === 'Replied'){
+    const gmail = 'https://mail.google.com/mail/u/?authuser=' + encodeURIComponent(g.address || '') + '#search/' + encodeURIComponent('from:' + (f['Email'] || ''));
+    return '<div class="mk-card or-card replied"><div class="mk-body">' + orWho(f) +
+      '<div class="or-reply-head">Replied ' + escHtml(orDate(f['Replied date'])) + '</div>' +
+      '<div class="mk-draft">' + escHtml(f['Reply'] || '') + '</div>' +
+      '<div class="mk-actions"><a class="btn btn-primary" href="' + escHtml(gmail) + '" target="_blank" rel="noopener">Answer in Gmail</a></div>' +
+      '<div class="mk-note">Once you\'ve answered, where do things stand?</div>' +
+      '<div class="mk-actions"><button class="btn" onclick="orSetStatus(\'' + id + '\',\'In conversation\')">Talking</button><button class="btn" onclick="orSetStatus(\'' + id + '\',\'Customer\')">Customer</button><button class="btn" onclick="orSetStatus(\'' + id + '\',\'Not interested\')">Not interested</button></div>' +
+      '</div></div>';
+  }
+  const canSend = g.ready;
+  return '<div class="mk-card or-card"><div class="mk-body">' + orWho(f) +
+    (f['Personal hook'] ? '<div class="mk-note"><b>Why them:</b> ' + escHtml(f['Personal hook']) + '</div>' : '') +
+    orPiecesHtml(f) +
+    '<div class="mk-label">To: ' + escHtml(f['Email'] || '') + '</div>' +
+    '<div class="mk-label">Subject</div><input class="mk-input" id="or-subj-' + id + '" value="' + escHtml(f['Draft subject'] || '') + '">' +
+    '<div class="mk-label">Email</div><textarea class="mk-input or-body" id="or-body-' + id + '">' + escHtml(f['Draft email'] || '') + '</textarea>' +
+    '<div class="or-footer">' + escHtml((orData.footer || '').trim()) + '</div>' +
+    '<div class="mk-actions"><button class="btn btn-primary" onclick="orSend(\'' + id + '\', this)"' + (canSend ? '' : ' disabled title="Gmail isn\'t set up yet"') + '>✉ Send</button>' +
+    '<button class="btn" onclick="orSaveDraft(\'' + id + '\', this)">Save edits</button><button class="btn" onclick="orRedraft(\'' + id + '\', this)">New draft</button><button class="btn" onclick="orSetStatus(\'' + id + '\',\'Skipped\')">Skip</button></div>' +
+    '<div class="mk-note">If they don\'t answer, one short follow-up goes out by itself after ' + ((orData && orData.followUpDays) || 10) + ' days.</div>' +
+    '</div></div>';
+}
+function orRowHtml(r){
+  const f = r.fields, st = f['Status'] || (f['Email'] ? 'Being drafted' : 'No email');
+  const when = f['Sent date'] ? 'sent ' + orDate(f['Sent date']) + (f['Follow-up due'] && st === 'Sent' ? ' · follow-up ' + orDate(f['Follow-up due']) : '') : '';
+  const contact = !f['Email'] && f['Phone'] ? '<a href="tel:' + escHtml(f['Phone']) + '">' + escHtml(f['Phone']) + '</a> (call or visit)' : escHtml(f['Email'] || '');
+  const log = f['Contact log'] ? '<details class="or-log"><summary>History</summary><div class="mk-draft">' + escHtml(f['Contact log']) + (f['Reply'] ? '\n\nTheir reply:\n' + escHtml(f['Reply']) : '') + '</div></details>' : '';
+  return '<div class="or-row">' + orWho(f) + '<div class="mk-muted"><span class="mk-chip">' + escHtml(st) + '</span> ' + escHtml(when) + '</div><div class="mk-muted">' + contact + '</div>' + log + '</div>';
+}
+function orPatchLocal(rec){
+  const i = orData.records.findIndex(x => x.id === rec.id);
+  if(i >= 0) orData.records[i] = rec; else orData.records.unshift(rec);
+  orUpdateHome(); orRender();
+}
+async function orCall(path, method, body){
+  const r = await fetch(SERVER_URL + path, { method, headers:{ 'Content-Type':'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const d = await r.json().catch(()=>({}));
+  if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+  return d;
+}
+const orTyped = id => ({ subject: document.getElementById('or-subj-' + id).value.trim(), body: document.getElementById('or-body-' + id).value.trim() });
+async function orSend(id, btn){
+  const f = (orRecs().find(r => r.id === id) || {}).fields || {};
+  if(!confirm('Send this email to ' + (f['Name'] || 'them') + ' (' + f['Email'] + ') from your Gmail?')) return;
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try { orPatchLocal(await orCall('/outreach/contacts/' + id + '/send', 'POST', orTyped(id))); orStatusMsg('✓ Sent to ' + escHtml(f['Name'] || '') + '. It\'s in your Gmail Sent folder.', 'sage'); }
+  catch(e){ btn.disabled = false; btn.textContent = '✉ Send'; orStatusMsg('Not sent: ' + escHtml(e.message), 'rose'); }
+}
+async function orSaveDraft(id, btn){
+  const t = orTyped(id);
+  btn.disabled = true;
+  try { orPatchLocal(await orCall('/outreach/contacts/' + id, 'PATCH', { fields: { 'Draft subject': t.subject, 'Draft email': t.body } })); orStatusMsg('✓ Saved.', 'sage'); }
+  catch(e){ btn.disabled = false; orStatusMsg('Couldn\'t save: ' + escHtml(e.message), 'rose'); }
+}
+async function orRedraft(id, btn){
+  btn.disabled = true; btn.textContent = 'Writing…';
+  try { orPatchLocal(await orCall('/outreach/contacts/' + id + '/redraft', 'POST')); orStatusMsg('✓ New draft below.', 'sage'); }
+  catch(e){ btn.disabled = false; btn.textContent = 'New draft'; orStatusMsg('Couldn\'t redraft: ' + escHtml(e.message), 'rose'); }
+}
+async function orSetStatus(id, status){
+  try { orPatchLocal(await orCall('/outreach/contacts/' + id, 'PATCH', { fields: { 'Status': status } })); orStatusMsg('✓ Marked ' + escHtml(status.toLowerCase()) + '.', 'sage'); }
+  catch(e){ orStatusMsg('Couldn\'t update: ' + escHtml(e.message), 'rose'); }
+}
+async function orCheck(btn){
+  btn.disabled = true; btn.textContent = 'Checking…';
+  try { orData = await orCall('/outreach/check', 'POST'); orUpdateHome(); orRender(); }
+  catch(e){ btn.disabled = false; btn.textContent = 'Check now'; orStatusMsg('Inbox check failed: ' + escHtml(e.message), 'rose'); }
+}
 
 // ── Marketing: Pinterest, Instagram & Facebook drafts → Patti approves → the server posts them ──
 // Rows live in the Airtable "Marketing Queue" table (one per piece per channel), read and written
@@ -3079,7 +3268,10 @@ function populateHomeStats() {
   document.getElementById('stat-sold').textContent         = allRecords.filter(r=>r.fields['Status']==='Sold'||r.fields['Status']==='Archived').length;
   const inStockCount = allRecords.filter(r => r.fields['Status'] === 'In stock').length;
   const attnEl = document.getElementById('hero-attention');
-  if (inStockCount > 0) { attnEl.style.display='block'; document.getElementById('hero-attention-msg').textContent = inStockCount + ' piece'+(inStockCount>1?'s':'')+' waiting to be photographed.'; }
+  const attn = [];
+  if (inStockCount > 0) attn.push(inStockCount + ' piece'+(inStockCount>1?'s':'')+' waiting to be photographed.');
+  if (orReplyCount > 0) attn.push(orReplyCount + ' outreach repl'+(orReplyCount>1?'ies':'y')+' waiting in Outreach.');
+  if (attn.length) { attnEl.style.display='block'; document.getElementById('hero-attention-msg').textContent = attn.join(' '); }
   else attnEl.style.display = 'none';
 }
 

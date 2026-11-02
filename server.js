@@ -4489,6 +4489,9 @@ async function mktCheckView() {
     approve: { done: waiting === 0 || reviewed > 0, note: [reviewed ? `${reviewed} piece${reviewed === 1 ? '' : 's'} reviewed this week` : '', waiting ? `${waiting} draft${waiting === 1 ? '' : 's'} waiting on the To review tab` : 'Nothing waiting'].filter(Boolean).join(' · ') },
     repost: { done: reposts > 0, note: reposts ? `${reposts} repost${reposts === 1 ? '' : 's'} drafted this week` : 'No reposts drafted yet this week' }
   };
+  // Outreach emails sent from the Outreach screen this week tick the outreach item.
+  const orSentWeek = (orCache.records || []).filter(r => String(r.fields['Sent date'] || '') >= dates.week).length;
+  if (orSentWeek) auto.outreach = { done: true, note: `${orSentWeek} outreach email${orSentWeek === 1 ? '' : 's'} sent this week` };
   const today = (d.days || {})[dates.today] || {};
   let reviews = null, reviewsError = null;
   try {
@@ -4554,6 +4557,363 @@ app.post('/marketing/checklist/redraft', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Outreach: personal emails to realtors, salons and sympathy partners ──────
+// Contacts live in the Airtable "Contacts" table (researched by Claude, or added by hand). The
+// server drafts each first email in Patti's voice with 1–2 real in-stock pieces; Patti reviews
+// it on EB Master's Outreach screen and taps Send. Emails go out from her Gmail through an app
+// password (GMAIL_USER + GMAIL_APP_PASSWORD), so they sit in her Sent folder and replies land in
+// her inbox. Every few hours the server reads that inbox: a reply marks the contact Replied (and
+// an opt-out marks it Do not contact), a bounce marks it Bounced, and a contact with no answer
+// after OR_FOLLOWUP_DAYS gets one short follow-up in the same thread. Nothing is sent without a
+// mailing address for the footer (OUTREACH_ADDRESS), which US anti-spam law requires.
+const AT_CONTACTS_TBL = 'tblgyzcgMZHCtrBaD';
+const GMAIL_USER = process.env.GMAIL_USER || 'eternalbloomsbypatti@gmail.com';
+const GMAIL_APP_PASSWORD = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, ''); // Google shows it in groups of 4
+const OUTREACH_ADDRESS = process.env.OUTREACH_ADDRESS || '';
+const OUTREACH_FROM_NAME = process.env.OUTREACH_FROM_NAME || 'Patti, Eternal Blooms by Patti';
+const OR_STATUSES = ['To research', 'Ready for review', 'Approved', 'Sent', 'Followed up', 'Replied', 'In conversation', 'Customer', 'Not interested', 'Do not contact', 'Skipped', 'Bounced'];
+const OR_EDITABLE_FIELDS = ['Draft subject', 'Draft email', 'Status', 'Notes', 'Relationship', 'Interest'];
+const OR_FOLLOWUP_DAYS = 10;
+const OR_DAILY_CAP = 25;          // first emails + follow-ups per day, to keep Gmail happy
+const OR_DRAFT_BATCH = 10;        // contacts drafted per run
+const OR_SWEEP_EVERY_MS = 3 * 60 * 60 * 1000;
+const OR_TZ = 'America/Chicago';
+const orToday = (d = new Date()) => d.toLocaleDateString('en-CA', { timeZone: OR_TZ });
+const orAddDays = (day, n) => new Date(Date.parse(day + 'T12:00:00Z') + n * MKT_DAY_MS).toISOString().slice(0, 10);
+const orFirstName = name => String(name || '').trim().split(/\s+/)[0] || '';
+const orGmailReady = () => !!(GMAIL_USER && GMAIL_APP_PASSWORD);
+const orSendReady = () => orGmailReady() && !!OUTREACH_ADDRESS;
+
+// Same caching as the marketing queue: one shared reload, 5 minutes fresh, writes patched in place.
+const orCache = { records: null, at: 0, loading: null };
+async function orRecords({ force = false } = {}) {
+  if (!force && orCache.records && Date.now() - orCache.at < MKT_FRESH_MS) return orCache.records;
+  if (!orCache.loading) {
+    orCache.loading = (async () => {
+      let out = [], offset = null;
+      do {
+        const data = await airtableReq(`${AT_CONTACTS_TBL}?pageSize=100` + (offset ? '&offset=' + encodeURIComponent(offset) : ''));
+        out = out.concat(data.records || []);
+        offset = data.offset || null;
+      } while (offset);
+      orCache.records = out; orCache.at = Date.now();
+      return out;
+    })().catch(e => {
+      if (!orCache.records) throw e;
+      console.warn('outreach: contacts reload failed, using the last copy —', e.message);
+      return orCache.records;
+    }).finally(() => { orCache.loading = null; });
+  }
+  return orCache.loading;
+}
+async function orSave(id, fields, logLine) {
+  if (logLine) {
+    const cur = ((orCache.records || []).find(r => r.id === id) || { fields: {} }).fields['Contact log'] || '';
+    fields = { ...fields, 'Contact log': (cur ? cur + '\n' : '') + orToday() + ' ' + logLine };
+  }
+  const rec = await airtableReq(`${AT_CONTACTS_TBL}/${id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) });
+  if (orCache.records) {
+    const i = orCache.records.findIndex(r => r.id === id);
+    if (i >= 0) orCache.records[i] = rec; else orCache.records.unshift(rec);
+  }
+  return rec;
+}
+
+// In-stock pieces with a photo and a product page, each with its tracked link.
+function orPieceUrl(p, sku, campaign) {
+  const u = new URL(p.onlineStoreUrl);
+  for (const [k, v] of Object.entries({ utm_source: 'outreach', utm_medium: 'email', utm_campaign: campaign, utm_content: sku })) u.searchParams.set(k, v);
+  return u.toString();
+}
+async function orPiecePool() {
+  return (await mktShopifyCandidates())
+    .filter(p => p.onlineStoreUrl && p.variants.nodes[0] && p.variants.nodes[0].sku && p.media.nodes.some(m => m.image))
+    .map(p => ({ p, sku: p.variants.nodes[0].sku, title: p.title, image: p.media.nodes.find(m => m.image).image.url }));
+}
+// Up to 12 pieces for the AI to choose from: what suits the segment, in-season first.
+function orShortlist(pool, segment) {
+  const text = x => (x.title + ' ' + (x.p.productType || '') + ' ' + (x.p.tags || []).join(' ')).toLowerCase();
+  let fit = pool;
+  if (segment === 'Sympathy') fit = pool.filter(x => /sympathy|memorial|cemetery|grave|headstone|remembrance/.test(text(x)));
+  else if (segment === 'Realtor' || segment === 'Home stager') fit = pool.filter(x => !/wreath/.test(text(x)) || /door|porch/.test(text(x)));
+  if (fit.length < 4) fit = pool;
+  const shuffled = fit.slice().sort(() => Math.random() - 0.5);
+  return [...shuffled.filter(x => mktAutoTheme(x.p)), ...shuffled.filter(x => !mktAutoTheme(x.p))].slice(0, 12);
+}
+
+const OR_SEGMENT_BRIEF = {
+  'Realtor': 'A real estate agent. Patti has already sold pieces to local agents for two things: staging listings (pieces that make empty or freshly painted rooms photograph warmly and never wilt between showings) and closing gifts for buyers. The natural pitch: "stage the listing with it, then leave it as the closing gift." Offer to drop a few pieces by their office.',
+  'Home stager': 'A home staging business. Pitch pieces for staging: they look fresh in listing photos, never wilt between showings, and can be reused on the next house. Offer to drop a few by.',
+  'Salon': 'A hair salon or similar shop. Several Omaha salons already display Patti\'s pieces to brighten their front desk or stations, and some sell them for her for a commission. Ask if they would like her to drop one by to see how it looks in their space.',
+  'Sympathy': 'A funeral home, church, hospice or cemetery office that serves grieving families. Be gentle and brief, with no sales language at all. Patti makes lasting memorial pieces and sympathy arrangements, including headstone arrangements, that families can keep for years. Ask if she could be someone they mention when families ask about lasting flowers, and offer to drop off a few examples and cards. Sign off "With care," then "Patti".',
+  'Other': 'A local business that might display, gift or resell Patti\'s pieces. Keep the ask simple.'
+};
+
+async function orDraftEmail(rec, pool) {
+  const f = rec.fields || {};
+  const segment = OR_SEGMENT_BRIEF[f['Segment']] ? f['Segment'] : 'Other';
+  const list = orShortlist(pool, segment);
+  const prompt = `${PIN_VOICE_RULES}
+
+Write a short first email from Patti to a local business she has never contacted. Patti makes handcrafted, one-of-a-kind faux floral arrangements in Omaha and sells them at eternalbloomsbypatti.com.
+
+Rules for this email (these override the pin rules above where they differ):
+- Patti's own voice: first person, warm, plain, local. Mentioning Omaha or their neighborhood is welcome.
+- 70–130 words. Greet by first name ("Hi ${orFirstName(f['Name']) || 'there'},"). Sign off "Patti" on its own line (no last name, no link, no footer; those are added later).
+- Mention the personal detail below naturally, in a way that shows she looked, not that she researched them. Never quote a listing price.
+- Name 1 or 2 of the pieces listed below that suit them, by a short plain description (e.g. "a cream magnolia centerpiece"), not by the full product title. Links are added in a P.S. later, so don't write any URL.
+- One clear, low-pressure ask. No prices, discounts, urgency, emoji or hashtags. At most one exclamation point.
+- Never say "bespoke", "made to order", "custom" (except Omaha-area outdoor planters), "weatherproof", "fake", "plastic" or "small batches".
+- Subject line: under 60 characters, specific and plain, sentence case, no exclamation point (e.g. "Closing gifts for your Gretna buyers").
+
+Who they are: ${OR_SEGMENT_BRIEF[segment]}
+Name: ${f['Name'] || ''}
+Business: ${f['Business'] || ''}
+Area: ${f['Area'] || ''}
+Personal detail: ${f['Personal hook'] || '(none)'}
+
+Pieces in stock (choose by number):
+${list.map((x, i) => `${i + 1}. ${x.title} (${x.p.productType || 'arrangement'}): ${String(x.p.description || '').replace(/\s+/g, ' ').slice(0, 160)}`).join('\n')}
+
+Return ONLY valid JSON, no code fences: {"subject": "...", "body": "...", "pieces": [numbers]}`;
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: MKT_DRAFT_MODEL, max_tokens: 4000, output_config: { effort: 'low' }, messages: [{ role: 'user', content: prompt }] })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error((data.error && data.error.message) || 'Anthropic API error');
+  const raw = claudeText(data).trim();
+  const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
+  const parsed = JSON.parse(s >= 0 && e > s ? raw.slice(s, e + 1) : raw);
+  const picked = [...new Set((Array.isArray(parsed.pieces) ? parsed.pieces : []).map(n => list[Number(n) - 1]).filter(Boolean))].slice(0, 2);
+  const ps = picked.length ? `\n\nP.S. ${picked.length > 1 ? 'Here are the two I mentioned' : 'Here\'s the one I mentioned'}:\n` + picked.map(x => `${x.title}: ${orPieceUrl(x.p, x.sku, 'first-email')}`).join('\n') : '';
+  await invEnsure().catch(() => {});
+  const invIds = picked.map(x => (invFindBySku(x.sku)[0] || {}).id).filter(Boolean);
+  return {
+    'Draft subject': String(parsed.subject || '').trim().slice(0, 120),
+    'Draft email': String(parsed.body || '').trim() + ps,
+    'Featured pieces': invIds,
+    'Status': 'Ready for review'
+  };
+}
+
+// Drafts new contacts (an email address and no status yet), a batch at a time, one run at once.
+let orDrafting = null, orDraftError = null;
+function orDraftNew() {
+  if (orDrafting || !ANTHROPIC_API_KEY || !shopifyAccessToken) return orDrafting;
+  orDrafting = (async () => {
+    const todo = (await orRecords()).filter(r => r.fields['Email'] && !r.fields['Status']).slice(0, OR_DRAFT_BATCH);
+    if (!todo.length) return;
+    const pool = await orPiecePool();
+    for (const rec of todo) {
+      try { await orSave(rec.id, await orDraftEmail(rec, pool), 'first email drafted'); orDraftError = null; }
+      catch (e) { orDraftError = e.message; console.warn(`outreach: drafting for ${rec.fields['Name']} failed —`, e.message); if (/credit|billing|authentication/i.test(e.message)) break; }
+    }
+  })().finally(() => { orDrafting = null; });
+  return orDrafting;
+}
+
+// ── Gmail ──
+let orMailer = null;
+function orTransport() {
+  if (!orMailer) orMailer = require('nodemailer').createTransport({ service: 'gmail', auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD } });
+  return orMailer;
+}
+const orFooter = () => `\n\n--\nEternal Blooms by Patti · eternalbloomsbypatti.com\n${OUTREACH_ADDRESS}\nIf you'd rather I not write again, just reply and let me know.`;
+const orSent = { day: '', n: 0 };
+function orCountSend() {
+  const day = orToday();
+  if (orSent.day !== day) { orSent.day = day; orSent.n = 0; }
+  if (orSent.n >= OR_DAILY_CAP) throw new Error(`Already sent ${OR_DAILY_CAP} emails today. The rest can go tomorrow.`);
+  orSent.n++;
+}
+async function orSendMail({ to, subject, text, inReplyTo }) {
+  if (!orSendReady()) throw new Error(!orGmailReady() ? 'Gmail isn\'t connected yet (GMAIL_APP_PASSWORD).' : 'Add the mailing address for the email footer first (OUTREACH_ADDRESS).');
+  orCountSend();
+  const info = await orTransport().sendMail({
+    from: { name: OUTREACH_FROM_NAME, address: GMAIL_USER }, to, subject, text: text + orFooter(),
+    ...(inReplyTo ? { inReplyTo, references: inReplyTo } : {})
+  });
+  return info.messageId;
+}
+
+// The text of a reply without the quoted email below it.
+function orReplyText(text) {
+  const lines = String(text || '').replace(/\r/g, '').split('\n');
+  const cut = lines.findIndex(l => /^On .+wrote:\s*$/.test(l) || /^-{2,}\s*Original Message/i.test(l) || /^From: /.test(l) || /^>/.test(l));
+  return (cut >= 0 ? lines.slice(0, cut) : lines).join('\n').trim().slice(0, 600);
+}
+const OR_OPT_OUT = /\b(unsubscribe|remove me|take me off|stop (e-?mailing|contacting|sending)|do not (e-?mail|contact)|don'?t (e-?mail|contact) me)\b/i;
+const OR_NOT_INTERESTED = /\b(not interested|no thanks?|no,? thank you|we'?re all set|pass on this)\b/i;
+function orPlainPart(node) {
+  if (!node) return null;
+  if (/^text\/plain$/i.test(node.type || '') && node.disposition !== 'attachment') return node.part || '1';
+  for (const c of node.childNodes || []) { const p = orPlainPart(c); if (p) return p; }
+  return null;
+}
+async function orReadPart(client, uid, part) {
+  const { content } = await client.download(String(uid), part, { uid: true });
+  const chunks = [];
+  for await (const c of content) chunks.push(c);
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+// Reads the inbox for replies and bounces, then sends follow-ups that are due.
+let orSweeping = null, orLastSweep = null;
+function orSweep() {
+  if (orSweeping || !orGmailReady() || !AIRTABLE_TOKEN) return orSweeping;
+  orSweeping = (async () => {
+    const out = { replies: 0, bounces: 0, followUps: 0, errors: [] };
+    const records = await orRecords({ force: true });
+    const open = records.filter(r => ['Sent', 'Followed up'].includes(r.fields['Status']) && r.fields['Email']);
+    if (open.length) {
+      const { ImapFlow } = require('imapflow');
+      const client = new ImapFlow({ host: 'imap.gmail.com', port: 993, secure: true, auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }, logger: false });
+      await client.connect();
+      const lock = await client.getMailboxLock('INBOX');
+      try {
+        for (const r of open) {
+          const f = r.fields, since = new Date(Date.parse(f['Sent date'] || orToday()) - MKT_DAY_MS);
+          const uids = await client.search({ from: f['Email'], since }, { uid: true });
+          if (!uids || !uids.length) continue;
+          const uid = uids[uids.length - 1];
+          const msg = await client.fetchOne(String(uid), { bodyStructure: true }, { uid: true });
+          const part = orPlainPart(msg && msg.bodyStructure);
+          const text = part ? orReplyText(await orReadPart(client, uid, part)) : '';
+          const status = OR_OPT_OUT.test(text) ? 'Do not contact' : OR_NOT_INTERESTED.test(text) ? 'Not interested' : 'Replied';
+          await orSave(r.id, { 'Status': status, 'Replied date': orToday(), 'Reply': text || '(no text)', 'Follow-up due': null }, status === 'Replied' ? 'replied' : `replied (${status.toLowerCase()})`);
+          out.replies++;
+        }
+        // Bounces come from Google's mailer daemon and name the address that failed.
+        const oldest = open.reduce((m, r) => Math.min(m, Date.parse(r.fields['Sent date'] || orToday())), Date.now());
+        const bounceUids = await client.search({ from: 'mailer-daemon', since: new Date(oldest - MKT_DAY_MS) }, { uid: true });
+        for (const uid of bounceUids || []) {
+          const msg = await client.fetchOne(String(uid), { bodyStructure: true }, { uid: true });
+          const part = orPlainPart(msg && msg.bodyStructure);
+          const text = part ? (await orReadPart(client, uid, part)).toLowerCase() : '';
+          for (const r of open.filter(r => text.includes(String(r.fields['Email']).toLowerCase()))) {
+            if (((orCache.records || []).find(x => x.id === r.id) || r).fields['Status'] === 'Bounced') continue;
+            await orSave(r.id, { 'Status': 'Bounced', 'Follow-up due': null }, 'email bounced');
+            out.bounces++;
+          }
+        }
+      } finally { lock.release(); await client.logout().catch(() => {}); }
+    }
+    // One follow-up, in the same thread, for first emails nobody answered.
+    const today = orToday();
+    const due = (orCache.records || []).filter(r => r.fields['Status'] === 'Sent' && r.fields['Follow-up due'] && r.fields['Follow-up due'] <= today && r.fields['Message ID']);
+    if (due.length && orSendReady()) {
+      const pool = shopifyAccessToken ? await orPiecePool().catch(() => []) : [];
+      for (const r of due) {
+        try {
+          const f = r.fields;
+          const featured = new Set((f['Featured pieces'] || []).map(id => ((invCache.byId.get(id) || {}).fields || {})['EB Number']));
+          const fresh = orShortlist(pool.filter(x => !featured.has(x.sku)), f['Segment'])[0];
+          const text = orFollowUpText(f, fresh);
+          const subject = /^re:/i.test(f['Draft subject'] || '') ? f['Draft subject'] : 'Re: ' + (f['Draft subject'] || 'my note');
+          await orSendMail({ to: f['Email'], subject, text, inReplyTo: f['Message ID'] });
+          await orSave(r.id, { 'Status': 'Followed up', 'Follow-up due': null }, 'follow-up sent');
+          out.followUps++;
+        } catch (e) { out.errors.push(`${r.fields['Name']}: ${e.message}`); if (/Already sent/.test(e.message)) break; }
+      }
+    }
+    orLastSweep = { at: new Date().toISOString(), ...out };
+    return orLastSweep;
+  })().catch(e => { orLastSweep = { at: new Date().toISOString(), error: e.message }; console.warn('outreach: inbox check failed —', e.message); return orLastSweep; })
+    .finally(() => { orSweeping = null; });
+  return orSweeping;
+}
+function orFollowUpText(f, piece) {
+  const hi = `Hi ${orFirstName(f['Name']) || 'there'},`;
+  const link = piece ? `\n${piece.title}: ${orPieceUrl(piece.p, piece.sku, 'follow-up')}\n` : '';
+  if (f['Segment'] === 'Sympathy') return `${hi}\n\nI wanted to make sure my earlier note reached you. If families ever ask about flowers that last, I'd be glad to help, and I'm happy to drop off a few examples and cards whenever it suits you.\n\nWith care,\nPatti`;
+  return `${hi}\n\nJust making sure my note reached you. Here's one I finished recently, in case it gives you a better feel for my work:\n${link}\nNo pressure at all. If it's ever useful, I'm happy to drop a few pieces by.\n\nPatti`;
+}
+
+// What the screen shows: the contacts, plus a picture and link for each featured piece.
+async function orView() {
+  const records = await orRecords();
+  await invEnsure().catch(() => {});
+  const pool = shopifyAccessToken ? await orPiecePool().catch(() => []) : [];
+  const bySku = new Map(pool.map(x => [x.sku, x]));
+  const pieces = {};
+  for (const r of records) for (const id of r.fields['Featured pieces'] || []) {
+    if (pieces[id]) continue;
+    const sku = ((invCache.byId.get(id) || {}).fields || {})['EB Number'] || '';
+    const x = bySku.get(sku);
+    pieces[id] = { sku, title: x ? x.title : sku, image: x ? x.image : '', url: x ? x.p.onlineStoreUrl : '', inStock: !!x };
+  }
+  return {
+    records, pieces,
+    gmail: { connected: orGmailReady(), address: GMAIL_USER, footerAddress: !!OUTREACH_ADDRESS, ready: orSendReady() },
+    drafting: !!orDrafting, draftError: orDraftError, lastCheck: orLastSweep,
+    footer: orFooter(), followUpDays: OR_FOLLOWUP_DAYS
+  };
+}
+
+// GET /outreach/queue — contacts for the review screen; starts drafting any new ones.
+app.get('/outreach/queue', async (req, res) => {
+  if (!AIRTABLE_TOKEN) return res.status(500).json({ error: 'AIRTABLE_TOKEN not configured on server.' });
+  try {
+    await orRecords({ force: req.query.refresh === '1' });
+    orDraftNew();
+    res.json(await orView());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// PATCH /outreach/contacts/:id { fields } — edit the draft, skip, or set where things stand.
+app.patch('/outreach/contacts/:id', async (req, res) => {
+  const fields = (req.body && req.body.fields) || {};
+  const bad = Object.keys(fields).filter(k => !OR_EDITABLE_FIELDS.includes(k));
+  if (bad.length) return res.status(400).json({ error: 'not editable: ' + bad.join(', ') });
+  if (fields['Status'] && !OR_STATUSES.includes(fields['Status'])) return res.status(400).json({ error: 'unknown status: ' + fields['Status'] });
+  try {
+    const log = fields['Status'] ? 'marked ' + fields['Status'].toLowerCase() : null;
+    if (fields['Status'] && !['Sent', 'Followed up'].includes(fields['Status'])) fields['Follow-up due'] = null;
+    res.json(await orSave(req.params.id, fields, log));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// POST /outreach/contacts/:id/redraft — a fresh first email for this contact.
+app.post('/outreach/contacts/:id/redraft', async (req, res) => {
+  if (!ANTHROPIC_API_KEY || !shopifyAccessToken) return res.status(500).json({ error: 'Drafting needs ANTHROPIC_API_KEY and the Shopify connection.' });
+  try {
+    const rec = (await orRecords()).find(r => r.id === req.params.id);
+    if (!rec) return res.status(404).json({ error: 'contact not found' });
+    res.json(await orSave(rec.id, await orDraftEmail(rec, await orPiecePool()), 'first email redrafted'));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// POST /outreach/contacts/:id/send { subject, body } — saves Patti's final text, then sends it.
+const orSending = new Set();
+app.post('/outreach/contacts/:id/send', async (req, res) => {
+  const id = req.params.id;
+  if (orSending.has(id)) return res.status(409).json({ error: 'Already sending this one.' });
+  orSending.add(id);
+  try {
+    const rec = (await orRecords()).find(r => r.id === id);
+    if (!rec) return res.status(404).json({ error: 'contact not found' });
+    const f = rec.fields;
+    if (!['Ready for review', 'Approved'].includes(f['Status'])) return res.status(409).json({ error: `This contact is ${f['Status'] || 'not drafted yet'}, so nothing was sent.` });
+    if (!f['Email']) return res.status(400).json({ error: 'No email address for this contact.' });
+    const subject = String((req.body && req.body.subject) || f['Draft subject'] || '').trim();
+    const body = String((req.body && req.body.body) || f['Draft email'] || '').trim();
+    if (!subject || !body) return res.status(400).json({ error: 'The subject and email can\'t be empty.' });
+    const messageId = await orSendMail({ to: f['Email'], subject, text: body });
+    const today = orToday();
+    res.json(await orSave(id, {
+      'Draft subject': subject, 'Draft email': body, 'Status': 'Sent', 'Sent date': today,
+      'Follow-up due': orAddDays(today, OR_FOLLOWUP_DAYS), 'Message ID': messageId
+    }, 'first email sent'));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+  finally { orSending.delete(id); }
+});
+// POST /outreach/check — read the inbox and send due follow-ups now.
+app.post('/outreach/check', async (req, res) => {
+  if (!orGmailReady()) return res.status(400).json({ error: 'Gmail isn\'t connected yet (GMAIL_APP_PASSWORD).' });
+  try { await orSweep(); res.json(await orView()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+setInterval(() => { orSweep(); }, OR_SWEEP_EVERY_MS);
+
 app.listen(PORT, () => {
   console.log(`EB server running on port ${PORT}`);
   ensureOrderWebhook();
@@ -4562,4 +4922,5 @@ app.listen(PORT, () => {
   metaLoadAuth().catch(e => console.warn('Meta: could not load the saved connection —', e.message));
   if (AIRTABLE_TOKEN) mktRecords().catch(e => console.warn('marketing: could not load the queue —', e.message));
   cutStateLoad();
+  setTimeout(() => { orSweep(); }, 2 * 60 * 1000); // replies that came in while the server was restarting
 });
