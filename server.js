@@ -4808,11 +4808,34 @@ function orCountSend() {
   if (orSent.n >= OR_DAILY_CAP) throw new Error(`Already sent ${OR_DAILY_CAP} emails today. The rest can go tomorrow.`);
   orSent.n++;
 }
+// The same email as a simple HTML page, so a piece's line ("Title: link") shows as its photo,
+// tappable through to the product page (a bare link on a phone, Patti's test 2026-11-02). The
+// plain text goes along too, for mail apps that don't show HTML.
+const orEsc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function orHtml(text, pool) {
+  const byUrl = new Map(pool.map(x => [x.p.onlineStoreUrl.split('?')[0], x]));
+  const linkify = line => orEsc(line).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" style="color:#8a5a5d">${u}</a>`);
+  const blocks = String(text || '').replace(/\r/g, '').split(/\n{2,}/).map(para => {
+    const lines = para.split('\n');
+    const pieces = [], rest = [];
+    for (const line of lines) {
+      const m = line.match(/^(.+?):\s+(https?:\/\/\S+)$/);
+      const x = m && byUrl.get(m[2].split('?')[0]);
+      if (x) pieces.push(`<a href="${orEsc(m[2])}" style="display:inline-block;width:46%;max-width:240px;margin:0 2% 14px 0;vertical-align:top;text-decoration:none;color:#5b5248"><img src="${orEsc(orImg600(x.image))}" alt="${orEsc(m[1])}" width="240" style="display:block;width:100%;height:auto;border:0;border-radius:8px"><span style="display:block;font-size:13px;line-height:1.35;margin-top:6px">${orEsc(m[1])}</span></a>`);
+      else rest.push(linkify(line));
+    }
+    return (rest.length ? `<p style="margin:0 0 14px">${rest.join('<br>')}</p>` : '') + (pieces.length ? `<div>${pieces.join('')}</div>` : '');
+  });
+  const foot = orFooter().replace(/^\s*--\n/, '').trim().split('\n').map(orEsc).join('<br>');
+  return `<div style="font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.55;color:#2b2622;max-width:560px">${blocks.join('')}<p style="margin:22px 0 0;font-family:Arial,sans-serif;font-size:12px;line-height:1.5;color:#817365">${foot}</p></div>`;
+}
+const orImg600 = url => /^https:\/\/cdn\.shopify\.com\//.test(url) ? url + (url.includes('?') ? '&' : '?') + 'width=600' : url;
 async function orSendMail({ to, subject, text, inReplyTo }) {
   if (!orSendReady()) throw new Error(!orGmailReady() ? 'Gmail isn\'t connected yet (GMAIL_APP_PASSWORD).' : 'Add the mailing address for the email footer first (OUTREACH_ADDRESS).');
   orCountSend();
+  const pool = shopifyAccessToken ? await orPiecePool().catch(() => []) : [];
   const info = await orTransport().sendMail({
-    from: { name: OUTREACH_FROM_NAME, address: GMAIL_USER }, to, subject, text: text + orFooter(),
+    from: { name: OUTREACH_FROM_NAME, address: GMAIL_USER }, to, subject, text: text + orFooter(), html: orHtml(text, pool),
     ...(inReplyTo ? { inReplyTo, references: inReplyTo } : {})
   });
   return info.messageId;
