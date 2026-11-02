@@ -2978,9 +2978,75 @@ function mktAngleLines(theme, previous, what) {
   return lines.join('\n');
 }
 
+// Each draft is written on its own, so without help every one opened the same way (2026-11-02:
+// 28 of 32 Facebook posts began "I loved…/I love…/I had…", all 32 Instagram captions and 25 of 26
+// pins began "This …"). Each draft now gets an opening style dealt from a shuffled deck, the
+// channel's recent openings to steer clear of, and a ban on the old crutch starts.
+const MKT_OPENERS = {
+  Facebook: [
+    'open with a color or a flower in the piece, named plainly (e.g. "Deep burgundy peonies and…")',
+    'open with a short question to the reader about their home or the season',
+    'open with a quick moment from the workbench — what she reached for first, or what changed as it came together',
+    'open with the spot in a home it is made for (a mantel, a front door, a dining table)',
+    'open with the season or occasion it is ready for',
+    'open with one small detail up close — a texture, a ribbon, a pinecone, a stem',
+    'open with who it would make a good gift for, or the moment it suits',
+    'open with a short, plain line that this piece is finished and ready (vary the wording)'
+  ],
+  Instagram: [
+    'open with a color or flower name',
+    'open with the place it looks best (entryway, mantel, table, porch)',
+    'open with the season or occasion',
+    'open with a texture or small detail',
+    'open with a short question to the reader',
+    'open with a short sensory phrase (a fragment is fine)',
+    'open with the type of piece named directly (e.g. "Swag, wreath, centerpiece…"), not with "This"'
+  ],
+  Pinterest: [
+    'open the description with the piece type and its colors (e.g. "Burgundy & gold winter swag…")',
+    'open the description with where it goes (e.g. "For a farmhouse mantel…")',
+    'open the description with the season or occasion',
+    'open the description with its standout flowers or greenery'
+  ]
+};
+const MKT_BANNED_OPENINGS = {
+  Facebook: { re: /^\s*(i\s+(loved|love|had|just)\b|i'm\s+so\b|there's\s+something\b)/i, text: 'Do NOT start with "I loved", "I love", "I had", "I just", "I\'m so" or "There\'s something". Patti can still say "I", just not as the very first word every time.' },
+  Instagram: { re: /^\s*(this|meet)\b/i, text: 'Do NOT start with "This" or "Meet".' },
+  Pinterest: { re: /^\s*(this|a handcrafted|a handmade)\b/i, text: 'Do NOT start the description with "This", "A handcrafted" or "A handmade".' }
+};
+function mktOpenerDeck() {
+  const decks = {};
+  return ch => {
+    const list = MKT_OPENERS[ch] || [];
+    if (!decks[ch] || !decks[ch].length) decks[ch] = list.slice().sort(() => Math.random() - 0.5);
+    return decks[ch].pop();
+  };
+}
+const mktOpening = text => String(text || '').replace(/^["'\s]+/, '').split(/\s+/).slice(0, 6).join(' ');
+// The newest 12 openings per channel, from the queue (newest first) and drafts made this run.
+function mktRecentOpenings(records) {
+  const out = { Pinterest: [], Instagram: [], Facebook: [] };
+  for (const r of records) {
+    const f = r.fields || {}, list = out[mktChannel(f)];
+    if (list && f['Description'] && list.length < 12) list.push(mktOpening(f['Description']));
+  }
+  return out;
+}
+function mktOpeningLines(ch, style, recent) {
+  const b = MKT_BANNED_OPENINGS[ch];
+  const lines = [`Opening for the ${ch === 'Pinterest' ? 'pin description' : ch + ' ' + (ch === 'Facebook' ? 'post' : 'caption')}: ${style}. ${b ? b.text : ''}`];
+  if (recent && recent.length) lines.push(`Recent ${ch} posts opened like this; start differently from ALL of them (different first two words, different sentence shape):\n${recent.map(t => '- ' + t + '…').join('\n')}`);
+  return lines.join('\n');
+}
+const mktBadOpening = (ch, text, recent) => {
+  const two = t => mktOpening(t).split(' ').slice(0, 2).join(' ').toLowerCase();
+  return (MKT_BANNED_OPENINGS[ch] && MKT_BANNED_OPENINGS[ch].re.test(text)) || (recent || []).some(t => two(t) === two(text));
+};
+
 async function mktDraftPin(p, img, ctx = {}) {
   const textPrompt = `${PIN_VOICE_RULES}
 ${mktAngleLines(ctx.theme, ctx.previous, 'pin')}
+${ctx.opener ? mktOpeningLines('Pinterest', ctx.opener, ctx.recent) : ''}
 
 Write ONE Pinterest pin for this product.
 - title: under 100 characters, Title Case, starting with the search phrase a shopper would type (e.g. "Fall Door Wreath", "Farmhouse Dining Table Centerpiece"), then the standout detail.
@@ -3024,10 +3090,12 @@ ${SOCIAL_VOICE_RULES}
 ${mktAngleLines(ctx.theme, [], '')}
 ${(prev.Instagram || []).length ? mktAngleLines('', prev.Instagram, 'Instagram caption') : ''}
 ${(prev.Facebook || []).length ? mktAngleLines('', prev.Facebook, 'Facebook post') : ''}
+${ctx.openers ? mktOpeningLines('Instagram', ctx.openers.Instagram, (ctx.recent || {}).Instagram) : ''}
+${ctx.openers ? mktOpeningLines('Facebook', ctx.openers.Facebook, (ctx.recent || {}).Facebook) : ''}
 
-Write an Instagram caption and a Facebook post for this product.
-- instagram: 2–4 short sentences, under 600 characters before any hashtags. What it is, the standout details, where it looks best. End with a soft call to action like "Shop this one-of-a-kind piece at the link in bio."
-- facebook: 2–4 sentences in Patti's own voice, under 600 characters, e.g. what she loved making about it and where it would look at home. Sign off "— Patti".
+Write an Instagram caption and a Facebook post for this product. The two must not open the same way.
+- instagram: 2–4 short sentences, under 600 characters before any hashtags. What it is, the standout details, where it looks best. End with a soft call to action that points to the link in bio (vary the wording; "Shop this one-of-a-kind piece at the link in bio" is one option, not the only one).
+- facebook: 2–4 sentences in Patti's own voice, under 600 characters: something true about the piece and where it would look at home, plus at most one personal note from making it. Vary sentence length and shape. Sign off "— Patti".
 ${img ? 'The product photo is attached — use what you can see.' : ''}
 
 Product title: ${p.title}
@@ -3092,6 +3160,8 @@ async function mktDraftBatch(count, opts = {}) {
   eligible = eligible.filter(c => c.channels.length);
   const pool = eligible.slice(0, count);
   const created = [], failed = [];
+  const deal = mktOpenerDeck(), recent = mktRecentOpenings(queue);
+  const noteOpening = (ch, text) => { recent[ch].unshift(mktOpening(text)); recent[ch].length = Math.min(recent[ch].length, 12); };
   for (const c of pool) {
     try {
       const inv = invFindBySku(c.sku)[0];
@@ -3106,11 +3176,19 @@ async function mktDraftBatch(count, opts = {}) {
       if (inv) base['Inventory'] = [inv.id];
       const type = ch => ((h(c.sku, ch) || {}).posts || []).length ? 'Repost' : 'New';
       if (c.channels.includes('Pinterest')) {
-        const pin = await mktDraftPin(c.p, c.img, { theme, previous: ((h(c.sku, 'Pinterest') || {}).posts || []).slice(0, 2).map(f => (f['Pin Title'] || '') + ' — ' + (f['Description'] || '')) });
+        const pinCtx = { theme, recent: recent.Pinterest, previous: ((h(c.sku, 'Pinterest') || {}).posts || []).slice(0, 2).map(f => (f['Pin Title'] || '') + ' — ' + (f['Description'] || '')) };
+        let pin = await mktDraftPin(c.p, c.img, { ...pinCtx, opener: deal('Pinterest') });
+        // One redraft, with a different style, when the model still fell back on a used opening.
+        if (mktBadOpening('Pinterest', pin.description, recent.Pinterest)) pin = await mktDraftPin(c.p, c.img, { ...pinCtx, opener: deal('Pinterest') });
+        noteOpening('Pinterest', pin.description);
         created.push({ fields: { ...base, 'Channel': 'Pinterest', 'Post type': type('Pinterest'), 'Pin Title': pin.title, 'Description': pin.description, 'Board': pin.board, 'Alt Text': pin.alt_text } });
       }
       if (c.channels.includes('Instagram') || c.channels.includes('Facebook')) {
-        const social = await mktDraftSocial(c.p, c.img, { theme, previous: { Instagram: prev('Instagram'), Facebook: prev('Facebook') } });
+        const socialCtx = { theme, recent, previous: { Instagram: prev('Instagram'), Facebook: prev('Facebook') } };
+        let social = await mktDraftSocial(c.p, c.img, { ...socialCtx, openers: { Instagram: deal('Instagram'), Facebook: deal('Facebook') } });
+        if (mktBadOpening('Instagram', social.instagram, recent.Instagram) || mktBadOpening('Facebook', social.facebook, recent.Facebook))
+          social = await mktDraftSocial(c.p, c.img, { ...socialCtx, openers: { Instagram: deal('Instagram'), Facebook: deal('Facebook') } });
+        noteOpening('Instagram', social.instagram); noteOpening('Facebook', social.facebook);
         if (c.channels.includes('Instagram')) created.push({ fields: { ...base, 'Channel': 'Instagram', 'Post type': type('Instagram'), 'Pin Title': c.p.title, 'Description': social.instagram } });
         if (c.channels.includes('Facebook')) created.push({ fields: { ...base, 'Channel': 'Facebook', 'Post type': type('Facebook'), 'Pin Title': c.p.title, 'Description': social.facebook + '\n\n' + c.p.onlineStoreUrl } });
       }
