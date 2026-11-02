@@ -2918,10 +2918,13 @@ function mktPickImage(p) {
 
 // Listing videos become video pins when Pinterest will show them well: at least 4 s long
 // (Pinterest's minimum) and vertical or square (landscape plays tiny in the feed). Shopify
-// keeps MP4 renditions of each .mov upload; take the largest one, up to 1080×1920.
+// keeps MP4 renditions of each .mov upload; take the largest one, up to 1080×1920. A listing
+// with a long and a short video uses the shortest one that qualifies (2026-11-02); one under
+// 12 s is too short for the social cut and posts as it is.
 const PIN_VIDEO_MIN_MS = 4000;
 function mktPickVideo(p) {
-  const vids = ((p.media && p.media.nodes) || []).filter(n => n && n.sources && n.duration >= PIN_VIDEO_MIN_MS);
+  const vids = ((p.media && p.media.nodes) || []).filter(n => n && n.sources && n.duration >= PIN_VIDEO_MIN_MS)
+    .sort((a, b) => a.duration - b.duration);
   for (const v of vids) {
     const mp4 = v.sources.filter(s => s.format === 'mp4' && s.url && s.height >= s.width && s.height <= 1920)
       .sort((a, b) => b.height - a.height)[0];
