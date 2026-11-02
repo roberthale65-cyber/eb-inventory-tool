@@ -2894,12 +2894,14 @@ async function mktFetchAll() {
 }
 
 // Active, in-stock Shopify products with their SKU (= EB Number), tags, photos and videos.
+// Reads up to 30 media per listing (was 10 until 2026-11-02): a short video added after the
+// photos can sit past the 10th spot, and listings run to 19 media.
 let mktCandCache = { at: 0, list: null };
 async function mktShopifyCandidates() {
   if (mktCandCache.list && Date.now() - mktCandCache.at < MKT_FRESH_MS) return mktCandCache.list;
   const out = []; let cursor = null;
   do {
-    const d = await shopifyGraphql(`query($after:String){products(first:100,after:$after,query:"status:active inventory_total:>0"){nodes{title handle onlineStoreUrl productType tags description(truncateAt:700) variants(first:1){nodes{sku}} media(first:10){nodes{... on MediaImage{image{url width height altText}} ... on Video{duration sources{url format width height}}}}} pageInfo{hasNextPage endCursor}}}`, { after: cursor });
+    const d = await shopifyGraphql(`query($after:String){products(first:100,after:$after,query:"status:active inventory_total:>0"){nodes{title handle onlineStoreUrl productType tags description(truncateAt:700) variants(first:1){nodes{sku}} media(first:30){nodes{... on MediaImage{image{url width height altText}} ... on Video{duration sources{url format width height}}}}} pageInfo{hasNextPage endCursor}}}`, { after: cursor });
     const conn = d && d.data && d.data.products;
     if (!conn) throw new Error('Shopify product query failed: ' + JSON.stringify((d && d.errors) || d));
     out.push(...conn.nodes);
