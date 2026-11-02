@@ -25,7 +25,8 @@ const APP_OPEN = [
   /^\/(auth|drive-auth|pinterest-auth|meta-auth)(\/callback)?$/, // OAuth: opened as pages, checked by each provider
   /^\/webhooks\//,                                            // Shopify, checked by HMAC
   /^\/marketing\/media\//,                                     // fetched by Pinterest, Instagram and Facebook
-  /^\/marketing\/(cut-jobs|cut-upload\/|cut-failed\/)/        // the video maker, checked by SOCIAL_CUT_KEY
+  /^\/marketing\/(cut-jobs|cut-upload\/|cut-failed\/)/,       // the video maker, checked by SOCIAL_CUT_KEY
+  /^\/outreach\/unsubscribe$/                                 // the unsubscribe link in outreach emails, checked by its signature
 ];
 const sameSecret = (a, b) => crypto.timingSafeEqual(crypto.createHash('sha256').update(String(a)).digest(), crypto.createHash('sha256').update(String(b)).digest());
 app.use((req, res, next) => {
@@ -4787,6 +4788,7 @@ function orDraftNew() {
     if (!todo.length) return;
     const pool = await orPiecePool();
     for (const rec of todo) {
+      if (orSuppressed(rec.fields['Email'])) { await orSave(rec.id, { 'Status': 'Do not contact' }, 'not drafted: this address unsubscribed earlier'); continue; }
       try { await orSave(rec.id, await orDraftEmail(rec, pool), 'first email drafted'); orDraftError = null; }
       catch (e) { orDraftError = e.message; console.warn(`outreach: drafting for ${rec.fields['Name']} failed —`, e.message); if (/credit|billing|authentication/i.test(e.message)) break; }
     }
@@ -4800,7 +4802,25 @@ function orTransport() {
   if (!orMailer) orMailer = require('nodemailer').createTransport({ service: 'gmail', auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD } });
   return orMailer;
 }
-const orFooter = () => `\n\n--\nEternal Blooms by Patti · eternalbloomsbypatti.com\n${OUTREACH_ADDRESS}\nIf you'd rather I not write again, just reply and let me know.`;
+// Every email carries a personal unsubscribe link (and Gmail's own Unsubscribe button, through the
+// List-Unsubscribe headers). The link is signed, so nobody can opt out someone else by guessing.
+const OR_PUBLIC_URL = (SERVER_URL || 'https://eb-shopify-server.onrender.com').replace(/\/$/, '');
+const OR_UNSUB_KEY = process.env.OUTREACH_SECRET || crypto.createHash('sha256').update('eb-outreach-unsub:' + (AIRTABLE_TOKEN || '')).digest('hex');
+const orUnsubToken = id => crypto.createHmac('sha256', OR_UNSUB_KEY).update(String(id)).digest('hex').slice(0, 24);
+const orUnsubUrl = id => `${OR_PUBLIC_URL}/outreach/unsubscribe?c=${encodeURIComponent(id)}&t=${orUnsubToken(id)}`;
+const orFooterLines = () => ['Eternal Blooms by Patti · eternalbloomsbypatti.com', OUTREACH_ADDRESS];
+const orFooter = id => `\n\n--\n${orFooterLines().join('\n')}\nDon't want emails from me? Unsubscribe: ${id ? orUnsubUrl(id) : '(a personal link is added to each email)'}`;
+// An address that opted out on any contact row is never emailed again, even if it's added anew.
+const orEmailKey = e => String(e || '').trim().toLowerCase();
+const orSuppressed = email => !!email && (orCache.records || []).some(r => orEmailKey(r.fields['Email']) === orEmailKey(email) && (r.fields['Opted out'] || r.fields['Status'] === 'Do not contact'));
+async function orOptOut(id, how) {
+  const rec = (await orRecords()).find(r => r.id === id);
+  if (!rec) return null;
+  const today = orToday(), key = orEmailKey(rec.fields['Email']);
+  const rows = (orCache.records || []).filter(r => r.id === id || (key && orEmailKey(r.fields['Email']) === key));
+  for (const r of rows) if (!r.fields['Opted out']) await orSave(r.id, { 'Status': 'Do not contact', 'Opted out': today, 'Follow-up due': null }, `unsubscribed (${how})`);
+  return rec;
+}
 const orSent = { day: '', n: 0 };
 function orCountSend() {
   const day = orToday();
@@ -4808,11 +4828,36 @@ function orCountSend() {
   if (orSent.n >= OR_DAILY_CAP) throw new Error(`Already sent ${OR_DAILY_CAP} emails today. The rest can go tomorrow.`);
   orSent.n++;
 }
-async function orSendMail({ to, subject, text, inReplyTo }) {
+// The same email as a simple HTML page, so a piece's line ("Title: link") shows as its photo,
+// tappable through to the product page (a bare link on a phone, Patti's test 2026-11-02). The
+// plain text goes along too, for mail apps that don't show HTML.
+const orEsc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function orHtml(text, pool, id) {
+  const byUrl = new Map(pool.map(x => [x.p.onlineStoreUrl.split('?')[0], x]));
+  const linkify = line => orEsc(line).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" style="color:#8a5a5d">${u}</a>`);
+  const blocks = String(text || '').replace(/\r/g, '').split(/\n{2,}/).map(para => {
+    const lines = para.split('\n');
+    const pieces = [], rest = [];
+    for (const line of lines) {
+      const m = line.match(/^(.+?):\s+(https?:\/\/\S+)$/);
+      const x = m && byUrl.get(m[2].split('?')[0]);
+      if (x) pieces.push(`<a href="${orEsc(m[2])}" style="display:inline-block;width:46%;max-width:240px;margin:0 2% 14px 0;vertical-align:top;text-decoration:none;color:#5b5248"><img src="${orEsc(orImg600(x.image))}" alt="${orEsc(m[1])}" width="240" style="display:block;width:100%;height:auto;border:0;border-radius:8px"><span style="display:block;font-size:13px;line-height:1.35;margin-top:6px">${orEsc(m[1])}</span></a>`);
+      else rest.push(linkify(line));
+    }
+    return (rest.length ? `<p style="margin:0 0 14px">${rest.join('<br>')}</p>` : '') + (pieces.length ? `<div>${pieces.join('')}</div>` : '');
+  });
+  const foot = [...orFooterLines().map(orEsc), `Don't want emails from me? <a href="${orEsc(orUnsubUrl(id))}" style="color:#817365">Unsubscribe</a>`].join('<br>');
+  return `<div style="font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.55;color:#2b2622;max-width:560px">${blocks.join('')}<p style="margin:22px 0 0;font-family:Arial,sans-serif;font-size:12px;line-height:1.5;color:#817365">${foot}</p></div>`;
+}
+const orImg600 = url => /^https:\/\/cdn\.shopify\.com\//.test(url) ? url + (url.includes('?') ? '&' : '?') + 'width=600' : url;
+async function orSendMail({ id, to, subject, text, inReplyTo }) {
   if (!orSendReady()) throw new Error(!orGmailReady() ? 'Gmail isn\'t connected yet (GMAIL_APP_PASSWORD).' : 'Add the mailing address for the email footer first (OUTREACH_ADDRESS).');
+  if (orSuppressed(to)) throw new Error(`${to} unsubscribed, so nothing was sent.`);
   orCountSend();
+  const pool = shopifyAccessToken ? await orPiecePool().catch(() => []) : [];
   const info = await orTransport().sendMail({
-    from: { name: OUTREACH_FROM_NAME, address: GMAIL_USER }, to, subject, text: text + orFooter(),
+    from: { name: OUTREACH_FROM_NAME, address: GMAIL_USER }, to, subject, text: text + orFooter(id), html: orHtml(text, pool, id),
+    headers: { 'List-Unsubscribe': `<${orUnsubUrl(id)}>, <mailto:${GMAIL_USER}?subject=unsubscribe>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
     ...(inReplyTo ? { inReplyTo, references: inReplyTo } : {})
   });
   return info.messageId;
@@ -4862,7 +4907,7 @@ function orSweep() {
           const part = orPlainPart(msg && msg.bodyStructure);
           const text = part ? orReplyText(await orReadPart(client, uid, part)) : '';
           const status = OR_OPT_OUT.test(text) ? 'Do not contact' : OR_NOT_INTERESTED.test(text) ? 'Not interested' : 'Replied';
-          await orSave(r.id, { 'Status': status, 'Replied date': orToday(), 'Reply': text || '(no text)', 'Follow-up due': null }, status === 'Replied' ? 'replied' : `replied (${status.toLowerCase()})`);
+          await orSave(r.id, { 'Status': status, 'Replied date': orToday(), 'Reply': text || '(no text)', 'Follow-up due': null, ...(status === 'Do not contact' ? { 'Opted out': orToday() } : {}) }, status === 'Replied' ? 'replied' : `replied (${status.toLowerCase()})`);
           out.replies++;
         }
         // Bounces come from Google's mailer daemon and name the address that failed.
@@ -4892,7 +4937,7 @@ function orSweep() {
           const fresh = orShortlist(pool.filter(x => !featured.has(x.sku)), f['Segment'])[0];
           const text = orFollowUpText(f, fresh);
           const subject = /^re:/i.test(f['Draft subject'] || '') ? f['Draft subject'] : 'Re: ' + (f['Draft subject'] || 'my note');
-          await orSendMail({ to: f['Email'], subject, text, inReplyTo: f['Message ID'] });
+          await orSendMail({ id: r.id, to: f['Email'], subject, text, inReplyTo: f['Message ID'] });
           await orSave(r.id, { 'Status': 'Followed up', 'Follow-up due': null }, 'follow-up sent');
           out.followUps++;
         } catch (e) { out.errors.push(`${r.fields['Name']}: ${e.message}`); if (/Already sent/.test(e.message)) break; }
@@ -4977,7 +5022,7 @@ app.post('/outreach/contacts/:id/send', async (req, res) => {
     const subject = String((req.body && req.body.subject) || f['Draft subject'] || '').trim();
     const body = String((req.body && req.body.body) || f['Draft email'] || '').trim();
     if (!subject || !body) return res.status(400).json({ error: 'The subject and email can\'t be empty.' });
-    const messageId = await orSendMail({ to: f['Email'], subject, text: body });
+    const messageId = await orSendMail({ id, to: f['Email'], subject, text: body });
     const today = orToday();
     res.json(await orSave(id, {
       'Draft subject': subject, 'Draft email': body, 'Status': 'Sent', 'Sent date': today,
@@ -4985,6 +5030,28 @@ app.post('/outreach/contacts/:id/send', async (req, res) => {
     }, 'first email sent'));
   } catch (e) { res.status(500).json({ error: e.message }); }
   finally { orSending.delete(id); }
+});
+const OR_UNSUB_PAGE = (title, body) => PIN_PAGE(title, body + '<p style="margin-top:28px">Patti<br>Eternal Blooms by Patti</p>');
+function orUnsubCheck(req) {
+  const id = String(req.query.c || ''), t = String(req.query.t || '');
+  return /^rec[A-Za-z0-9]{14}$/.test(id) && sameSecret(t, orUnsubToken(id)) ? id : null;
+}
+// GET /outreach/unsubscribe?c=<contact>&t=<signature> — confirm page.
+app.get('/outreach/unsubscribe', async (req, res) => {
+  const id = orUnsubCheck(req);
+  if (!id) return res.status(400).send(OR_UNSUB_PAGE('This link doesn\'t look right', '<p>Please reply to my email with "unsubscribe" and I\'ll take you off my list.</p>'));
+  const rec = (await orRecords().catch(() => [])).find(r => r.id === id);
+  if (rec && rec.fields['Opted out']) return res.send(OR_UNSUB_PAGE('You\'re unsubscribed', '<p>You won\'t get any more emails from me.</p>'));
+  res.send(OR_UNSUB_PAGE('Unsubscribe?', `<p>Tap below and you won't get any more emails from me.</p><form method="post"><button type="submit" style="font:inherit;font-size:16px;padding:12px 26px;border-radius:8px;border:0;background:#bb8588;color:#fff;cursor:pointer">Unsubscribe</button></form>`));
+});
+// POST — the button above, or Gmail's one-click unsubscribe (List-Unsubscribe-Post).
+app.post('/outreach/unsubscribe', express.urlencoded({ extended: false }), async (req, res) => {
+  const id = orUnsubCheck(req);
+  if (!id) return res.status(400).send(OR_UNSUB_PAGE('This link doesn\'t look right', '<p>Please reply to my email with "unsubscribe" and I\'ll take you off my list.</p>'));
+  const oneClick = (req.body && req.body['List-Unsubscribe']) === 'One-Click';
+  try { await orOptOut(id, oneClick ? 'Gmail unsubscribe button' : 'email link'); }
+  catch (e) { console.warn('outreach: unsubscribe failed —', e.message); return res.status(500).send(OR_UNSUB_PAGE('Something went wrong', '<p>Please try again in a minute, or reply to my email with "unsubscribe".</p>')); }
+  res.send(OR_UNSUB_PAGE('You\'re unsubscribed', '<p>You won\'t get any more emails from me. Sorry for the bother.</p>'));
 });
 // POST /outreach/check — read the inbox and send due follow-ups now.
 app.post('/outreach/check', async (req, res) => {
