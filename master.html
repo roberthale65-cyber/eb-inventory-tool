@@ -294,11 +294,11 @@ button:active{transform:scale(.97)}
 .or-who{font-size:14px;line-height:1.4}.or-who .mk-chip{margin-left:6px}
 .mk-card.or-card{border-left-color:var(--teal)}.mk-card.or-card.replied{border-left-color:var(--gold)}
 .or-pieces{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.or-pieces a{display:flex;flex-direction:column;width:96px;font-size:11px;color:var(--text-mid);text-decoration:none;line-height:1.3}.or-pieces img{width:96px;height:96px;object-fit:cover;border-radius:8px;margin-bottom:4px;background:var(--ivory-dark)}
-textarea.mk-input.or-body{min-height:220px}
+textarea.mk-input.or-body{min-height:220px;overflow:hidden;resize:none}
 .or-footer{white-space:pre-wrap;font-size:11.5px;color:var(--text-muted);margin-top:6px;line-height:1.5}
 .or-reply-head{font-size:12px;font-weight:800;margin-top:10px;color:var(--teal)}
 .or-row{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px}
-.or-check{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:var(--text-muted);margin-bottom:12px}
+.or-check{padding:0 4px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:var(--text-muted);margin-bottom:12px}
 .or-log summary{font-size:12px;cursor:pointer;margin-top:6px;color:var(--text-mid)}
 .mk-actions a.btn{text-align:center;text-decoration:none}
 .mk-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
@@ -2074,7 +2074,11 @@ function orRender(){
     return;
   }
   host.innerHTML = list.map(r => orTab === 'review' ? orCardHtml(r) : orRowHtml(r)).join('');
+  host.querySelectorAll('.or-body').forEach(orGrow);
 }
+// The email box grows with its text: a box that scrolls inside a scrolling page is fiddly on a phone.
+function orGrow(ta){ ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 4) + 'px'; }
+window.addEventListener('resize', () => document.querySelectorAll('.or-body').forEach(orGrow)); // turning the iPad rewraps the text
 const orDate = s => s ? new Date(s + 'T12:00:00').toLocaleDateString(undefined, { month:'short', day:'numeric' }) : '';
 function orWho(f){
   return '<div class="or-who"><strong>' + escHtml(f['Name'] || '') + '</strong>' + (f['Business'] ? ' · ' + escHtml(f['Business']) : '') +
@@ -2105,7 +2109,7 @@ function orCardHtml(r){
     orPiecesHtml(f) +
     '<div class="mk-label">To: ' + escHtml(f['Email'] || '') + '</div>' +
     '<div class="mk-label">Subject</div><input class="mk-input" id="or-subj-' + id + '" value="' + escHtml(f['Draft subject'] || '') + '">' +
-    '<div class="mk-label">Email</div><textarea class="mk-input or-body" id="or-body-' + id + '">' + escHtml(f['Draft email'] || '') + '</textarea>' +
+    '<div class="mk-label">Email</div><textarea class="mk-input or-body" id="or-body-' + id + '" oninput="orGrow(this)">' + escHtml(f['Draft email'] || '') + '</textarea>' +
     '<div class="or-footer">' + escHtml((orData.footer || '').trim()) + '</div>' +
     '<div class="mk-actions"><button class="btn btn-primary" onclick="orSend(\'' + id + '\', this)"' + (canSend ? '' : ' disabled title="Gmail isn\'t set up yet"') + '>✉ Send</button>' +
     '<button class="btn" onclick="orSaveDraft(\'' + id + '\', this)">Save edits</button><button class="btn" onclick="orRedraft(\'' + id + '\', this)">New draft</button><button class="btn" onclick="orSetStatus(\'' + id + '\',\'Skipped\')">Skip</button></div>' +

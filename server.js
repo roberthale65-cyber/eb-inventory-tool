@@ -4619,10 +4619,11 @@ async function orSave(id, fields, logLine) {
   return rec;
 }
 
-// In-stock pieces with a photo and a product page, each with its tracked link.
-function orPieceUrl(p, sku, campaign) {
+// In-stock pieces with a photo and a product page, each with its tracked link. Only the two tags
+// the Results report groups by, so the link Patti's contact sees stays short.
+function orPieceUrl(p, sku) {
   const u = new URL(p.onlineStoreUrl);
-  for (const [k, v] of Object.entries({ utm_source: 'outreach', utm_medium: 'email', utm_campaign: campaign, utm_content: sku })) u.searchParams.set(k, v);
+  for (const [k, v] of Object.entries({ utm_source: 'outreach', utm_content: sku })) u.searchParams.set(k, v);
   return u.toString();
 }
 async function orPiecePool() {
@@ -4687,7 +4688,7 @@ Return ONLY valid JSON, no code fences: {"subject": "...", "body": "...", "piece
   const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
   const parsed = JSON.parse(s >= 0 && e > s ? raw.slice(s, e + 1) : raw);
   const picked = [...new Set((Array.isArray(parsed.pieces) ? parsed.pieces : []).map(n => list[Number(n) - 1]).filter(Boolean))].slice(0, 2);
-  const ps = picked.length ? `\n\nP.S. ${picked.length > 1 ? 'Here are the two I mentioned' : 'Here\'s the one I mentioned'}:\n` + picked.map(x => `${x.title}: ${orPieceUrl(x.p, x.sku, 'first-email')}`).join('\n') : '';
+  const ps = picked.length ? `\n\nP.S. ${picked.length > 1 ? 'Here are the two I mentioned' : 'Here\'s the one I mentioned'}:\n` + picked.map(x => `${x.title}: ${orPieceUrl(x.p, x.sku)}`).join('\n') : '';
   await invEnsure().catch(() => {});
   const invIds = picked.map(x => (invFindBySku(x.sku)[0] || {}).id).filter(Boolean);
   return {
@@ -4826,7 +4827,7 @@ function orSweep() {
 }
 function orFollowUpText(f, piece) {
   const hi = `Hi ${orFirstName(f['Name']) || 'there'},`;
-  const link = piece ? `\n${piece.title}: ${orPieceUrl(piece.p, piece.sku, 'follow-up')}\n` : '';
+  const link = piece ? `\n${piece.title}: ${orPieceUrl(piece.p, piece.sku)}\n` : '';
   if (f['Segment'] === 'Sympathy') return `${hi}\n\nI wanted to make sure my earlier note reached you. If families ever ask about flowers that last, I'd be glad to help, and I'm happy to drop off a few examples and cards whenever it suits you.\n\nWith care,\nPatti`;
   return `${hi}\n\nJust making sure my note reached you. Here's one I finished recently, in case it gives you a better feel for my work:\n${link}\nNo pressure at all. If it's ever useful, I'm happy to drop a few pieces by.\n\nPatti`;
 }
