@@ -2,7 +2,17 @@ const express = require('express');
 const cors    = require('cors');
 const crypto  = require('crypto');
 const { AsyncLocalStorage } = require('async_hooks');
-const fetch   = (...args) => import('node-fetch').then(({default: f}) => f(...args));
+// Every outside call gets a time limit (node-fetch has none): an Airtable, Shopify, Drive or Claude
+// connection that opened and then stalled used to hang forever, and with it everything waiting on
+// a shared load (the inventory cache, the branding queue). The limit covers reading the reply too;
+// video transfers pass a longer { timeout }.
+const FETCH_TIMEOUT_MS = 2 * 60 * 1000;
+const FETCH_TIMEOUT_CLAUDE_MS = 5 * 60 * 1000; // long listings and video moments take a while
+const fetch = (url, { timeout, ...opts } = {}) => {
+  const ms = timeout || (String(url).startsWith('https://api.anthropic.com/') ? FETCH_TIMEOUT_CLAUDE_MS : FETCH_TIMEOUT_MS);
+  return import('node-fetch').then(({default: f}) => f(url, { ...opts, signal: opts.signal || AbortSignal.timeout(ms) }));
+};
+const FETCH_VIDEO_TIMEOUT_MS = 20 * 60 * 1000;
 const FormData = require('form-data'); // streaming multipart for staged video uploads
  
 const app = express();
@@ -1909,7 +1919,16 @@ function buildToolMetafieldGids(product_category, body){
 }
 
 // ── Create product ────────────────────────────────────────────
+// One publish per SKU at a time: two at once (a retry, a second tab) could both miss the
+// existing-SKU lookup below and create two products.
+const createInFlight = new Set();
 app.post('/create-product', async (req, res) => {
+  const key = String((req.body && req.body.sku) || '');
+  if (key && createInFlight.has(key)) return res.status(409).json({ error: `${key} is already being published. Give it a minute, then check Shopify before trying again.` });
+  if (key) createInFlight.add(key);
+  try { await createProduct(req, res); } finally { createInFlight.delete(key); }
+});
+async function createProduct(req, res) {
   if (!shopifyAccessToken) return res.status(401).json({ error: 'Not authorized. Visit ' + SERVER_URL + '/auth to complete Shopify OAuth first.' });
   const { title, body_html, sku, price, tags, product_type, collections, ship_weight_lb, dimensions, meta_description, requires_shipping, local_only, images, quantity, product_category, colors, pattern, plant_name, locations, arrangement, plant_container_type, stem_length, decoration_material, planter_material, celebration_type, lighting_options, shape, care_instructions, indoor_outdoor, suggested_display } = req.body;
   if (!title || !sku) return res.status(400).json({ error: 'title and sku are required' });
@@ -1927,24 +1946,28 @@ app.post('/create-product', async (req, res) => {
   // slow-but-successful publish the client treated as a failure) previously created a
   // DUPLICATE product with the same SKU — triggering Shopify's "SKU used by another item"
   // warning. If the SKU is already live, return that product instead of creating another.
-  // A lookup failure is non-fatal: we log and fall through to normal creation.
+  // If Shopify can't be asked (throttled, down), nothing is created: going ahead blind is how
+  // duplicates were made. Publishing again a minute later is safe.
   try {
-    const lookupRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/graphql.json`, {
-      method: 'POST',
-      headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `query($q:String!){ productVariants(first:10, query:$q){ edges { node { sku product { legacyResourceId handle featuredImage { url } } } } } }`,
-        variables: { q: `sku:${JSON.stringify(String(sku))}` }
-      })
-    });
-    const lookupData = await lookupRes.json();
+    const lookupData = await shopifyGraphql(
+      `query($q:String!){ productVariants(first:10, query:$q){ edges { node { id sku product { legacyResourceId handle featuredImage { url } } } } } }`,
+      { q: `sku:${JSON.stringify(String(sku))}` });
+    if (lookupData.errors) throw new Error(lookupData.errors.map(e => e.message).join(', '));
     const edges = (lookupData && lookupData.data && lookupData.data.productVariants && lookupData.data.productVariants.edges) || [];
     // Require an EXACT sku match (variant search tokenizes on hyphens, so trust equality only).
     const hit = edges.map(e => e.node).find(n => n && n.sku === sku && n.product);
     if (hit) {
       const p = hit.product;
       console.log(`create-product: SKU ${sku} already exists (product ${p.legacyResourceId}) — returning existing, not duplicating.`);
+      // An earlier publish may have stopped before the piece reached the LOCAL profile (a restart,
+      // a time-out): put it there now, or take it off sale, so a retry really fixes it.
+      let warning = null;
+      if (localOnly && !(await assignShippingProfile(sku, hit.id, ship_weight_lb, true))) {
+        warning = 'Local-only profile could not be assigned — listing set to DRAFT so it cannot be bought with shipping. Fix the LOCAL row in Shipping Profile Map, then run /apply-local-only and re-activate.';
+        await shopifyGraphql(`mutation($product:ProductUpdateInput!){ productUpdate(product:$product){ userErrors { message } } }`, { product: { id: `gid://shopify/Product/${p.legacyResourceId}`, status: 'DRAFT' } }).catch(e => console.warn('local-only draft fallback failed:', e.message));
+      }
       return res.json({
+        ...(warning ? { warning } : {}),
         success: true,
         already_existed: true,
         product_id: Number(p.legacyResourceId),
@@ -1956,7 +1979,8 @@ app.post('/create-product', async (req, res) => {
       });
     }
   } catch (e) {
-    console.warn('create-product SKU idempotency lookup failed (proceeding to create):', e.message);
+    console.warn('create-product SKU lookup failed, nothing created:', e.message);
+    return res.status(502).json({ error: `Couldn't check Shopify for an existing ${sku} (${e.message}), so nothing was published. Try again in a minute.` });
   }
 
   // Inventory quantity — default to 1 (one-of-a-kind) when unset; clamp to a non-negative integer.
@@ -1985,6 +2009,9 @@ app.post('/create-product', async (req, res) => {
     product: {
       title, body_html: fullDescription, vendor: 'Eternal Blooms Designs', product_type: product_type || '', tags: localOnly ? withLocalOnlyTag(tags) : (tags || ''),
       variants: [variant],
+      // Local-only pieces start as drafts and go live only once they're in the LOCAL profile:
+      // created live, a publish cut off before that step left them shipping nationwide (#1002).
+      ...(localOnly ? { status: 'draft' } : {}),
       images: (images || []).map((img, i) => ({ attachment: img.data, filename: img.filename, position: i + 1 }))
     }
   };
@@ -2044,10 +2071,17 @@ app.post('/create-product', async (req, res) => {
     // rates nationwide — pull it back to draft so it can't sell until it's fixed.
     let localOnlyWarning = null;
     if (localOnly && !profileOk) {
-      localOnlyWarning = 'Local-only profile could not be assigned — listing set to DRAFT so it cannot be bought with shipping. Fix the LOCAL row in Shipping Profile Map, then run /apply-local-only and re-activate.';
-      try { await shopifyGraphql(`mutation($product:ProductUpdateInput!){ productUpdate(product:$product){ userErrors { message } } }`, { product: { id: `gid://shopify/Product/${productId}`, status: 'DRAFT' } }); }
-      catch (e) { console.warn('local-only draft fallback failed:', e.message); }
+      localOnlyWarning = 'Local-only profile could not be assigned — listing left as a DRAFT so it cannot be bought with shipping. Fix the LOCAL row in Shipping Profile Map, then run /apply-local-only and re-activate.';
       console.warn(`create-product: ${sku} ${localOnlyWarning}`);
+    } else if (localOnly) {
+      try {
+        const act = await shopifyGraphql(`mutation($product:ProductUpdateInput!){ productUpdate(product:$product){ userErrors { message } } }`, { product: { id: `gid://shopify/Product/${productId}`, status: 'ACTIVE' } });
+        const errs = (act.errors || []).concat(act?.data?.productUpdate?.userErrors || []);
+        if (errs.length) throw new Error(errs.map(e => e.message).join(', '));
+      } catch (e) {
+        localOnlyWarning = `It's in the Local only profile but couldn't be made live (${e.message}) — it's a draft; set it to Active in Shopify.`;
+        console.warn(`create-product: ${sku} ${localOnlyWarning}`);
+      }
     }
     // Google & YouTube, Facebook & Instagram and Shop — shippable pieces only.
     const salesChannels = localOnly ? 'skipped (local-only)' : await setExtraSalesChannels(`gid://shopify/Product/${productId}`, sku, true);
@@ -2159,7 +2193,7 @@ app.post('/create-product', async (req, res) => {
     const metafieldsSet = mf.reduce((acc, m) => { acc[m.key] = JSON.parse(m.value).length; return acc; }, {});
     res.json({ success: true, product_id: productId, handle: data.product.handle, shopify_url: productUrl, admin_url: `https://admin.shopify.com/store/zdzva0-tj/products/${productId}`, hero_image_url: heroImageUrl, collections_assigned: collectionResults, quantity: qty, category: (categoryGid ? product_category : null), colors_set: colorGids.length, pattern_set: patternGids.length, metafields_set: metafieldsSet, local_only: localOnly, sales_channels: salesChannels, ...(localOnlyWarning ? { warning: localOnlyWarning } : {}) });
   } catch(e) { res.status(500).json({ error: e.message }); }
-});
+}
 
 // ── Re-sync attributes & inventory to an EXISTING product ─────
 // Re-applies tool-owned structured data to an already-published product (matched by
@@ -2318,7 +2352,7 @@ app.post('/shopify-add-video', async (req, res) => {
     //    videoRes.body is a Node Readable — bytes are never buffered into memory.
     const videoRes = await fetch(
       `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-      { headers: { 'Authorization': 'Bearer ' + token } }
+      { headers: { 'Authorization': 'Bearer ' + token }, timeout: FETCH_VIDEO_TIMEOUT_MS }
     );
     if (!videoRes.ok) throw new Error('Drive video download failed: ' + videoRes.status);
 
@@ -2861,6 +2895,11 @@ async function mktRecords({ force = false } = {}) {
         for (const r of mktCache.savedDuringLoad.values()) {
           const i = records.findIndex(x => x.id === r.id);
           if (i >= 0) records[i] = r; else records.unshift(r);
+        }
+        // Posts not yet saved as Posted in Airtable stay Posted here (see mktSavePosted).
+        for (const [id, fields] of mktPostedUnsaved) {
+          const i = records.findIndex(x => x.id === id);
+          if (i >= 0) records[i] = { ...records[i], fields: { ...records[i].fields, ...fields } };
         }
         mktCache.records = records; mktCache.at = Date.now(); return records;
       })
@@ -3508,7 +3547,7 @@ async function pinBoardId(name) {
 // /shopify-add-video), so memory stays flat whatever the file size.
 async function pinUploadVideo(videoUrl) {
   const reg = await pinApi('/media', { method: 'POST', body: { media_type: 'video' } });
-  const vres = await fetch(videoUrl);
+  const vres = await fetch(videoUrl, { timeout: FETCH_VIDEO_TIMEOUT_MS });
   if (!vres.ok) throw new Error('Video download from Shopify failed: ' + vres.status);
   if (!Number(vres.headers.get('content-length'))) throw new Error('Shopify did not report the video size');
   const form = new FormData();
@@ -3900,7 +3939,7 @@ async function cutDriveSave(file, name, eb, title) {
 }
 async function cutDriveFetch(id, file) {
   const token = await getValidGoogleToken();
-  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&supportsAllDrives=true`, { headers: { 'Authorization': 'Bearer ' + token } });
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&supportsAllDrives=true`, { headers: { 'Authorization': 'Bearer ' + token }, timeout: FETCH_VIDEO_TIMEOUT_MS });
   if (!r.ok) throw new Error(`Drive download failed (${r.status})`);
   const tmp = file + '.part';
   await new Promise((resolve, reject) => {
@@ -4128,12 +4167,31 @@ async function mktPostPin(id) {
     const notes = [...media.notes, post.note].filter(Boolean);
     if (notes.length) fields['Notes'] = [f['Notes'], ...notes].filter(Boolean).join('\n');
     if (post.note) fields['Media'] = 'Photo';
-    await save(fields);
     console.log(`marketing: posted ${f['EB Number']} to ${channel} as ${post.id}${post.note ? ' (photo fallback)' : ''}`);
+    // It's live now, so the copy in memory says Posted before Airtable is told: if that save
+    // failed (the monthly API cap), the row stayed Approved and went out again every 5 minutes.
+    mktPostedUnsaved.set(id, fields);
+    mktCacheUpsert([{ ...rec, fields: { ...f, ...fields } }]);
+    await mktSavePosted(id);
+    return;
   } catch (e) {
     console.warn(`marketing: posting ${id} failed —`, e.message);
     await save({ 'Post error': e.message.slice(0, 1000) }).catch(() => {});
   } finally { mktPosting.delete(id); }
+}
+// Posts that went out but aren't saved as Posted in Airtable yet: kept in the cache (and over
+// reloads, see mktRecords) and saved again on the 5-minute tick. Never throws.
+const mktPostedUnsaved = new Map(); // id → fields
+async function mktSavePosted(id) {
+  const fields = mktPostedUnsaved.get(id);
+  if (!fields) return;
+  try {
+    const d = await airtableReq(`${AT_MARKETING_TBL}/${id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) });
+    if (mktPostedUnsaved.get(id) === fields) mktPostedUnsaved.delete(id);
+    mktCacheUpsert([d]);
+  } catch (e) {
+    console.warn(`marketing: ${id} was posted but saving that to Airtable failed, will retry —`, e.message);
+  }
 }
 
 // Approved rows that never went out: approved before their channel was connected, or cut off
@@ -4173,7 +4231,7 @@ function mktNextSlot(channel, records, now = new Date()) {
 const mktIsDue = f => !f['Scheduled for'] || Date.parse(f['Scheduled for']) <= Date.now();
 // Posts whose slot has arrived go out on a 5-minute tick. It reads only the in-memory queue
 // (every write goes through this server), so it costs no Airtable calls.
-setInterval(() => { if (mktCache.records) mktPostPending(mktCache.records, { skipErrored: true }).catch(e => console.warn('marketing: scheduled posting failed —', e.message)); }, 5 * 60 * 1000);
+setInterval(() => { for (const id of [...mktPostedUnsaved.keys()]) mktSavePosted(id); if (mktCache.records) mktPostPending(mktCache.records, { skipErrored: true }).catch(e => console.warn('marketing: scheduled posting failed —', e.message)); }, 5 * 60 * 1000);
 
 let mktPendingBusy = false;
 async function mktPostPending(records, { skipErrored = false } = {}) {
@@ -4664,7 +4722,12 @@ const orGmailReady = () => !!(GMAIL_USER && GMAIL_APP_PASSWORD);
 const orSendReady = () => orGmailReady() && !!OUTREACH_ADDRESS;
 
 // Same caching as the marketing queue: one shared reload, 5 minutes fresh, writes patched in place.
-const orCache = { records: null, at: 0, loading: null };
+// Rows saved while a reload runs are put back on its result (as for mktCache), and so are emails
+// that went out but whose Airtable save failed (orUnsaved): either would otherwise read as unsent
+// again, and Send or the follow-up would go out twice (health check, 2026-11-03).
+const orCache = { records: null, at: 0, loading: null, savedDuringLoad: new Map() };
+const orUnsaved = new Map(); // id → { fields, logLine } sent, but not yet saved to Airtable
+const orWithUnsaved = rec => orUnsaved.has(rec.id) ? { ...rec, fields: { ...rec.fields, ...orUnsaved.get(rec.id).fields } } : rec;
 async function orRecords({ force = false } = {}) {
   if (!force && orCache.records && Date.now() - orCache.at < MKT_FRESH_MS) return orCache.records;
   if (!orCache.loading) {
@@ -4675,28 +4738,58 @@ async function orRecords({ force = false } = {}) {
         out = out.concat(data.records || []);
         offset = data.offset || null;
       } while (offset);
+      for (const r of orCache.savedDuringLoad.values()) {
+        const i = out.findIndex(x => x.id === r.id);
+        if (i >= 0) out[i] = r; else out.unshift(r);
+      }
+      out = out.map(orWithUnsaved);
       orCache.records = out; orCache.at = Date.now();
       return out;
     })().catch(e => {
       if (!orCache.records) throw e;
       console.warn('outreach: contacts reload failed, using the last copy —', e.message);
       return orCache.records;
-    }).finally(() => { orCache.loading = null; });
+    }).finally(() => { orCache.loading = null; orCache.savedDuringLoad.clear(); });
   }
   return orCache.loading;
+}
+function orCacheUpsert(rec) {
+  if (orCache.loading) orCache.savedDuringLoad.set(rec.id, rec);
+  if (!orCache.records) return;
+  const i = orCache.records.findIndex(r => r.id === rec.id);
+  if (i >= 0) orCache.records[i] = rec; else orCache.records.unshift(rec);
 }
 async function orSave(id, fields, logLine) {
   if (logLine) {
     const cur = ((orCache.records || []).find(r => r.id === id) || { fields: {} }).fields['Contact log'] || '';
     fields = { ...fields, 'Contact log': (cur ? cur + '\n' : '') + orToday() + ' ' + logLine };
   }
-  const rec = await airtableReq(`${AT_CONTACTS_TBL}/${id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) });
-  if (orCache.records) {
-    const i = orCache.records.findIndex(r => r.id === id);
-    if (i >= 0) orCache.records[i] = rec; else orCache.records.unshift(rec);
-  }
+  const rec = orWithUnsaved(await airtableReq(`${AT_CONTACTS_TBL}/${id}`, { method: 'PATCH', body: JSON.stringify({ fields, typecast: true }) }));
+  orCacheUpsert(rec);
   return rec;
 }
+// Saving after an email has gone out: the copy in memory shows it sent straight away, then
+// Airtable is told. If that save fails (e.g. the monthly API cap, 2026-10-19), it's kept in
+// orUnsaved and tried again every 5 minutes. Never throws: the email is out either way.
+async function orSaveAfterSend(id, fields, logLine) {
+  const cur = (orCache.records || []).find(r => r.id === id) || { id, fields: {} };
+  orUnsaved.set(id, { fields, logLine });
+  orCacheUpsert({ ...cur, fields: { ...cur.fields, ...fields } });
+  return orFlushUnsaved(id);
+}
+async function orFlushUnsaved(id) {
+  const u = orUnsaved.get(id);
+  if (!u) return (orCache.records || []).find(r => r.id === id);
+  try {
+    const rec = await orSave(id, u.fields, u.logLine);
+    if (orUnsaved.get(id) === u) orUnsaved.delete(id);
+    return rec;
+  } catch (e) {
+    console.warn(`outreach: ${id} was emailed but saving that to Airtable failed, will retry —`, e.message);
+    return (orCache.records || []).find(r => r.id === id);
+  }
+}
+setInterval(() => { for (const id of [...orUnsaved.keys()]) orFlushUnsaved(id); }, 5 * 60 * 1000);
 
 // In-stock pieces with a photo and a product page, each with its tracked link. Only the two tags
 // the Results report groups by, so the link Patti's contact sees stays short.
@@ -4793,7 +4886,8 @@ function orDraftNew() {
       try { await orSave(rec.id, await orDraftEmail(rec, pool), 'first email drafted'); orDraftError = null; }
       catch (e) { orDraftError = e.message; console.warn(`outreach: drafting for ${rec.fields['Name']} failed —`, e.message); if (/credit|billing|authentication/i.test(e.message)) break; }
     }
-  })().finally(() => { orDrafting = null; });
+  })().catch(e => { orDraftError = e.message; console.warn('outreach: drafting stopped —', e.message); })
+    .finally(() => { orDrafting = null; });
   return orDrafting;
 }
 
@@ -4911,13 +5005,17 @@ function orSweep() {
     const out = { replies: 0, bounces: 0, followUps: 0, errors: [] };
     const records = await orRecords({ force: true });
     const open = records.filter(r => ['Sent', 'Followed up'].includes(r.fields['Status']) && r.fields['Email']);
+    const unchecked = new Set(); // contacts whose replies couldn't be read this time
     if (open.length) {
       const { ImapFlow } = require('imapflow');
       const client = new ImapFlow({ host: 'imap.gmail.com', port: 993, secure: true, auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }, logger: false });
-      await client.connect();
-      const lock = await client.getMailboxLock('INBOX');
+      // A dropped connection is reported as an 'error' event; with no listener it crashed the server.
+      client.on('error', e => console.warn('outreach: inbox connection error —', e.message));
+      let lock = null;
       try {
-        for (const r of open) {
+        await client.connect();
+        lock = await client.getMailboxLock('INBOX');
+        for (const r of open) try {
           const f = r.fields, since = new Date(Date.parse(f['Sent date'] || orToday()) - MKT_DAY_MS);
           const uids = await client.search({ from: f['Email'], since }, { uid: true });
           if (!uids || !uids.length) continue;
@@ -4928,6 +5026,9 @@ function orSweep() {
           const status = OR_OPT_OUT.test(text) ? 'Do not contact' : OR_NOT_INTERESTED.test(text) ? 'Not interested' : 'Replied';
           await orSave(r.id, { 'Status': status, 'Replied date': orToday(), 'Reply': text || '(no text)', 'Follow-up due': null, ...(status === 'Do not contact' ? { 'Opted out': orToday() } : {}) }, status === 'Replied' ? 'replied' : `replied (${status.toLowerCase()})`);
           out.replies++;
+        } catch (e) {
+          // One unreadable message no longer ends the whole check; that contact just gets no follow-up this time.
+          unchecked.add(r.id); out.errors.push(`${r.fields['Name']}: ${e.message}`);
         }
         // Bounces come from Google's mailer daemon and name the address that failed.
         const oldest = open.reduce((m, r) => Math.min(m, Date.parse(r.fields['Sent date'] || orToday())), Date.now());
@@ -4942,11 +5043,11 @@ function orSweep() {
             out.bounces++;
           }
         }
-      } finally { lock.release(); await client.logout().catch(() => {}); }
+      } finally { if (lock) lock.release(); await client.logout().catch(() => client.close()); }
     }
     // One follow-up, in the same thread, for first emails nobody answered.
     const today = orToday();
-    const due = (orCache.records || []).filter(r => r.fields['Status'] === 'Sent' && r.fields['Follow-up due'] && r.fields['Follow-up due'] <= today && r.fields['Message ID']);
+    const due = (orCache.records || []).filter(r => r.fields['Status'] === 'Sent' && r.fields['Follow-up due'] && r.fields['Follow-up due'] <= today && r.fields['Message ID'] && !unchecked.has(r.id));
     if (due.length && orSendReady()) {
       const pool = shopifyAccessToken ? await orPiecePool().catch(() => []) : [];
       for (const r of due) {
@@ -4957,7 +5058,7 @@ function orSweep() {
           const text = orFollowUpText(f, fresh);
           const subject = /^re:/i.test(f['Draft subject'] || '') ? f['Draft subject'] : 'Re: ' + (f['Draft subject'] || 'my note');
           await orSendMail({ id: r.id, to: f['Email'], subject, text, inReplyTo: f['Message ID'] });
-          await orSave(r.id, { 'Status': 'Followed up', 'Follow-up due': null }, 'follow-up sent');
+          await orSaveAfterSend(r.id, { 'Status': 'Followed up', 'Follow-up due': null }, 'follow-up sent');
           out.followUps++;
         } catch (e) { out.errors.push(`${r.fields['Name']}: ${e.message}`); if (/Already sent/.test(e.message)) break; }
       }
@@ -5043,7 +5144,7 @@ app.post('/outreach/contacts/:id/send', async (req, res) => {
     if (!subject || !body) return res.status(400).json({ error: 'The subject and email can\'t be empty.' });
     const messageId = await orSendMail({ id, to: f['Email'], subject, text: body });
     const today = orToday();
-    res.json(await orSave(id, {
+    res.json(await orSaveAfterSend(id, {
       'Draft subject': subject, 'Draft email': body, 'Status': 'Sent', 'Sent date': today,
       'Follow-up due': orAddDays(today, OR_FOLLOWUP_DAYS), 'Message ID': messageId
     }, 'first email sent'));
@@ -5079,6 +5180,10 @@ app.post('/outreach/check', async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 setInterval(() => { orSweep(); }, OR_SWEEP_EVERY_MS);
+
+// A background job that fails without a .catch would otherwise stop the whole server (Node 15+),
+// taking every screen and webhook down with it. Logged instead, so the cause shows in Render.
+process.on('unhandledRejection', e => console.error('Unhandled background error —', e && e.stack || e));
 
 app.listen(PORT, () => {
   console.log(`EB server running on port ${PORT}`);
