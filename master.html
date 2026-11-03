@@ -1972,6 +1972,7 @@ function goTo(screenId) {
   if(screenId==='screen-readiness') readinessRender();
   if(screenId==='screen-marketing') mkInit();
   if(screenId==='screen-outreach') orInit();
+  if(screenId==='screen-sold' && msSaleDone) msReset();
   if(screenId==='screen-bin-mgmt') bmOnScreenEnter();
   if(screenId==='screen-fulfillment') ffInit();
   if(screenId==='screen-new-piece') npFolderInit();
@@ -2055,7 +2056,10 @@ function orStatusMsg(msg, type){
   el.className = 'info-card ' + (type || 'teal'); el.style.display = 'block'; el.innerHTML = msg;
 }
 function orSetTab(t){ orTab = t; orRender(); }
-function orRender(){
+// Redraws keep text typed into other cards but not saved yet (as Marketing does): the 8-second
+// refresh, or sending one card, used to put every other card back to the server's draft.
+// fresh: the contact the server just answered for, whose saved text replaces what was typed.
+function orRender(fresh){
   const d = orData || {}, g = d.gmail || {};
   const top = [];
   if(!g.connected) top.push('<div class="info-card amber"><strong>Gmail isn\'t connected yet</strong>Drafts are ready to review, but Send stays off until the server has the Gmail app password for ' + escHtml(g.address || 'Patti\'s Gmail') + ' (GMAIL_APP_PASSWORD in Render).</div>');
@@ -2073,7 +2077,10 @@ function orRender(){
     host.innerHTML = '<div style="text-align:center;padding:30px 16px;color:var(--text-muted);font-size:14px">' + empty + '</div>';
     return;
   }
+  const typed = {};
+  host.querySelectorAll('input[id],textarea[id]').forEach(el => { if(el.value !== el.defaultValue && !(fresh && el.id.endsWith('-' + fresh))) typed[el.id] = el.value; });
   host.innerHTML = list.map(r => orTab === 'review' ? orCardHtml(r) : orRowHtml(r)).join('');
+  for(const id in typed){ const el = document.getElementById(id); if(el) el.value = typed[id]; }
   host.querySelectorAll('.or-body').forEach(orGrow);
 }
 // The email box grows with its text: a box that scrolls inside a scrolling page is fiddly on a phone.
@@ -2126,7 +2133,7 @@ function orRowHtml(r){
 function orPatchLocal(rec){
   const i = orData.records.findIndex(x => x.id === rec.id);
   if(i >= 0) orData.records[i] = rec; else orData.records.unshift(rec);
-  orUpdateHome(); orRender();
+  orUpdateHome(); orRender(rec.id);
 }
 async function orCall(path, method, body){
   const r = await fetch(SERVER_URL + path, { method, headers:{ 'Content-Type':'application/json' }, body: body ? JSON.stringify(body) : undefined });
@@ -2517,7 +2524,8 @@ function mkStatusMsg(msg, type){
 }
 
 // keepTyped (the background refresh): carry over text typed into cards but not saved yet, and
-// the cursor, instead of wiping them when the list is redrawn.
+// the cursor, instead of wiping them when the list is redrawn. keepText does the same without
+// waiting, for a tap on one card (Logo, Preview, Skip a channel…) that must not wipe edits elsewhere.
 let mkRenderPending = false;
 // Something on the list a redraw would interrupt: a playing video, or a card field being typed in.
 function mkListBusy(){
@@ -2542,8 +2550,9 @@ function mkRender(opts){
     host.innerHTML = '<div style="text-align:center;padding:30px 16px;color:var(--text-muted);font-size:14px">' + empty + '</div>';
     return;
   }
-  const typed = {}, active = document.activeElement, focus = keepTyped && active && host.contains(active) && active.id ? { id: active.id, start: active.selectionStart, end: active.selectionEnd } : null;
-  if(keepTyped) host.querySelectorAll('input[id],textarea[id]').forEach(el => { if(el.value !== el.defaultValue) typed[el.id] = el.value; });
+  const keepText = keepTyped || (opts && opts.keepText);
+  const typed = {}, active = document.activeElement, focus = keepText && active && host.contains(active) && active.id ? { id: active.id, start: active.selectionStart, end: active.selectionEnd } : null;
+  if(keepText) host.querySelectorAll('input[id],textarea[id]').forEach(el => { if(el.value !== el.defaultValue) typed[el.id] = el.value; });
   host.innerHTML = pieces.map(mkPieceHtml).join('');
   for(const id in typed){ const el = document.getElementById(id); if(el){ el.value = typed[id]; el.dispatchEvent(new Event('input')); } }
   if(focus){ const el = document.getElementById(focus.id); if(el){ el.focus(); try { el.setSelectionRange(focus.start, focus.end); } catch(e){} } }
@@ -2681,7 +2690,7 @@ async function mkSave(id, fields, { render = true } = {}){
   const d = await r.json().catch(()=>({}));
   if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
   const i = mkRecords.findIndex(x => x.id === id); if(i >= 0) mkRecords[i] = d;
-  if(render){ mkUpdateHomeCount(); mkRender(); }
+  if(render){ mkUpdateHomeCount(); mkRender({ keepText: true }); }
   return d;
 }
 // One tap approves every channel still in Draft for this piece.
@@ -2709,15 +2718,15 @@ async function mkSetLogo(eb, value){
   try {
     for(const r of rows) await mkSave(r.id, { ...mkCardFields(r.id), 'Logo': value }, { render:false });
     delete mkBranded[eb];
-    mkRender(); mkStatusMsg('Logo for ' + escHtml(eb) + ': <b>' + escHtml(MK_LOGO_OPTS.find(o => o[0] === value)[1]) + '</b>. Tap Preview to see it.');
-  } catch(e){ mkRender(); mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
+    mkRender({ keepText: true }); mkStatusMsg('Logo for ' + escHtml(eb) + ': <b>' + escHtml(MK_LOGO_OPTS.find(o => o[0] === value)[1]) + '</b>. Tap Preview to see it.');
+  } catch(e){ mkRender({ keepText: true }); mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
 }
 // Asks the server for the branded photo and shows it on the card.
 async function mkPreviewLogo(eb){
   const rows = mkRecords.filter(r => r.fields['EB Number'] === eb && (r.fields['Status'] === 'Draft' || r.fields['Status'] === 'Approved'));
   const row = rows[0];
   if(!row) return;
-  const show = d => { mkBranded[eb] = d; mkRender(); };
+  const show = d => { mkBranded[eb] = d; mkRender({ keepText: true }); };
   show({ status: 'Preparing…' });
   for(let i = 0; i < 24; i++){
     try {
@@ -2778,8 +2787,8 @@ async function mkSetVideoVersion(eb, value){
   try {
     for(const r of rows) await mkSave(r.id, { ...mkCardFields(r.id), 'Video version': value }, { render:false });
     delete mkCuts[eb];
-    mkRender(); mkStatusMsg('Video for ' + escHtml(eb) + ': <b>' + escHtml(MK_VIDEO_OPTS.find(o => o[0] === value)[1]) + '</b>.');
-  } catch(e){ mkRender(); mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
+    mkRender({ keepText: true }); mkStatusMsg('Video for ' + escHtml(eb) + ': <b>' + escHtml(MK_VIDEO_OPTS.find(o => o[0] === value)[1]) + '</b>.');
+  } catch(e){ mkRender({ keepText: true }); mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
 }
 async function mkPostNow(id){
   try { await mkSave(id, { 'Scheduled for': new Date().toISOString() }); mkStatusMsg('Posting now — it moves to <b>Posted</b> when it\'s live.'); }
@@ -2798,7 +2807,7 @@ async function mkRetry(id){
     const d = await r.json().catch(()=>({}));
     if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
     const rec = mkRecords.find(x => x.id === id); if(rec) rec.fields['Post error'] = '';
-    mkRender(); mkStatusMsg('Trying again — it moves to <b>Posted</b> when it\'s live.');
+    mkRender({ keepText: true }); mkStatusMsg('Trying again — it moves to <b>Posted</b> when it\'s live.');
   } catch(e){ mkStatusMsg('<strong>Couldn\'t retry</strong>' + escHtml(e.message), 'rose'); }
 }
 async function mkSetStatus(id, status){
@@ -5422,10 +5431,14 @@ function lpReset(){lpSelectedRecord=null;lpPhotoItems=[];lpDriveImages=[];lpDriv
 
 
 // ── MARK AS SOLD ──
-function msStep(n){stepBackFn=n>1?()=>msStep(n-1):null;updateHeaderBackBtn();document.querySelectorAll('#screen-sold .step-block').forEach(s=>s.classList.remove('active'));document.getElementById('ms-step-'+n).classList.add('active');document.getElementById('ms-step-pill').textContent='Step '+n+' of 2';document.getElementById('ms-progress').style.width=(n===1?50:100)+'%';window.scrollTo({top:0,behavior:'smooth'});}
+function msStep(n){if(n===1&&msSaleDone){msReset();return;}stepBackFn=n>1?()=>msStep(n-1):null;updateHeaderBackBtn();document.querySelectorAll('#screen-sold .step-block').forEach(s=>s.classList.remove('active'));document.getElementById('ms-step-'+n).classList.add('active');document.getElementById('ms-step-pill').textContent='Step '+n+' of 2';document.getElementById('ms-progress').style.width=(n===1?50:100)+'%';window.scrollTo({top:0,behavior:'smooth'});}
 function populateMSSelect(){const listed=sortPiecesByEB(allRecords.filter(r=>r.fields['Status']==='Listed'||r.fields['Status']==='In stock'));msAllOpts=listed.map(r=>({value:r.id,label:pieceLabel(r.fields)||r.id}));const sel=document.getElementById('ms-eb-select');if(listed.length===0){sel.innerHTML='<option value="">— no listed pieces —</option>';return;}sel.innerHTML='<option value="">— pick a piece —</option>'+msAllOpts.map(o=>'<option value="'+escHtml(o.value)+'">'+escHtml(o.label)+'</option>').join('');_clearEbSearch('ms-eb-search','ms-eb-results');sel.onchange=()=>{const recId=sel.value;document.getElementById('ms-next-btn').disabled=!recId;if(!recId){msSelectedRecord=null;document.getElementById('ms-piece-preview').style.display='none';return;}msSelectedRecord=allRecords.find(r=>r.id===recId);if(!msSelectedRecord)return;const f=msSelectedRecord.fields;const msp=cfShowPrice(f);document.getElementById('ms-sale-price').value=msp!=null?msp.toFixed(2):'';document.getElementById('ms-piece-preview').style.display='block';document.getElementById('ms-piece-preview').innerHTML='<div class="at-preview"><div class="at-preview-title">Selected piece</div><div class="at-grid"><div class="at-field"><div class="at-label">EB Number</div><div class="at-value">'+escHtml(f['EB Number'])+'</div></div><div class="at-field"><div class="at-label">Type</div><div class="at-value">'+escHtml(f['Type']||'—')+'</div></div><div class="at-field"><div class="at-label">Price</div><div class="at-value">'+(f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—')+'</div></div></div></div>';};}
+// After a sale the screen kept its "✓ Done!" button disabled, so the next sale needed a reload.
+// Coming back to Mark as sold after a sale starts a fresh one.
+var msSaleDone=false; // var: goTo can run before this line during start-up
+function msReset(){msSaleDone=false;msSelectedRecord=null;msSelectedChannel=null;document.querySelectorAll('#screen-sold .channel-btn').forEach(b=>b.classList.remove('selected'));const btn=document.getElementById('ms-confirm-btn');btn.disabled=false;btn.textContent='✓ Mark as sold';document.getElementById('ms-result').style.display='none';document.getElementById('ms-piece-preview').style.display='none';document.getElementById('ms-next-btn').disabled=true;document.getElementById('ms-sale-price').value='';document.getElementById('ms-sale-date').value=new Date().toLocaleDateString('en-CA');populateMSSelect();msStep(1);}
 function msSelectChannel(el,channel){document.querySelectorAll('#screen-sold .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');msSelectedChannel=channel;}
-async function msConfirmSale(){if(!msSelectedRecord||!msSelectedChannel){alert('Select a piece and sale channel.');return;}const salePrice=document.getElementById('ms-sale-price').value.trim();const saleDate=document.getElementById('ms-sale-date').value;const btn=document.getElementById('ms-confirm-btn');btn.disabled=true;btn.textContent='⏳ Recording...';setStatus('ms','Marking as sold...','loading');try{await markSold(msSelectedRecord,msSelectedChannel,salePrice,saleDate);const result=document.getElementById('ms-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(msSelectedRecord.fields['EB Number'])+'</strong> marked as sold via '+msSelectedChannel+'.';btn.textContent='✓ Done!';setStatus('ms','Sale recorded ✓','success');populateHomeStats();populateMSSelect();populateLPSelect();populateCFInventory();setTimeout(()=>hideStatus('ms'),4000);}catch(e){setStatus('ms','Error: '+e.message,'error');btn.disabled=false;btn.textContent='✓ Mark as sold';}}
+async function msConfirmSale(){if(!msSelectedRecord||!msSelectedChannel){alert('Select a piece and sale channel.');return;}const salePrice=document.getElementById('ms-sale-price').value.trim();const saleDate=document.getElementById('ms-sale-date').value;const btn=document.getElementById('ms-confirm-btn');btn.disabled=true;btn.textContent='⏳ Recording...';setStatus('ms','Marking as sold...','loading');try{await markSold(msSelectedRecord,msSelectedChannel,salePrice,saleDate);const result=document.getElementById('ms-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(msSelectedRecord.fields['EB Number'])+'</strong> marked as sold via '+msSelectedChannel+'.';btn.textContent='✓ Done!';msSaleDone=true;setStatus('ms','Sale recorded ✓','success');populateHomeStats();populateMSSelect();populateLPSelect();populateCFInventory();setTimeout(()=>hideStatus('ms'),4000);}catch(e){setStatus('ms','Error: '+e.message,'error');btn.disabled=false;btn.textContent='✓ Mark as sold';}}
 // What the buyer paid goes to Gross sale amount ($); the listed Price ($) is left as-is.
 async function markSold(record,channel,salePrice,saleDate){const f=record.fields;const atFields={'Status':'Sold','Sales channel':channel};if(salePrice)atFields['Gross sale amount ($)']=parseFloat(salePrice);if(saleDate)atFields['Date sold']=saleDate;await atWriteNow(record.id,atFields);Object.assign(f,atFields);
   // Sold → move this piece's Drive folder into "Sold" (non-fatal, background).
