@@ -4762,12 +4762,14 @@ app.post('/marketing/checklist/redraft', async (req, res) => {
 // password (GMAIL_USER + GMAIL_APP_PASSWORD), so they sit in her Sent folder and replies land in
 // her inbox. Every few hours the server reads that inbox: a reply marks the contact Replied (and
 // an opt-out marks it Do not contact), a bounce marks it Bounced, and a contact with no answer
-// after OR_FOLLOWUP_DAYS gets one short follow-up in the same thread. Nothing is sent without a
-// mailing address for the footer (OUTREACH_ADDRESS), which US anti-spam law requires.
+// after OR_FOLLOWUP_DAYS gets one short follow-up in the same thread. The footer carries the business
+// mailing address, which US anti-spam law requires.
 const AT_CONTACTS_TBL = 'tblgyzcgMZHCtrBaD';
 const GMAIL_USER = process.env.GMAIL_USER || 'eternalbloomsbypatti@gmail.com';
 const GMAIL_APP_PASSWORD = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, ''); // Google shows it in groups of 4
-const OUTREACH_ADDRESS = process.env.OUTREACH_ADDRESS || '';
+// The PO box, built in (2026-11-03): the home street address must never go out, so a leftover
+// OUTREACH_ADDRESS setting in Render is ignored. Change it here if the mailing address changes.
+const OUTREACH_ADDRESS = 'PO Box 641674, Omaha, NE 68164';
 const OUTREACH_FROM_NAME = process.env.OUTREACH_FROM_NAME || 'Patti, Eternal Blooms by Patti';
 const OR_STATUSES = ['To research', 'Ready for review', 'Approved', 'Sent', 'Followed up', 'Replied', 'In conversation', 'Customer', 'Not interested', 'Do not contact', 'Skipped', 'Bounced'];
 const OR_EDITABLE_FIELDS = ['Draft subject', 'Draft email', 'Status', 'Notes', 'Relationship', 'Interest'];
@@ -5039,7 +5041,7 @@ function orHtml(text, pool, id) {
 }
 const orImg600 = url => /^https:\/\/cdn\.shopify\.com\//.test(url) ? url + (url.includes('?') ? '&' : '?') + 'width=600' : url;
 async function orSendMail({ id, to, subject, text, inReplyTo }) {
-  if (!orSendReady()) throw new Error(!orGmailReady() ? 'Gmail isn\'t connected yet (GMAIL_APP_PASSWORD).' : 'Add the mailing address for the email footer first (OUTREACH_ADDRESS).');
+  if (!orSendReady()) throw new Error(!orGmailReady() ? 'Gmail isn\'t connected yet (GMAIL_APP_PASSWORD).' : 'The email footer has no mailing address.');
   if (orSuppressed(to)) throw new Error(`${to} unsubscribed, so nothing was sent.`);
   text = orWithSignature(text);
   orCountSend();
