@@ -2082,8 +2082,9 @@ function orRender(fresh){
   if(d.drafting) top.push('<div class="info-card teal"><strong>Drafting new emails…</strong>They\'ll appear here in a minute or two.</div>');
   if(d.draftError) top.push('<div class="info-card rose"><strong>A draft didn\'t work</strong>' + escHtml(d.draftError) + '</div>');
   const lc = d.lastCheck;
+  const lim = d.sendLimit ? '<div class="or-check"><span>Sent today: ' + d.sendLimit.sentToday + ' of ' + d.sendLimit.cap + '. Sending is kept slow on purpose so Gmail and other providers trust your emails.</span></div>' : '';
   const check = g.connected ? '<div class="or-check"><span>' + (lc ? (lc.error ? 'Last inbox check failed: ' + escHtml(lc.error) : 'Inbox checked ' + mkWhen(lc.at) + (lc.replies || lc.followUps || lc.bounces ? ' · ' + [lc.replies ? lc.replies + ' repl' + (lc.replies === 1 ? 'y' : 'ies') : '', lc.followUps ? lc.followUps + ' follow-up' + (lc.followUps === 1 ? '' : 's') + ' sent' : '', lc.bounces ? lc.bounces + ' bounced' : ''].filter(Boolean).join(', ') : '')) : 'The inbox is checked every few hours.') + '</span><button class="btn mk-small" onclick="orCheck(this)">Check now</button></div>' : '';
-  document.getElementById('or-top').innerHTML = top.join('') + check;
+  document.getElementById('or-top').innerHTML = top.join('') + check + lim;
   document.getElementById('or-tabs').innerHTML = OR_TABS.map(([k, label]) => '<button class="mk-tab' + (orTab === k ? ' active' : '') + '" onclick="orSetTab(\'' + k + '\')">' + label + ' (' + orList(k).length + ')</button>').join('');
   const list = orList(orTab), host = document.getElementById('or-list');
   orSchedulePoll();
