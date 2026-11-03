@@ -4740,6 +4740,7 @@ Write a short first email from Patti to a local business she has never contacted
 
 Rules for this email (these override the pin rules above where they differ):
 - Patti's own voice: first person, warm, plain, local. Mentioning Omaha or their neighborhood is welcome.
+- Patti is the one writing, so never name her in the third person: no "handmade by Patti" or "Patti's pieces" (that touch is for pins, not her own emails). Say "I make", "my pieces".
 - 70–130 words. Greet by first name ("Hi ${orFirstName(f['Name']) || 'there'},"). Sign off "Patti" on its own line (no last name, no link, no footer; those are added later).
 - Mention the personal detail below naturally, in a way that shows she looked, not that she researched them. Never quote a listing price.
 - Name 1 or 2 of the pieces listed below that suit them, by a short plain description (e.g. "a cream magnolia centerpiece"), not by the full product title. Links are added in a P.S. later, so don't write any URL.
