@@ -47,9 +47,11 @@ app.use((req, res, next) => {
 // Capture the raw request body ONLY for Shopify webhook routes, so we can verify
 // the HMAC signature (JSON parsing otherwise discards the exact bytes Shopify signed).
 // Scoped by path to avoid holding large image-upload buffers in memory.
-app.use(express.json({limit: '150mb', verify: (req, res, buf) => {
-  if (req.url && req.url.startsWith('/webhooks/')) req.rawBody = buf;
-}}));
+// Routes open without the passcode (webhooks, OAuth, unsubscribe…) only ever get small bodies, so
+// they're capped at 2 MB: a stranger could otherwise make the server read 150 MB per request.
+const jsonVerify = (req, res, buf) => { if (req.url && req.url.startsWith('/webhooks/')) req.rawBody = buf; };
+const jsonBig = express.json({ limit: '150mb', verify: jsonVerify }), jsonSmall = express.json({ limit: '2mb', verify: jsonVerify });
+app.use((req, res, next) => (APP_OPEN.some(re => re.test(req.path)) ? jsonSmall : jsonBig)(req, res, next));
 // Tag every request so each Airtable call made while serving it is counted against its
 // route (see airtableReq / GET /airtable-usage). Record ids are folded to :id.
 const atCallCtx = new AsyncLocalStorage();
@@ -315,6 +317,10 @@ function shopifyGraphql(query, variables){
   });
 }
 
+// Every problem a mutation reported: HTTP/throttle errors as well as its userErrors. Checking only
+// userErrors read a throttled call as success.
+const gqlErrors = (data, mutation) => ((data && data.errors) || []).concat((data && data.data && data.data[mutation] && data.data[mutation].userErrors) || []);
+
 // Resolve display labels to metaobject GIDs for a metaobject type, reusing existing
 // entries by label (case-insensitive) and creating any missing ones. Non-fatal:
 // a label that can't be resolved/created is simply skipped.
@@ -399,10 +405,16 @@ const isBillingLimitError = e => /PUBLIC_API_BILLING_LIMIT_EXCEEDED/.test(String
 //   • every inventory write that goes through this server updates the copy in place.
 const INV_FRESH_MS = 10 * 60 * 1000;
 const INV_FULL_MS  = 6 * 60 * 60 * 1000;
-const invCache = { byId: new Map(), syncedAt: 0, fullAt: 0, loading: null };
-function invCacheUpsert(data) {
+const invCache = { byId: new Map(), syncedAt: 0, fullAt: 0, loading: null, savedDuringLoad: new Map() };
+// Writes made while a sync is running are newer than what it fetched: they're put back on its
+// result, or a piece marked Sold during a reload showed as Listed again (as for mktCache).
+function invCacheUpsert(data, { fromSync = false } = {}) {
   const recs = (data && Array.isArray(data.records)) ? data.records : [data];
-  for (const r of recs) if (r && r.id && r.fields) invCache.byId.set(r.id, { id: r.id, createdTime: r.createdTime, fields: r.fields });
+  for (const r of recs) if (r && r.id && r.fields) {
+    const rec = { id: r.id, createdTime: r.createdTime, fields: r.fields };
+    invCache.byId.set(r.id, rec);
+    if (!fromSync && invCache.loading) invCache.savedDuringLoad.set(r.id, rec);
+  }
 }
 async function invFetchAll(formula, source) {
   let out = [], offset = null;
@@ -428,7 +440,7 @@ function invEnsure({ force = false, full = false } = {}) {
       try {
         // 1-minute overlap covers clock skew between this server and Airtable.
         const since = new Date(invCache.syncedAt - 60 * 1000).toISOString();
-        invCacheUpsert({ records: await invFetchAll(`IS_AFTER(LAST_MODIFIED_TIME(), DATETIME_PARSE('${since}'))`, 'cache:delta') });
+        invCacheUpsert({ records: await invFetchAll(`IS_AFTER(LAST_MODIFIED_TIME(), DATETIME_PARSE('${since}'))`, 'cache:delta') }, { fromSync: true });
       } catch (e) {
         if (isBillingLimitError(e)) throw e;
         console.warn('Inventory delta sync failed — falling back to a full reload:', e.message);
@@ -438,9 +450,10 @@ function invEnsure({ force = false, full = false } = {}) {
     if (doFull) {
       const recs = await invFetchAll(null, 'cache:full');
       invCache.byId = new Map();
-      invCacheUpsert({ records: recs });
+      invCacheUpsert({ records: recs }, { fromSync: true });
       invCache.fullAt = started;
     }
+    for (const [id, rec] of invCache.savedDuringLoad) invCache.byId.set(id, rec);
     invCache.syncedAt = started;
   })().catch(e => {
     // Airtable unreachable / over its monthly cap: if we already hold a copy, keep serving
@@ -448,7 +461,7 @@ function invEnsure({ force = false, full = false } = {}) {
     if (!invCache.fullAt) throw e;
     console.warn('Inventory sync failed — serving the cached copy, retrying in 2 min:', e.message);
     invCache.syncedAt = Date.now() - INV_FRESH_MS + 2 * 60 * 1000;
-  }).finally(() => { invCache.loading = null; });
+  }).finally(() => { invCache.loading = null; invCache.savedDuringLoad.clear(); });
   return invCache.loading;
 }
 function invRecords() { return Array.from(invCache.byId.values()); }
@@ -706,7 +719,9 @@ app.get('/health', async (req, res) => {
     shopify: 'unknown',
     timestamp: new Date().toISOString()
   };
-  if (shopifyAccessToken) {
+  if (shopifyAccessToken && Date.now() - healthShopify.at < 60 * 1000) {
+    Object.assign(checks, healthShopify.checks);
+  } else if (shopifyAccessToken) {
     try {
       const r = await fetch(`https://${SHOPIFY_STORE}/admin/api/2026-04/shop.json`, {
         headers: { 'X-Shopify-Access-Token': shopifyAccessToken }
@@ -726,11 +741,16 @@ app.get('/health', async (req, res) => {
         checks.write_publications_granted = checks.granted_scopes.includes('write_publications');
       }
     } catch(e) { checks.shopify = 'error: ' + e.message; }
+    const { shopify, shop_name, granted_scopes, write_inventory_granted, write_publications_granted } = checks;
+    healthShopify = { at: Date.now(), checks: { shopify, shop_name, granted_scopes, write_inventory_granted, write_publications_granted } };
   } else {
     checks.shopify = 'no token — complete OAuth first';
   }
   res.json(checks);
 });
+// The Shopify part of /health is reused for a minute: every EB Master open calls /health, and
+// each check is two Shopify calls from the store's shared rate budget.
+let healthShopify = { at: 0, checks: null };
  
 // ── Shopify OAuth ─────────────────────────────────────────────
 app.get('/auth', (req, res) => {
@@ -791,6 +811,13 @@ app.get('/auth/callback', async (req, res) => {
 // the callback checks the state it issued and that the new account can see EB's Drive before it
 // replaces the connection: a stranger's own Google account can't take over (review, 2026-11-01).
 const driveOauthStates = new Map(); // state → issued-at
+// Issues an OAuth state. The sign-in pages are open routes, so old states are dropped and the
+// map is capped: otherwise each visit to them added an entry that was never removed.
+function oauthIssue(states, state) {
+  for (const [k, at] of states) if (Date.now() - at > 15 * 60 * 1000) states.delete(k);
+  while (states.size >= 50) states.delete(states.keys().next().value);
+  states.set(state, Date.now());
+}
 app.get('/drive-auth', (req, res) => {
   const state = crypto.randomBytes(16).toString('hex');
   const redirectUri = `${SERVER_URL}/drive-auth/callback`;
@@ -803,7 +830,7 @@ app.get('/drive-auth', (req, res) => {
     + '&access_type=offline'
     + '&prompt=consent'
     + '&state=' + state;
-  driveOauthStates.set(state, Date.now());
+  oauthIssue(driveOauthStates, state);
   res.redirect(authUrl);
 });
 
@@ -1198,15 +1225,43 @@ app.patch('/airtable/inventory/:id', async (req, res) => {
 
 // ── Airtable: costs endpoints ─────────────────────────────────
 
-// GET /airtable/costs — fetch all cost records (paginated, newest first)
+// Costs and Bins are read whole and kept for 10 minutes; writes through this server update the copy.
+// Opening Costs, Cost Summary (every cost record, every year) or Bins used to read Airtable each
+// time, against its monthly call cap (health check, 2026-11-03). Edits made in Airtable itself
+// show up within 10 minutes. Returned as one page, so the app's paging loop stops after one call.
+function tableCache(path, sort) {
+  const c = { records: null, at: 0, loading: null };
+  c.get = async () => {
+    if (c.records && Date.now() - c.at < 10 * 60 * 1000) return c.records;
+    if (!c.loading) c.loading = (async () => {
+      let out = [], offset = null;
+      do {
+        const data = await airtableReq(path + (path.includes('?') ? '&' : '?') + 'pageSize=100' + (offset ? '&offset=' + encodeURIComponent(offset) : ''));
+        out = out.concat(data.records || []);
+        offset = data.offset || null;
+      } while (offset);
+      c.records = out.sort(sort); c.at = Date.now();
+      return c.records;
+    })().catch(e => { if (!c.records) throw e; return c.records; }) // Airtable down: keep the last copy
+      .finally(() => { c.loading = null; });
+    return c.loading;
+  };
+  c.upsert = rec => {
+    if (!c.records || !rec || !rec.id) return;
+    const i = c.records.findIndex(r => r.id === rec.id);
+    if (i >= 0) c.records[i] = rec; else c.records.push(rec);
+    c.records.sort(sort);
+  };
+  return c;
+}
+const byField = (f, dir) => (a, b) => dir * String(a.fields[f] ?? '').localeCompare(String(b.fields[f] ?? ''), undefined, { numeric: true });
+const costsCache = tableCache(encodeURIComponent(AT_COSTS_TBL), byField('Date', -1));
+const binsCache = tableCache('Bins', byField('Bin Number', 1));
+
+// GET /airtable/costs — every cost record, newest first
 app.get('/airtable/costs', async (req, res) => {
-  const { offset } = req.query;
-  try {
-    let path = encodeURIComponent(AT_COSTS_TBL) + '?pageSize=100&sort%5B0%5D%5Bfield%5D=Date&sort%5B0%5D%5Bdirection%5D=desc';
-    if (offset) path += '&offset=' + encodeURIComponent(offset);
-    const data = await airtableReq(path);
-    res.json(data);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  try { res.json({ records: await costsCache.get() }); }
+  catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /airtable/costs — create new cost record
@@ -1218,6 +1273,7 @@ app.post('/airtable/costs', async (req, res) => {
       method: 'POST',
       body: JSON.stringify({ fields, typecast: true })
     });
+    costsCache.upsert(data);
     res.json(data);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -1232,18 +1288,17 @@ app.patch('/airtable/costs/:id', async (req, res) => {
       method: 'PATCH',
       body: JSON.stringify({ fields, typecast: true })
     });
+    costsCache.upsert(data);
     res.json(data);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Airtable: Bins registry ─────────────────────────────────
-// GET /airtable/bins — list all printed bin records
+// GET /airtable/bins — every printed bin, by number (all pages: one page stopped at 100 bins,
+// and the next-number suggestion could repeat one already printed)
 app.get('/airtable/bins', async (req, res) => {
-  try {
-    const url = `https://api.airtable.com/v0/${AT_BASE_ID}/Bins?sort%5B0%5D%5Bfield%5D=Bin+Number&sort%5B0%5D%5Bdirection%5D=asc`;
-    const data = await airtableReq(url);
-    res.json(data);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  try { res.json({ records: await binsCache.get() }); }
+  catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /airtable/bins — register a newly printed bin
@@ -1257,6 +1312,7 @@ app.post('/airtable/bins', async (req, res) => {
       method: 'POST',
       body: JSON.stringify({ fields, typecast: true })
     });
+    binsCache.upsert(data);
     res.json(data);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -2104,7 +2160,7 @@ async function createProduct(req, res) {
         if (mf.length) productInput.metafields = mf;
         const upMutation = `mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){product{id category{id name}}userErrors{field message}}}`;
         const upData = await shopifyGraphql(upMutation, { product: productInput });
-        const upErrors = upData?.data?.productUpdate?.userErrors || [];
+        const upErrors = gqlErrors(upData, 'productUpdate');
         if (upErrors.length) console.warn('Category/metafield update userErrors:', upErrors.map(e => e.message).join(', '));
         else console.log('Metafields set:', sku, '→', mf.map(m => m.key).join(', ') || '(none)', categoryGid ? '+ category' : '');
       } catch (upErr) { console.warn('Category/metafield update failed (non-fatal):', upErr.message); }
@@ -2241,7 +2297,7 @@ app.post('/resync-attributes', async (req, res) => {
       if (categoryGid) productInput.category = categoryGid;
       if (mf.length) productInput.metafields = mf;
       const upData = await shopifyGraphql(`mutation productUpdate($product:ProductUpdateInput!){productUpdate(product:$product){userErrors{field message}}}`, { product: productInput });
-      mfErrors = upData?.data?.productUpdate?.userErrors || [];
+      mfErrors = gqlErrors(upData, 'productUpdate');
       if (mfErrors.length) console.warn('Resync metafield userErrors:', mfErrors.map(e => e.message).join(', '));
       else console.log('Resync metafields:', sku, '→ added', JSON.stringify(added));
     }
@@ -2280,7 +2336,7 @@ app.post('/resync-attributes', async (req, res) => {
       if (locationId) {
         // 2026-04: @idempotent directive + per-quantity changeFromQuantity both required (see /create-product note).
         const invData = await shopifyGraphql(`mutation invSet($input:InventorySetQuantitiesInput!,$idem:String!){inventorySetQuantities(input:$input)@idempotent(key:$idem){userErrors{message}}}`, { input: { name: 'available', reason: 'correction', quantities: [{ inventoryItemId, locationId: `gid://shopify/Location/${locationId}`, quantity: qty, changeFromQuantity: null }] }, idem: crypto.randomUUID() });
-        const invErrs = invData?.data?.inventorySetQuantities?.userErrors || [];
+        const invErrs = gqlErrors(invData, 'inventorySetQuantities');
         inventory = invErrs.length ? ('error: ' + invErrs.map(e => e.message).join(', ')) : qty;
       }
     }
@@ -3442,11 +3498,16 @@ async function pinAccessToken() {
   if (PINTEREST_ACCESS_TOKEN) return PINTEREST_ACCESS_TOKEN;
   if (!pinConnected()) throw new Error('Pinterest is not connected — visit /pinterest-auth');
   if (!pinAuth.accessToken || Date.now() > pinAuth.expiresAt - 24 * 60 * 60 * 1000) {
-    await pinTokenRequest({ grant_type: 'refresh_token', refresh_token: pinAuth.refreshToken });
-    await pinSaveAuth();
+    // One refresh at a time: Pinterest replaces the refresh token, so two at once could save the old one.
+    if (!pinRefreshing) pinRefreshing = (async () => {
+      await pinTokenRequest({ grant_type: 'refresh_token', refresh_token: pinAuth.refreshToken });
+      await pinSaveAuth();
+    })().finally(() => { pinRefreshing = null; });
+    await pinRefreshing;
   }
   return pinAuth.accessToken;
 }
+let pinRefreshing = null;
 async function pinApi(path, opts = {}) {
   const r = await fetch(PINTEREST_API_BASE + path, {
     method: opts.method || 'GET',
@@ -3463,7 +3524,7 @@ const PIN_PAGE = (title, body) => `<html><head><meta charset="utf-8"><link href=
 app.get('/pinterest-auth', (req, res) => {
   if (!PINTEREST_APP_ID || !PINTEREST_APP_SECRET) return res.status(500).send(PIN_PAGE('Pinterest isn’t set up yet', '<p>Add PINTEREST_APP_ID and PINTEREST_APP_SECRET to the server’s environment in Render, then try again.</p>'));
   const state = crypto.randomBytes(16).toString('hex');
-  pinOauthStates.set(state, Date.now());
+  oauthIssue(pinOauthStates, state);
   const authUrl = 'https://www.pinterest.com/oauth/?client_id=' + encodeURIComponent(PINTEREST_APP_ID)
     + '&redirect_uri=' + encodeURIComponent(`${SERVER_URL}/pinterest-auth/callback`)
     + '&response_type=code&scope=' + encodeURIComponent(PINTEREST_SCOPES) + '&state=' + state;
@@ -3621,7 +3682,7 @@ async function metaApi(path, { method = 'GET', params = {}, video = false } = {}
 app.get('/meta-auth', (req, res) => {
   if (!META_APP_ID || !META_APP_SECRET) return res.status(500).send(PIN_PAGE('Facebook & Instagram aren’t set up yet', '<p>Add META_APP_ID and META_APP_SECRET to the server’s environment in Render, then try again.</p>'));
   const state = crypto.randomBytes(16).toString('hex');
-  metaOauthStates.set(state, Date.now());
+  oauthIssue(metaOauthStates, state);
   res.redirect(META_GRAPH.replace('//graph.', '//www.') + '/dialog/oauth?client_id=' + encodeURIComponent(META_APP_ID)
     + '&redirect_uri=' + encodeURIComponent(`${SERVER_URL}/meta-auth/callback`)
     + '&response_type=code' + (META_CONFIG_ID ? '&config_id=' + encodeURIComponent(META_CONFIG_ID) : '&scope=' + encodeURIComponent(META_SCOPES))
@@ -4020,8 +4081,8 @@ app.get('/marketing/cut-jobs', async (req, res) => {
 
 // POST /marketing/cut-upload/:name — a finished cut (the MP4 as the body). Kept on disk and
 // saved to Drive under the piece's EB number and title.
-app.post('/marketing/cut-upload/:name', express.raw({ type: 'video/mp4', limit: '60mb' }), async (req, res) => {
-  if (!cutAuthorized(req)) return res.status(403).json({ error: 'not allowed' });
+// The key is checked before the video is read into memory.
+app.post('/marketing/cut-upload/:name', (req, res, next) => cutAuthorized(req) ? next() : res.status(403).json({ error: 'not allowed' }), express.raw({ type: 'video/mp4', limit: '60mb' }), async (req, res) => {
   const name = req.params.name;
   if (!/^[a-f0-9]{32}\.mp4$/.test(name) || !Buffer.isBuffer(req.body) || req.body.length < 10000) return res.status(400).json({ error: 'bad cut' });
   try {
@@ -4874,17 +4935,27 @@ Return ONLY valid JSON, no code fences: {"subject": "...", "body": "...", "piece
 }
 
 // Drafts new contacts (an email address and no status yet), a batch at a time, one run at once.
+// A contact whose draft failed waits an hour before the next try: every app open starts a run, and
+// each try is a Claude call (health check, 2026-11-03).
 let orDrafting = null, orDraftError = null;
+const orDraftFailedAt = new Map(); // id → time of the last failed draft
+const OR_DRAFT_RETRY_MS = 60 * 60 * 1000;
+// Statuses that mean this address has already been emailed (or bounced) on some row.
+const OR_CONTACTED = ['Sent', 'Followed up', 'Replied', 'In conversation', 'Customer', 'Not interested', 'Bounced'];
 function orDraftNew() {
   if (orDrafting || !ANTHROPIC_API_KEY || !shopifyAccessToken) return orDrafting;
   orDrafting = (async () => {
-    const todo = (await orRecords()).filter(r => r.fields['Email'] && !r.fields['Status']).slice(0, OR_DRAFT_BATCH);
+    const todo = (await orRecords()).filter(r => r.fields['Email'] && !r.fields['Status'] && !(Date.now() - (orDraftFailedAt.get(r.id) || 0) < OR_DRAFT_RETRY_MS)).slice(0, OR_DRAFT_BATCH);
     if (!todo.length) return;
     const pool = await orPiecePool();
     for (const rec of todo) {
       if (orSuppressed(rec.fields['Email'])) { await orSave(rec.id, { 'Status': 'Do not contact' }, 'not drafted: this address unsubscribed earlier'); continue; }
-      try { await orSave(rec.id, await orDraftEmail(rec, pool), 'first email drafted'); orDraftError = null; }
-      catch (e) { orDraftError = e.message; console.warn(`outreach: drafting for ${rec.fields['Name']} failed —`, e.message); if (/credit|billing|authentication/i.test(e.message)) break; }
+      // The same address added twice: don't pitch someone again who already has the first email.
+      const key = orEmailKey(rec.fields['Email']);
+      const dup = (orCache.records || []).find(r => r.id !== rec.id && orEmailKey(r.fields['Email']) === key && OR_CONTACTED.includes(r.fields['Status']));
+      if (dup) { await orSave(rec.id, { 'Status': 'Skipped' }, `not drafted: this address is already on ${dup.fields['Name'] || 'another'} row (${dup.fields['Status']})`); continue; }
+      try { await orSave(rec.id, await orDraftEmail(rec, pool), 'first email drafted'); orDraftError = null; orDraftFailedAt.delete(rec.id); }
+      catch (e) { orDraftError = e.message; orDraftFailedAt.set(rec.id, Date.now()); console.warn(`outreach: drafting for ${rec.fields['Name']} failed —`, e.message); if (/credit|billing|authentication/i.test(e.message)) break; }
     }
   })().catch(e => { orDraftError = e.message; console.warn('outreach: drafting stopped —', e.message); })
     .finally(() => { orDrafting = null; });
@@ -4933,9 +5004,14 @@ async function orOptOut(id, how) {
   return rec;
 }
 const orSent = { day: '', n: 0 };
+// The count starts from the Contact log, so a restart (every deploy) doesn't hand out another 25.
+function orSentToday(day) {
+  const re = new RegExp(`^${day} (first email sent|follow-up sent)$`, 'gm');
+  return (orCache.records || []).reduce((n, r) => n + (String(r.fields['Contact log'] || '').match(re) || []).length, 0) + orUnsaved.size;
+}
 function orCountSend() {
   const day = orToday();
-  if (orSent.day !== day) { orSent.day = day; orSent.n = 0; }
+  if (orSent.day !== day) { orSent.day = day; orSent.n = orSentToday(day); }
   if (orSent.n >= OR_DAILY_CAP) throw new Error(`Already sent ${OR_DAILY_CAP} emails today. The rest can go tomorrow.`);
   orSent.n++;
 }
@@ -4999,12 +5075,25 @@ async function orReadPart(client, uid, part) {
 
 // Reads the inbox for replies and bounces, then sends follow-ups that are due.
 let orSweeping = null, orLastSweep = null;
+// Contacts followed up this long after the first email are no longer looked for in the inbox:
+// nothing closed them, so every one was searched every 3 hours for ever.
+const OR_STOP_CHECKING_DAYS = 45;
+// Bounce emails already read: only newer ones are fetched (a restart reads them all once more).
+let orBounceLastUid = 0;
+// Does a bounce message name this address? Whole address only: bob@x.com isn't in jimbob@x.com.
+function orMentions(text, key) {
+  for (let i = text.indexOf(key); i >= 0; i = text.indexOf(key, i + 1)) {
+    if (!/[a-z0-9._%+-]/.test(text[i - 1] || '') && !/^(\.?[a-z0-9-])/.test(text.slice(i + key.length, i + key.length + 2))) return true;
+  }
+  return false;
+}
 function orSweep() {
   if (orSweeping || !orGmailReady() || !AIRTABLE_TOKEN) return orSweeping;
   orSweeping = (async () => {
     const out = { replies: 0, bounces: 0, followUps: 0, errors: [] };
     const records = await orRecords({ force: true });
-    const open = records.filter(r => ['Sent', 'Followed up'].includes(r.fields['Status']) && r.fields['Email']);
+    const stopBefore = orAddDays(orToday(), -OR_STOP_CHECKING_DAYS);
+    const open = records.filter(r => r.fields['Email'] && (r.fields['Status'] === 'Sent' || (r.fields['Status'] === 'Followed up' && (r.fields['Sent date'] || '') >= stopBefore)));
     const unchecked = new Set(); // contacts whose replies couldn't be read this time
     if (open.length) {
       const { ImapFlow } = require('imapflow');
@@ -5017,7 +5106,7 @@ function orSweep() {
         lock = await client.getMailboxLock('INBOX');
         for (const r of open) try {
           const f = r.fields, since = new Date(Date.parse(f['Sent date'] || orToday()) - MKT_DAY_MS);
-          const uids = await client.search({ from: f['Email'], since }, { uid: true });
+          const uids = await client.search({ from: orEmailKey(f['Email']), since }, { uid: true });
           if (!uids || !uids.length) continue;
           const uid = uids[uids.length - 1];
           const msg = await client.fetchOne(String(uid), { bodyStructure: true }, { uid: true });
@@ -5032,16 +5121,22 @@ function orSweep() {
         }
         // Bounces come from Google's mailer daemon and name the address that failed.
         const oldest = open.reduce((m, r) => Math.min(m, Date.parse(r.fields['Sent date'] || orToday())), Date.now());
-        const bounceUids = await client.search({ from: 'mailer-daemon', since: new Date(oldest - MKT_DAY_MS) }, { uid: true });
-        for (const uid of bounceUids || []) {
-          const msg = await client.fetchOne(String(uid), { bodyStructure: true }, { uid: true });
-          const part = orPlainPart(msg && msg.bodyStructure);
-          const text = part ? (await orReadPart(client, uid, part)).toLowerCase() : '';
-          for (const r of open.filter(r => text.includes(String(r.fields['Email']).toLowerCase()))) {
-            if (((orCache.records || []).find(x => x.id === r.id) || r).fields['Status'] === 'Bounced') continue;
-            await orSave(r.id, { 'Status': 'Bounced', 'Follow-up due': null }, 'email bounced');
-            out.bounces++;
-          }
+        const bounceQuery = { from: 'mailer-daemon', since: new Date(oldest - MKT_DAY_MS) };
+        if (orBounceLastUid) bounceQuery.uid = `${orBounceLastUid + 1}:*`;
+        const bounceUids = ((await client.search(bounceQuery, { uid: true })) || []).filter(uid => uid > orBounceLastUid);
+        let bounceOk = true; // after a failure, later ones are read again next time too
+        for (const uid of bounceUids) {
+          try {
+            const msg = await client.fetchOne(String(uid), { bodyStructure: true }, { uid: true });
+            const part = orPlainPart(msg && msg.bodyStructure);
+            const text = part ? (await orReadPart(client, uid, part)).toLowerCase() : '';
+            for (const r of open.filter(r => orMentions(text, orEmailKey(r.fields['Email'])))) {
+              if (((orCache.records || []).find(x => x.id === r.id) || r).fields['Status'] === 'Bounced') continue;
+              await orSave(r.id, { 'Status': 'Bounced', 'Follow-up due': null }, 'email bounced');
+              out.bounces++;
+            }
+            if (bounceOk) orBounceLastUid = Math.max(orBounceLastUid, uid);
+          } catch (e) { bounceOk = false; out.errors.push(`bounce ${uid}: ${e.message}`); }
         }
       } finally { if (lock) lock.release(); await client.logout().catch(() => client.close()); }
     }
@@ -5049,6 +5144,7 @@ function orSweep() {
     const today = orToday();
     const due = (orCache.records || []).filter(r => r.fields['Status'] === 'Sent' && r.fields['Follow-up due'] && r.fields['Follow-up due'] <= today && r.fields['Message ID'] && !unchecked.has(r.id));
     if (due.length && orSendReady()) {
+      await invEnsure().catch(() => {}); // to tell which pieces the first email showed (empty just after a restart)
       const pool = shopifyAccessToken ? await orPiecePool().catch(() => []) : [];
       for (const r of due) {
         try {
