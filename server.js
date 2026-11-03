@@ -4773,7 +4773,7 @@ Return ONLY valid JSON, no code fences: {"subject": "...", "body": "...", "piece
   const invIds = picked.map(x => (invFindBySku(x.sku)[0] || {}).id).filter(Boolean);
   return {
     'Draft subject': String(parsed.subject || '').trim().slice(0, 120),
-    'Draft email': String(parsed.body || '').trim() + ps,
+    'Draft email': orWithSignature(String(parsed.body || '').trim()) + ps,
     'Featured pieces': invIds,
     'Status': 'Ready for review'
   };
@@ -4809,6 +4809,22 @@ const OR_UNSUB_KEY = process.env.OUTREACH_SECRET || crypto.createHash('sha256').
 const orUnsubToken = id => crypto.createHmac('sha256', OR_UNSUB_KEY).update(String(id)).digest('hex').slice(0, 24);
 const orUnsubUrl = id => `${OR_PUBLIC_URL}/outreach/unsubscribe?c=${encodeURIComponent(id)}&t=${orUnsubToken(id)}`;
 const orFooterLines = () => ['Eternal Blooms by Patti · eternalbloomsbypatti.com', OUTREACH_ADDRESS];
+// The shop's name and address under Patti's sign-off, like a business signature, linked (and tracked)
+// in the HTML email. Added when drafting, and at sending for drafts written before 2026-11-03.
+const OR_SITE = 'eternalbloomsbypatti.com';
+const orSiteUrl = where => `https://${OR_SITE}/?utm_source=outreach&utm_content=${where}`;
+const orSiteLink = (where, color) => `<a href="${orEsc(orSiteUrl(where))}" style="color:${color}">${OR_SITE}</a>`;
+function orWithSignature(text) {
+  const lines = String(text || '').split('\n');
+  if (lines.some(l => l.trim().toLowerCase() === OR_SITE)) return text;
+  const ps = lines.findIndex(l => /^P\.?S\./i.test(l.trim()));
+  const end = ps >= 0 ? ps : lines.length;
+  let at = -1;
+  for (let i = end - 1; i >= 0; i--) if (/^patti[.,]?$/i.test(lines[i].trim())) { at = i + 1; break; }
+  if (at < 0) { at = end; while (at > 0 && !lines[at - 1].trim()) at--; }
+  lines.splice(at, 0, 'Eternal Blooms by Patti', OR_SITE);
+  return lines.join('\n');
+}
 const orFooter = id => `\n\n--\n${orFooterLines().join('\n')}\nDon't want emails from me? Unsubscribe: ${id ? orUnsubUrl(id) : '(a personal link is added to each email)'}`;
 // An address that opted out on any contact row is never emailed again, even if it's added anew.
 const orEmailKey = e => String(e || '').trim().toLowerCase();
@@ -4842,17 +4858,19 @@ function orHtml(text, pool, id) {
       const m = line.match(/^(.+?):\s+(https?:\/\/\S+)$/);
       const x = m && byUrl.get(m[2].split('?')[0]);
       if (x) pieces.push(`<a href="${orEsc(m[2])}" style="display:inline-block;width:46%;max-width:240px;margin:0 2% 14px 0;vertical-align:top;text-decoration:none;color:#5b5248"><img src="${orEsc(orImg600(x.image))}" alt="${orEsc(m[1])}" width="240" style="display:block;width:100%;height:auto;border:0;border-radius:8px"><span style="display:block;font-size:13px;line-height:1.35;margin-top:6px">${orEsc(m[1])}</span></a>`);
+      else if (line.trim().toLowerCase() === OR_SITE) rest.push(orSiteLink('signature', '#8a5a5d'));
       else rest.push(linkify(line));
     }
     return (rest.length ? `<p style="margin:0 0 14px">${rest.join('<br>')}</p>` : '') + (pieces.length ? `<div>${pieces.join('')}</div>` : '');
   });
-  const foot = [...orFooterLines().map(orEsc), `Don't want emails from me? <a href="${orEsc(orUnsubUrl(id))}" style="color:#817365">Unsubscribe</a>`].join('<br>');
+  const foot = [...orFooterLines().map(orEsc).map((l, i) => i === 0 ? l.replace(OR_SITE, orSiteLink('footer', '#817365')) : l), `Don't want emails from me? <a href="${orEsc(orUnsubUrl(id))}" style="color:#817365">Unsubscribe</a>`].join('<br>');
   return `<div style="font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.55;color:#2b2622;max-width:560px">${blocks.join('')}<p style="margin:22px 0 0;font-family:Arial,sans-serif;font-size:12px;line-height:1.5;color:#817365">${foot}</p></div>`;
 }
 const orImg600 = url => /^https:\/\/cdn\.shopify\.com\//.test(url) ? url + (url.includes('?') ? '&' : '?') + 'width=600' : url;
 async function orSendMail({ id, to, subject, text, inReplyTo }) {
   if (!orSendReady()) throw new Error(!orGmailReady() ? 'Gmail isn\'t connected yet (GMAIL_APP_PASSWORD).' : 'Add the mailing address for the email footer first (OUTREACH_ADDRESS).');
   if (orSuppressed(to)) throw new Error(`${to} unsubscribed, so nothing was sent.`);
+  text = orWithSignature(text);
   orCountSend();
   const pool = shopifyAccessToken ? await orPiecePool().catch(() => []) : [];
   const info = await orTransport().sendMail({
