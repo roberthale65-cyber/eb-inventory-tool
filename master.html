@@ -62,7 +62,7 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .hero-attention strong{display:block;font-size:11px;letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px;opacity:.9}
 .home-grid{padding:20px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:520px;margin:0 auto}
 .mode-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:22px 18px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;box-shadow:var(--shadow-sm)}
-.mode-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:var(--border-strong)}
+@media (hover:hover){.mode-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:var(--border-strong)}}
 .mode-card:active{transform:scale(.97)}
 .mode-card.new-piece{border-top:3px solid var(--sage)}
 .mode-card.list-publish{border-top:3px solid var(--teal)}
@@ -72,18 +72,18 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .mode-title{font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--text);margin-bottom:5px;line-height:1.2}
 .mode-desc{font-size:12px;color:var(--text-muted);line-height:1.5}
 .mode-arrow{position:absolute;bottom:14px;right:14px;font-size:16px;color:var(--border-strong);transition:transform .2s}
-.mode-card:hover .mode-arrow{transform:translateX(3px)}
+@media (hover:hover){.mode-card:hover .mode-arrow{transform:translateX(3px)}}
 .quick-links{padding:0 16px 16px;max-width:520px;margin:0 auto}
 .quick-links-title{font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px}
 .quick-links-row{display:flex;gap:8px;flex-wrap:wrap}
 .ql-btn{background:var(--card);border:1.5px solid var(--border);border-radius:99px;padding:8px 16px;font-size:12px;font-weight:700;color:var(--text-mid);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:all .15s;box-shadow:var(--shadow-sm)}
-.ql-btn:hover{border-color:var(--sage);color:var(--sage);background:var(--sage-bg)}
+@media (hover:hover){.ql-btn:hover{border-color:var(--sage);color:var(--sage);background:var(--sage-bg)}}
 .wizard-header{background:var(--card);border-bottom:1px solid var(--border);padding:14px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:62px;z-index:100}
 .back-btn{width:32px;height:32px;border-radius:50%;border:1.5px solid var(--border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text-mid);flex-shrink:0;transition:all .15s}
-.back-btn:hover{border-color:var(--sage);color:var(--sage);background:var(--sage-bg)}
+@media (hover:hover){.back-btn:hover{border-color:var(--sage);color:var(--sage);background:var(--sage-bg)}}
 .hdr-nav-btn{height:28px;padding:0 10px;border-radius:99px;border:1.5px solid var(--border);background:transparent;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--text-mid);flex-shrink:0;transition:all .15s;white-space:nowrap;letter-spacing:.01em}
-.hdr-nav-btn:hover{border-color:var(--sage);color:var(--sage);background:var(--sage-bg)}
-.hdr-nav-btn.home-btn:hover{border-color:var(--rose);color:var(--rose);background:var(--rose-pale)}
+@media (hover:hover){.hdr-nav-btn:hover{border-color:var(--sage);color:var(--sage);background:var(--sage-bg)}}
+@media (hover:hover){.hdr-nav-btn.home-btn:hover{border-color:var(--rose);color:var(--rose);background:var(--rose-pale)}}
 .wizard-title{font-family:var(--font-display);font-size:17px;font-weight:600;color:var(--text);flex:1}
 .wizard-step-pill{background:var(--sage-bg);color:var(--sage);font-size:11px;font-weight:800;padding:4px 10px;border-radius:99px;flex-shrink:0}
 .wizard-progress{height:3px;background:var(--ivory-dark);position:sticky;top:112px;z-index:99}
@@ -112,10 +112,10 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .info-card strong{display:block;margin-bottom:3px;font-weight:800}
 /* ── Folder picker ── */
 .lp-folder-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:11px 13px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;cursor:pointer;transition:border-color .15s}
-.lp-folder-card:hover{border-color:var(--teal-light)}
+@media (hover:hover){.lp-folder-card:hover{border-color:var(--teal-light)}}
 .lp-folder-card.selected{border-color:var(--teal);background:var(--teal-bg)}
 .lp-folder-card.sold{background:var(--ivory-dark);opacity:.8}
-.lp-folder-card.sold:hover{border-color:var(--border)}
+@media (hover:hover){.lp-folder-card.sold:hover{border-color:var(--border)}}
 .lp-folder-conf{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:3px}
 .lp-folder-conf.strong{background:#688b58}.lp-folder-conf.good{background:#eea211}.lp-folder-conf.maybe{background:#aea498}
 .lp-folder-radio{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--border);flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;transition:all .15s}
@@ -139,7 +139,7 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .lp-video-panel.found{border-color:var(--teal);background:var(--teal-bg)}
 .photo-shot-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
 .shot-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;cursor:pointer;transition:all .15s}
-.shot-card:hover{border-color:var(--sage-light)}
+@media (hover:hover){.shot-card:hover{border-color:var(--sage-light)}}
 .shot-card.done{background:var(--green-bg);border-color:var(--green-border)}
 .shot-num{font-size:10px;font-weight:800;color:var(--text-muted);margin-bottom:3px;letter-spacing:.04em}
 .shot-name{font-size:12px;font-weight:700;color:var(--text)}
@@ -163,7 +163,7 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .lf-label{font-weight:700;min-width:130px;color:var(--text-muted);font-size:11px;letter-spacing:.03em;flex-shrink:0;padding-top:2px}
 .lf-value{color:var(--text);flex:1;font-family:'Courier New',monospace;font-size:11.5px;background:var(--ivory);padding:4px 8px;border-radius:6px;word-break:break-all;line-height:1.5}
 .lf-copy{font-size:11px;padding:3px 9px;border-radius:6px;border:1.5px solid var(--border);background:#fff;color:var(--text-muted);cursor:pointer;flex-shrink:0;white-space:nowrap;font-family:var(--font-body);font-weight:700;transition:all .15s}
-.lf-copy:hover{background:var(--sage-bg);color:var(--sage);border-color:var(--sage)}
+@media (hover:hover){.lf-copy:hover{background:var(--sage-bg);color:var(--sage);border-color:var(--sage)}}
 .lf-copy.copied{background:var(--green-bg);color:var(--green-text);border-color:var(--green-border)}
 .ai-block{background:linear-gradient(135deg,#f4f9f8 0%,#daede9 100%);border:1.5px solid #89bfb7;border-radius:var(--radius);padding:18px;margin-top:14px}
 .ai-block-title{font-size:11px;font-weight:800;color:#2f5653;letter-spacing:.07em;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:7px}
@@ -173,12 +173,12 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .desc-textarea[contenteditable]:empty::before{content:attr(data-placeholder);color:#6ea9a2;font-style:italic;pointer-events:none;display:block}
 .rich-toolbar{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:6px}
 .rich-btn{font-family:var(--font-body);font-size:12px;font-weight:700;color:var(--text);background:#fff;border:1.5px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer;line-height:1;transition:all .12s}
-.rich-btn:hover{border-color:var(--teal);color:var(--teal)}
+@media (hover:hover){.rich-btn:hover{border-color:var(--teal);color:var(--teal)}}
 .desc-html{width:100%;box-sizing:border-box;font-family:'Courier New',ui-monospace,monospace;font-size:12px;padding:12px 14px;border:1.5px solid #89bfb7;border-radius:var(--radius-sm);background:#fbfaf9;color:var(--text);outline:none;resize:vertical;min-height:140px;line-height:1.5}
 .desc-html:focus{border-color:#46867f;box-shadow:0 0 0 3px rgba(70,134,127,0.12)}
 .desc-confirmed-box{background:#fff;border:1.5px solid var(--green-border);border-radius:var(--radius-sm);padding:14px;font-size:13.5px;line-height:1.7;color:var(--text);position:relative;min-height:80px}
 .drop-zone{border:2px dashed rgba(129,115,101,0.4);border-radius:var(--radius);background:#fff;padding:30px 20px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px}
-.drop-zone:hover,.drop-zone.dragover{border-color:var(--gold);background:var(--gold-bg)}
+@media (hover:hover){.drop-zone:hover,.drop-zone.dragover{border-color:var(--gold);background:var(--gold-bg)}}
 .drop-zone input[type=file]{display:none}
 .drop-zone-icon{font-size:36px;margin-bottom:10px}
 .drop-zone-text{font-size:14px;font-weight:700;color:var(--gold);margin-bottom:4px}
@@ -190,7 +190,7 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .photo-card-opt img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
 .photo-badge{position:absolute;top:4px;left:4px;font-size:9px;font-weight:800;padding:2px 6px;border-radius:99px;background:var(--gold);color:#fff}
 .photo-remove{position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.5);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;padding:0}
-.photo-remove:hover{background:rgba(220,38,38,0.9)}
+@media (hover:hover){.photo-remove:hover{background:rgba(220,38,38,0.9)}}
 .photo-move{position:absolute;right:4px;bottom:24px;font-size:9px;font-weight:800;padding:3px 8px;border-radius:99px;background:rgba(0,0,0,0.55);color:#fff;border:none;cursor:pointer;line-height:1.3}
 .photo-crop-btn{position:absolute;left:4px;bottom:24px;font-size:9px;font-weight:800;padding:3px 8px;border-radius:99px;background:rgba(0,0,0,0.55);color:#fff;border:none;cursor:pointer;line-height:1.3}
 .photo-crop-btn.set{background:var(--sage)}
@@ -206,7 +206,7 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .block-list{font-size:12px;background:var(--red-bg);border-radius:8px;padding:10px 12px;margin-top:10px;color:var(--red-text);line-height:1.8}
 .channel-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
 .channel-btn{background:var(--card);border:2px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:center;cursor:pointer;transition:all .15s;font-family:var(--font-body)}
-.channel-btn:hover{border-color:var(--rose-light)}
+@media (hover:hover){.channel-btn:hover{border-color:var(--rose-light)}}
 .channel-btn.selected{background:var(--rose-bg);border-color:var(--rose);color:var(--rose)}
 .channel-icon{font-size:22px;display:block;margin-bottom:5px}
 .channel-label{font-size:12px;font-weight:700;color:var(--text)}
@@ -220,7 +220,7 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .cf-search input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(129,115,101,0.15)}
 .cf-inventory{padding:12px 16px;padding-bottom:80px}
 .cf-piece-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-sm);transition:all .15s;cursor:pointer}
-.cf-piece-card:hover{border-color:var(--gold);box-shadow:var(--shadow-md)}
+@media (hover:hover){.cf-piece-card:hover{border-color:var(--gold);box-shadow:var(--shadow-md)}}
 .cf-piece-card.sold-out{opacity:.45}
 .cf-piece-thumb-placeholder{width:60px;height:60px;border-radius:10px;flex-shrink:0;background:var(--gold-bg);display:flex;align-items:center;justify-content:center;font-size:24px}
 .cf-piece-info{flex:1;min-width:0}
@@ -239,31 +239,31 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 button{font-family:var(--font-body);cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;justify-content:center;gap:6px}
 button:active{transform:scale(.97)}
 .btn{font-size:13px;font-weight:700;padding:10px 18px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:#fff;color:var(--text)}
-.btn:hover{background:var(--ivory-dark);border-color:var(--border-strong)}
+@media (hover:hover){.btn:hover{background:var(--ivory-dark);border-color:var(--border-strong)}}
 .btn-primary{background:var(--sage);color:#fff;border-color:var(--sage);font-size:14px;padding:12px 24px;border-radius:var(--radius-sm)}
-.btn-primary:hover{background:#547346;border-color:#547346;color:#fff}
+@media (hover:hover){.btn-primary:hover{background:#547346;border-color:#547346;color:#fff}}
 .btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .btn-rose{background:var(--rose);color:#fff;border-color:var(--rose)}
-.btn-rose:hover{background:#9e6066;border-color:#9e6066;color:#fff}
+@media (hover:hover){.btn-rose:hover{background:#9e6066;border-color:#9e6066;color:#fff}}
 .btn-rose:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .btn-gold{background:var(--gold);color:#fff;border-color:var(--gold)}
-.btn-gold:hover{background:#5b5248;border-color:#5b5248;color:#fff}
+@media (hover:hover){.btn-gold:hover{background:#5b5248;border-color:#5b5248;color:#fff}}
 .btn-gold:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .btn-teal{background:var(--teal);color:#fff;border-color:var(--teal)}
-.btn-teal:hover{background:#366b67;border-color:#366b67;color:#fff}
+@media (hover:hover){.btn-teal:hover{background:#366b67;border-color:#366b67;color:#fff}}
 .btn-purple{background:#46867f;color:#fff;border-color:#46867f;font-size:14px;padding:12px 24px;border-radius:var(--radius-sm)}
-.btn-purple:hover{background:#366b67;color:#fff;border-color:#366b67}
+@media (hover:hover){.btn-purple:hover{background:#366b67;color:#fff;border-color:#366b67}}
 .btn-purple:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .btn-amber{background:var(--gold);color:#fff;border-color:var(--gold);font-size:14px;padding:12px 24px;border-radius:var(--radius-sm)}
-.btn-amber:hover{background:#5b5248;color:#fff;border-color:#5b5248}
+@media (hover:hover){.btn-amber:hover{background:#5b5248;color:#fff;border-color:#5b5248}}
 .btn-amber:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .btn-publish{background:#547346;color:#fff;border-color:#547346;font-size:15px;padding:14px 28px;border-radius:var(--radius-sm);font-weight:800;width:100%}
-.btn-publish:hover{background:#445c39;border-color:#445c39;color:#fff}
+@media (hover:hover){.btn-publish:hover{background:#445c39;border-color:#445c39;color:#fff}}
 .btn-publish:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
 .btn-full{width:100%;justify-content:center}
 .btn-save-exit{background:var(--ivory-dark);border:1.5px dashed var(--border-strong);color:var(--text-muted);font-size:13px;font-weight:700;padding:10px 18px;border-radius:var(--radius-sm);width:100%;justify-content:center;margin-top:8px}
-.btn-save-exit:hover{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber-text)}
+@media (hover:hover){.btn-save-exit:hover{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber-text)}}
 .status-bar{border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;margin-bottom:14px;display:flex;align-items:center;gap:9px}
 .status-bar.loading{background:#f2f0ee;color:var(--text-muted)}
 .status-bar.success{background:var(--green-bg);color:var(--green-text)}
@@ -326,7 +326,7 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 .mk-ch{border-top:1px solid var(--border);padding-top:10px;margin-top:10px}
 .rd-eb + .mk-ch{border-top:none;padding-top:0}
 .hdr-nav-btn.guide-btn{text-decoration:none;border-color:var(--rose);color:var(--rose)}
-.hdr-nav-btn.guide-btn:hover{background:var(--rose-bg)}
+@media (hover:hover){.hdr-nav-btn.guide-btn:hover{background:var(--rose-bg)}}
 .mk-ch-head{font-size:12px;font-weight:800;color:var(--text);margin-bottom:2px}
 .mk-ch-off{font-size:10px;font-weight:700;color:var(--text-muted);background:var(--ivory-dark);border-radius:99px;padding:1px 7px;margin-left:4px}
 .mk-actions .btn.mk-small{flex:0 0 auto;min-width:0;font-size:12px;padding:6px 12px}
@@ -400,14 +400,14 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 .bm-scan-frame{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:60%;aspect-ratio:1;border:2.5px solid rgba(70,134,127,0.9);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,0.45)}
 .cost-path-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:16px}
 .cost-path-card{background:var(--card);border:2px solid var(--border);border-radius:var(--radius);padding:18px 16px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-sm)}
-.cost-path-card:hover{border-color:var(--purple-light);box-shadow:var(--shadow-md);transform:translateY(-2px)}
+@media (hover:hover){.cost-path-card:hover{border-color:var(--purple-light);box-shadow:var(--shadow-md);transform:translateY(-2px)}}
 .cost-path-card:active{transform:scale(.98)}
 .cost-path-icon{font-size:28px;flex-shrink:0;width:44px;text-align:center}
 .cost-path-title{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--text);margin-bottom:3px}
 .cost-path-desc{font-size:12px;color:var(--text-muted);line-height:1.4}
 .cost-path-arrow{font-size:16px;color:var(--border-strong);margin-left:auto;flex-shrink:0}
 .receipt-drop-zone{border:2px dashed rgba(70,134,127,0.35);border-radius:var(--radius);background:var(--purple-bg);padding:36px 20px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px}
-.receipt-drop-zone:hover,.receipt-drop-zone.dragover{border-color:var(--purple);background:#daede9}
+@media (hover:hover){.receipt-drop-zone:hover,.receipt-drop-zone.dragover{border-color:var(--purple);background:#daede9}}
 .receipt-drop-zone input[type=file]{display:none}
 .receipt-drop-icon{font-size:40px;margin-bottom:10px}
 .receipt-drop-text{font-size:15px;font-weight:700;color:var(--purple);margin-bottom:4px}
@@ -419,14 +419,14 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 .parsed-result-title{font-size:10px;font-weight:800;color:var(--purple);letter-spacing:.07em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:7px}
 .cost-cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
 .cost-cat-btn{background:var(--card);border:2px solid var(--border);border-radius:var(--radius-sm);padding:10px 8px;text-align:center;cursor:pointer;transition:all .15s;font-family:var(--font-body)}
-.cost-cat-btn:hover{border-color:var(--purple-light);background:var(--purple-bg)}
+@media (hover:hover){.cost-cat-btn:hover{border-color:var(--purple-light);background:var(--purple-bg)}}
 .cost-cat-btn.selected{background:var(--purple-bg);border-color:var(--purple)}
 .cost-cat-icon{font-size:20px;display:block;margin-bottom:4px}
 .cost-cat-label{font-size:11px;font-weight:700;color:var(--text)}
 .cost-cat-btn.selected .cost-cat-label{color:var(--purple)}
 .mat-subcat-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px}
 .mat-sub-btn{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;cursor:pointer;transition:all .15s;font-family:var(--font-body);font-size:12px;font-weight:700;color:var(--text);text-align:center}
-.mat-sub-btn:hover{border-color:var(--sage-light);background:var(--sage-bg)}
+@media (hover:hover){.mat-sub-btn:hover{border-color:var(--sage-light);background:var(--sage-bg)}}
 .mat-sub-btn.selected{background:var(--sage-bg);border-color:var(--sage);color:var(--sage)}
 .cost-history-list{display:grid;gap:8px;margin-top:12px}
 .cost-history-item{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow-sm)}
@@ -449,11 +449,11 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 /* Add/Edit mode toggle + multi-select chips */
 .np-mode-toggle{display:flex;gap:8px;margin-bottom:16px}
 .np-mode-btn{flex:1;background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:11px 10px;font-size:13px;font-weight:800;color:var(--text-muted);cursor:pointer;font-family:var(--font-body);justify-content:center}
-.np-mode-btn:hover{border-color:var(--sage-light)}
+@media (hover:hover){.np-mode-btn:hover{border-color:var(--sage-light)}}
 .np-mode-btn.active{background:var(--sage-bg);border-color:var(--sage);color:var(--sage)}
 .chip-checks{display:flex;flex-wrap:wrap;gap:6px}
 .chip-checks label{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--text);background:#fff;border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;transition:all .12s;letter-spacing:0;text-transform:none}
-.chip-checks label:hover{border-color:var(--sage-light)}
+@media (hover:hover){.chip-checks label:hover{border-color:var(--sage-light)}}
 .chip-checks label:has(input:checked){background:var(--sage-bg);border-color:var(--sage);color:var(--sage)}
 .chip-checks input{accent-color:var(--sage);width:14px;height:14px;margin:0}
 /* Searchable multi-select (chips + type-to-filter + checkbox dropdown) */
@@ -466,10 +466,10 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 .ms-menu{display:none;position:absolute;z-index:40;left:0;right:0;top:calc(100% + 4px);max-height:260px;overflow-y:auto;background:#fff;border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:0 8px 24px rgba(0,0,0,.12)}
 .ms.ms-open .ms-menu{display:block}
 .ms-opt{display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;cursor:pointer}
-.ms-opt:hover{background:var(--sage-bg)}
+@media (hover:hover){.ms-opt:hover{background:var(--sage-bg)}}
 .ms-opt input{accent-color:var(--sage);width:15px;height:15px;margin:0;flex-shrink:0}
 .ms-add{padding:9px 12px;font-size:13px;color:var(--sage);font-weight:600;cursor:pointer;border-top:1px solid var(--border)}
-.ms-add:hover{background:var(--sage-bg)}
+@media (hover:hover){.ms-add:hover{background:var(--sage-bg)}}
 /* Collapsible Photo & Video Workflow panel */
 .pv-workflow{background:var(--teal-bg);border:1.5px solid var(--teal-light);border-radius:var(--radius-sm);padding:0;margin-bottom:12px;overflow:hidden}
 .pv-workflow>summary{list-style:none;cursor:pointer;padding:12px 14px;font-family:var(--font-body);font-size:13px;font-weight:800;color:var(--teal);display:flex;align-items:center;gap:7px;user-select:none}
@@ -478,8 +478,19 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 .pv-workflow[open]>summary::after{transform:rotate(90deg)}
 .pv-steps{margin:0;padding:0 16px 14px 34px;color:var(--text);font-size:13px;line-height:1.7}
 .pv-steps li{margin-bottom:4px}
+/* Hover colours only where there's a mouse (the rules above sit in @media (hover:hover)): on an
+   iPhone or iPad a tapped button kept its hover colour until the next tap somewhere else. */
+/* No double-tap-to-zoom delay on controls (quick taps on Move or photo arrows zoomed the page). */
+button,a,label,select,input[type=checkbox],[onclick]{touch-action:manipulation}
+/* Bottom sheets (Sold, Crop): the page behind no longer scrolls once the sheet reaches its end;
+   dvh follows Safari's toolbar; room for the home indicator when opened from the Home Screen. */
+.modal-sheet{max-height:85dvh;overscroll-behavior:contain;padding-bottom:calc(24px + env(safe-area-inset-bottom, 0px))}
 /* Touch screens (iPhone, iPad): tap targets of about 44 px. Last, so it wins over the sizes above. */
 @media (pointer:coarse){
+  .hdr-nav-btn{height:40px;padding:0 14px;font-size:12px}
+  .ql-btn,.mk-tab,.mk-actions .btn{min-height:44px}
+  .or-log summary{padding:10px 0;font-size:13px}
+  .modal-overlay{backdrop-filter:none} /* blurring the whole long page behind slowed the sheet's slide-up on iPad */
   #mk-check summary{padding:12px 0;font-size:13px}
   .mk-chk input{width:24px;height:24px}
   .mk-draft-head .btn,.mk-actions .btn.mk-small{padding:11px 16px;font-size:13px;min-height:44px}
@@ -656,12 +667,12 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
       <div id="np-outdoor-warning" style="display:none" class="info-card amber"><strong>⚠ Outdoor pot — local pickup / delivery only.</strong> It can’t ship; the listing is set up as local-only when you publish.</div>
       <div class="field"><label>Date made</label><input type="date" id="np-date-made"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">When the piece was made. Defaults to today (the EB creation date) if left blank.</div></div>
       <div class="grid-2">
-        <div class="field"><label>Price ($)</label><input type="text" id="np-price" placeholder="e.g. 85.00" oninput="npAutoFillCost()"></div>
-        <div class="field"><label>Quantity</label><input type="number" id="np-quantity" min="0" step="1" value="1"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Units in stock. Defaults to 1 for one-of-a-kind pieces.</div></div>
+        <div class="field"><label>Price ($)</label><input type="text" inputmode="decimal" id="np-price" placeholder="e.g. 85.00" oninput="npAutoFillCost()"></div>
+        <div class="field"><label>Quantity</label><input type="number" inputmode="numeric" id="np-quantity" min="0" step="1" value="1"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Units in stock. Defaults to 1 for one-of-a-kind pieces.</div></div>
       </div>
       <div class="grid-2">
-        <div class="field"><label>Cost ($)</label><input type="text" id="np-cost" placeholder="auto-filled from price"></div>
-        <div class="field"><label>Cost % of price</label><input type="number" id="np-cost-pct" min="1" max="100" step="1" value="66" oninput="npAutoFillCost()"></div>
+        <div class="field"><label>Cost ($)</label><input type="text" inputmode="decimal" id="np-cost" placeholder="auto-filled from price"></div>
+        <div class="field"><label>Cost % of price</label><input type="number" inputmode="numeric" id="np-cost-pct" min="1" max="100" step="1" value="66" oninput="npAutoFillCost()"></div>
       </div>
       <div class="btn-row"><button class="btn-primary btn-full" onclick="npSubNext()">Continue to details →</button></div>
       <button class="btn-save-exit" onclick="npSaveAndExitStep1()">💾 Save &amp; finish later</button>
@@ -744,29 +755,29 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
       </div>
       <div class="info-card sage" id="np-dims-hint"><strong>📏 Measure the finished piece now.</strong></div>
       <div class="grid-3">
-        <div class="field"><label>Width (in)</label><input type="number" id="np-width" placeholder='24'></div>
-        <div class="field"><label>Height (in)</label><input type="number" id="np-height" placeholder='18'></div>
-        <div class="field"><label>Depth (in)</label><input type="number" id="np-depth" placeholder='4'></div>
+        <div class="field"><label>Width (in)</label><input type="number" inputmode="decimal" id="np-width" placeholder='24'></div>
+        <div class="field"><label>Height (in)</label><input type="number" inputmode="decimal" id="np-height" placeholder='18'></div>
+        <div class="field"><label>Depth (in)</label><input type="number" inputmode="decimal" id="np-depth" placeholder='4'></div>
       </div>
       <div class="section-label" style="margin-top:4px">Item weight</div>
       <div class="grid-2">
-        <div class="field"><label>Pounds (lb)</label><input type="number" min="0" step="1" id="np-weight-lb" placeholder="e.g. 3"></div>
-        <div class="field"><label>Ounces (oz)</label><input type="number" min="0" max="15" step="1" id="np-weight-oz" placeholder="e.g. 8"></div>
+        <div class="field"><label>Pounds (lb)</label><input type="number" inputmode="numeric" min="0" step="1" id="np-weight-lb" placeholder="e.g. 3"></div>
+        <div class="field"><label>Ounces (oz)</label><input type="number" inputmode="numeric" min="0" max="15" step="1" id="np-weight-oz" placeholder="e.g. 8"></div>
       </div>
       <div class="section-label" style="margin-top:12px">Normal shipping size <span style="font-weight:400;font-size:11px;color:var(--text-muted)">&mdash; packed box, not display</span></div>
       <!-- Labels follow the product-dimension order (Width · Height · Depth); ids stay -l/-w/-h for storage compatibility -->
       <div class="grid-3">
-        <div class="field"><label>Width (in)</label><input type="number" id="np-ship-l" placeholder="17" oninput="npDimHint('ship','np-ship-hint')"></div>
-        <div class="field"><label>Height (in)</label><input type="number" id="np-ship-w" placeholder="17" oninput="npDimHint('ship','np-ship-hint')"></div>
-        <div class="field"><label>Depth (in)</label><input type="number" id="np-ship-h" placeholder="21" oninput="npDimHint('ship','np-ship-hint')"></div>
+        <div class="field"><label>Width (in)</label><input type="number" inputmode="decimal" id="np-ship-l" placeholder="17" oninput="npDimHint('ship','np-ship-hint')"></div>
+        <div class="field"><label>Height (in)</label><input type="number" inputmode="decimal" id="np-ship-w" placeholder="17" oninput="npDimHint('ship','np-ship-hint')"></div>
+        <div class="field"><label>Depth (in)</label><input type="number" inputmode="decimal" id="np-ship-h" placeholder="21" oninput="npDimHint('ship','np-ship-hint')"></div>
       </div>
       <div class="dim-hint" id="np-ship-hint"></div>
       <div class="section-label" style="margin-top:4px">Aggressive compression <span style="font-weight:400;font-size:11px;color:var(--text-muted)">&mdash; tightest safe box</span></div>
       <!-- Labels follow the product-dimension order (Width · Height · Depth); ids stay -l/-w/-h for storage compatibility -->
       <div class="grid-3">
-        <div class="field"><label>Width (in)</label><input type="number" id="np-comp-l" placeholder="15" oninput="npDimHint('comp','np-comp-hint')"></div>
-        <div class="field"><label>Height (in)</label><input type="number" id="np-comp-w" placeholder="15" oninput="npDimHint('comp','np-comp-hint')"></div>
-        <div class="field"><label>Depth (in)</label><input type="number" id="np-comp-h" placeholder="19" oninput="npDimHint('comp','np-comp-hint')"></div>
+        <div class="field"><label>Width (in)</label><input type="number" inputmode="decimal" id="np-comp-l" placeholder="15" oninput="npDimHint('comp','np-comp-hint')"></div>
+        <div class="field"><label>Height (in)</label><input type="number" inputmode="decimal" id="np-comp-w" placeholder="15" oninput="npDimHint('comp','np-comp-hint')"></div>
+        <div class="field"><label>Depth (in)</label><input type="number" inputmode="decimal" id="np-comp-h" placeholder="19" oninput="npDimHint('comp','np-comp-hint')"></div>
       </div>
       <div class="dim-hint" id="np-comp-hint"></div>
       <div id="np-photos-done-hint" style="display:none" class="info-card teal"><strong>✅ Skipping photo checklist.</strong> After saving dimensions you'll go straight to List &amp; Publish.</div>
@@ -837,19 +848,19 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
       <div id="lp-dims-editor" style="display:none" class="info-card rose">
         <strong>⚠ Some physical details are missing.</strong> Add them here and save — they're written straight back to Airtable.
         <div class="grid-3" style="margin-top:10px">
-          <div class="field"><label>Width (in)</label><input type="number" id="lp-edit-width" placeholder="24"></div>
-          <div class="field"><label>Height (in)</label><input type="number" id="lp-edit-height" placeholder="18"></div>
-          <div class="field"><label>Depth (in)</label><input type="number" id="lp-edit-depth" placeholder="4"></div>
+          <div class="field"><label>Width (in)</label><input type="number" inputmode="decimal" id="lp-edit-width" placeholder="24"></div>
+          <div class="field"><label>Height (in)</label><input type="number" inputmode="decimal" id="lp-edit-height" placeholder="18"></div>
+          <div class="field"><label>Depth (in)</label><input type="number" inputmode="decimal" id="lp-edit-depth" placeholder="4"></div>
         </div>
         <div class="grid-2">
-          <div class="field"><label>Item weight — lb</label><input type="number" min="0" step="1" id="lp-edit-weight-lb" placeholder="3"></div>
-          <div class="field"><label>oz</label><input type="number" min="0" max="15" step="1" id="lp-edit-weight-oz" placeholder="8"></div>
+          <div class="field"><label>Item weight — lb</label><input type="number" inputmode="numeric" min="0" step="1" id="lp-edit-weight-lb" placeholder="3"></div>
+          <div class="field"><label>oz</label><input type="number" inputmode="numeric" min="0" max="15" step="1" id="lp-edit-weight-oz" placeholder="8"></div>
         </div>
         <div class="section-label" style="margin-top:4px">Normal shipping size <span style="font-weight:400;font-size:11px;color:var(--text-muted)">&mdash; packed box, not display (sets the shipping estimate)</span></div>
         <div class="grid-3">
-          <div class="field"><label>Width (in)</label><input type="number" id="lp-edit-ship-l" placeholder="17" oninput="lpShipHint()"></div>
-          <div class="field"><label>Height (in)</label><input type="number" id="lp-edit-ship-w" placeholder="17" oninput="lpShipHint()"></div>
-          <div class="field"><label>Depth (in)</label><input type="number" id="lp-edit-ship-h" placeholder="21" oninput="lpShipHint()"></div>
+          <div class="field"><label>Width (in)</label><input type="number" inputmode="decimal" id="lp-edit-ship-l" placeholder="17" oninput="lpShipHint()"></div>
+          <div class="field"><label>Height (in)</label><input type="number" inputmode="decimal" id="lp-edit-ship-w" placeholder="17" oninput="lpShipHint()"></div>
+          <div class="field"><label>Depth (in)</label><input type="number" inputmode="decimal" id="lp-edit-ship-h" placeholder="21" oninput="lpShipHint()"></div>
         </div>
         <div class="dim-hint" id="lp-edit-ship-hint"></div>
         <div id="lp-dims-save-status" style="display:none;font-size:12px;margin-bottom:8px"></div>
@@ -1031,7 +1042,7 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
         <div class="channel-btn" onclick="msSelectChannel(this,'Direct')"><span class="channel-icon">🤝</span><div class="channel-label">Direct / other</div></div>
       </div>
       <div class="info-card teal" style="font-size:12px">Note: Facebook Marketplace sales = Direct / other. Facebook Shop will be added as an option once the Commerce Manager is configured to sell items through the Facebook Business Page.</div>
-      <div class="field"><label>Sale price (confirm or adjust)</label><input type="text" id="ms-sale-price" placeholder="e.g. 85.00"></div>
+      <div class="field"><label>Sale price (confirm or adjust)</label><input type="text" inputmode="decimal" id="ms-sale-price" placeholder="e.g. 85.00"></div>
       <div class="field"><label>Date sold</label><input type="date" id="ms-sale-date"></div>
       <div class="info-card sage" style="font-size:12px"><strong>This will:</strong> Set Shopify inventory to 0 · Move to Sold/Portfolio · Update Airtable status to Sold</div>
       <div class="btn-row"><button class="btn-rose btn-full" id="ms-confirm-btn" onclick="msConfirmSale()">✓ Mark as sold</button><button class="btn btn-full" onclick="msStep(1)">← Back</button></div>
@@ -1198,7 +1209,7 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
       <div class="channel-btn" onclick="modalSelectChannel(this,'Direct')"><span class="channel-icon">🤝</span><div class="channel-label">Direct</div></div>
     </div>
     <div class="info-card teal" style="font-size:12px">Note: Facebook Marketplace sales = Direct / other. Facebook Shop will be added as an option once the Commerce Manager is configured to sell items through the Facebook Business Page.</div>
-    <div class="field"><label>Sale price</label><input type="text" id="modal-price" placeholder="e.g. 85.00"></div>
+    <div class="field"><label>Sale price</label><input type="text" inputmode="decimal" enterkeyhint="done" id="modal-price" placeholder="e.g. 85.00"></div>
     <div id="modal-status" class="status-bar" style="display:none"><div class="sb-dot"></div><span id="modal-status-msg"></span></div>
     <div class="btn-row">
       <button class="btn" onclick="printQRTag(modalSelectedRecord&&modalSelectedRecord.fields['EB Number'], modalSelectedRecord&&modalSelectedRecord.fields['Price ($)']||'')">🏷 Print tag</button>
@@ -1371,7 +1382,7 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
       <div class="divider"></div>
       <div class="field"><label>Trip description / destination</label><input type="text" id="mile-description" placeholder="e.g. Millard West show setup, 6 round trips"></div>
       <div class="grid-2">
-        <div class="field"><label>Total miles</label><input type="number" id="mile-miles" placeholder="e.g. 114"></div>
+        <div class="field"><label>Total miles</label><input type="number" inputmode="numeric" id="mile-miles" placeholder="e.g. 114"></div>
         <div class="field"><label>Date</label><input type="date" id="mile-date"></div>
       </div>
       <div class="field"><label>Purpose</label><select id="mile-purpose"><option value="Craft show setup/breakdown">Craft show setup/breakdown</option><option value="Client delivery">Client delivery</option><option value="Materials pickup">Materials pickup</option><option value="Event/show day">Event/show day</option><option value="Other business">Other business</option></select></div>
@@ -1382,7 +1393,7 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
       <div class="section-label">Manual cost entry</div>
       <div class="field"><label>Vendor / source</label><input type="text" id="man-vendor" placeholder="e.g. Hobby Lobby, Amazon, show fee"></div>
       <div class="grid-2">
-        <div class="field"><label>Amount ($)</label><input type="number" id="man-amount" placeholder="0.00" step="0.01"></div>
+        <div class="field"><label>Amount ($)</label><input type="number" inputmode="decimal" id="man-amount" placeholder="0.00" step="0.01"></div>
         <div class="field"><label>Date</label><input type="date" id="man-date"></div>
       </div>
       <div class="field"><label>Description</label><input type="text" id="man-description" placeholder="What was purchased?"></div>
@@ -1399,7 +1410,7 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
         <div class="parsed-result-title">&#x1F916; Parsed from receipt</div>
         <div class="grid-2">
           <div class="field"><label>Vendor</label><input type="text" id="pr-vendor" style="font-family:var(--font-body);font-size:14px;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;width:100%;outline:none"></div>
-          <div class="field"><label>Total ($)</label><input type="number" id="pr-amount" step="0.01" style="font-family:var(--font-body);font-size:14px;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;width:100%;outline:none"></div>
+          <div class="field"><label>Total ($)</label><input type="number" inputmode="decimal" id="pr-amount" step="0.01" style="font-family:var(--font-body);font-size:14px;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;width:100%;outline:none"></div>
         </div>
         <div class="grid-2">
           <div class="field"><label>Date</label><input type="date" id="pr-date" style="font-family:var(--font-body);font-size:14px;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;width:100%;outline:none"></div>
@@ -2088,8 +2099,12 @@ function orRender(fresh){
   host.querySelectorAll('.or-body').forEach(orGrow);
 }
 // The email box grows with its text: a box that scrolls inside a scrolling page is fiddly on a phone.
-function orGrow(ta){ ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 4) + 'px'; }
-window.addEventListener('resize', () => document.querySelectorAll('.or-body').forEach(orGrow)); // turning the iPad rewraps the text
+// Measuring shrinks the box for a moment; Safari could then pull the page up, so the scroll
+// position is put back. Only a width change (turning the iPad) refits: Safari also fires resize
+// whenever its toolbar shows or hides while scrolling, which made the page jump.
+function orGrow(ta){ const y = window.scrollY; ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 4) + 'px'; if(window.scrollY !== y) window.scrollTo(0, y); }
+let orLastWidth = window.innerWidth;
+window.addEventListener('resize', () => { if(window.innerWidth === orLastWidth) return; orLastWidth = window.innerWidth; document.querySelectorAll('.or-body').forEach(orGrow); }); // turning the iPad rewraps the text
 const orDate = s => s ? new Date(s + 'T12:00:00').toLocaleDateString(undefined, { month:'short', day:'numeric' }) : '';
 function orWho(f){
   return '<div class="or-who"><strong>' + escHtml(f['Name'] || '') + '</strong>' + (f['Business'] ? ' · ' + escHtml(f['Business']) : '') +
@@ -2100,7 +2115,7 @@ function orPiecesHtml(f){
   const ps = (f['Featured pieces'] || []).map(id => (orData.pieces || {})[id]).filter(Boolean);
   if(!ps.length) return '';
   return '<div class="or-pieces">' + ps.map(p => '<a href="' + escHtml(p.url || '#') + '" target="_blank" title="' + escHtml(p.title) + '">' +
-    (p.image ? '<img src="' + escHtml(mkThumb(p.image)) + '" alt="" loading="lazy">' : '') + '<span>' + escHtml(p.title) + (p.inStock ? '' : ' (no longer in stock)') + '</span></a>').join('') + '</div>';
+    (p.image ? '<img src="' + escHtml(mkThumb(p.image, 240)) + '" alt="" loading="lazy" decoding="async">' : '') + '<span>' + escHtml(p.title) + (p.inStock ? '' : ' (no longer in stock)') + '</span></a>').join('') + '</div>';
 }
 function orCardHtml(r){
   const f = r.fields, id = r.id, g = (orData && orData.gmail) || {};
@@ -2480,7 +2495,7 @@ function mkRenderPicker(){
     '<div class="mk-muted" style="margin:6px 0">' + list.length + ' piece' + (list.length === 1 ? '' : 's') + ' · ' + mkPick.selected.size + ' selected</div>' +
     '<div class="mk-pick-list">' + list.slice(0, 120).map(x =>
       '<label class="mk-pick-row' + (mkPick.selected.has(x.sku) ? ' on' : '') + '"><input type="checkbox"' + (mkPick.selected.has(x.sku) ? ' checked' : '') + ' onchange="mkPickToggle(\'' + escHtml(x.sku) + '\')">' +
-      '<img src="' + escHtml(x.image) + '" loading="lazy" alt=""><div><div class="mk-pick-title">' + escHtml(x.title) + '</div><div class="mk-muted">' + escHtml(x.sku) + (x.themes.length ? ' · ' + escHtml(x.themes.join(', ')) : '') + '</div><div class="mk-muted">' + mkPickHistory(x) + '</div></div></label>').join('') +
+      '<img src="' + escHtml(mkThumb(x.image, 120)) + '" loading="lazy" decoding="async" alt=""><div><div class="mk-pick-title">' + escHtml(x.title) + '</div><div class="mk-muted">' + escHtml(x.sku) + (x.themes.length ? ' · ' + escHtml(x.themes.join(', ')) : '') + '</div><div class="mk-muted">' + mkPickHistory(x) + '</div></div></label>').join('') +
       (list.length > 120 ? '<div class="mk-muted">Showing the first 120 — narrow the filters to see more.</div>' : '') + '</div>' +
     '<div class="mk-label"><span>Post to</span></div><div class="mk-pick-filters">' + MK_CHANNELS.map(ch => '<label class="mk-chk"><input type="checkbox"' + (mkPick.channels.has(ch) ? ' checked' : '') + ' onchange="mkPickChannel(\'' + ch + '\')"> ' + MK_CH_ICON[ch] + ' ' + ch + '</label>').join('') + '</div>' +
     '<div class="mk-label"><span>Angle</span></div><select class="mk-input" onchange="mkPick.angle=this.value">' + opt('auto', 'Whatever season fits now', mkPick.angle) + opt('', 'No seasonal angle', mkPick.angle) + mkPlan.themes.map(t => opt(t, t, mkPick.angle)).join('') + '</select>' +
@@ -2569,10 +2584,11 @@ function mkRender(opts){
 
 // One card per piece: shared photo/video, then a block per channel.
 // Shopify's image server sends a smaller copy on request: a 720 px poster instead of the 2048 px
-// original (about 1/8 of the memory once decoded). Other hosts are left alone.
-function mkThumb(url){
+// original (about 1/8 of the memory once decoded). Other hosts are left alone. Small thumbnails
+// (lists, outreach tiles) ask for less: width is twice the size shown, for sharp Retina screens.
+function mkThumb(url, width){
   url = String(url || '');
-  return /^https:\/\/cdn\.shopify\.com\/s\/files\//.test(url) ? url + (url.includes('?') ? '&' : '?') + 'width=720' : url;
+  return /^https:\/\/cdn\.shopify\.com\/s\/files\//.test(url) ? url + (url.includes('?') ? '&' : '?') + 'width=' + (width || 720) : url;
 }
 // Swaps the poster for the player and starts it, inside the tap (iPhone and iPad only start video
 // from a tap).
@@ -2844,9 +2860,9 @@ async function mkPost(id){
   // clipboard writes that don't happen directly in the tap.
   const url = 'https://www.pinterest.com/pin/create/button/?url=' + encodeURIComponent(rec.fields['Product URL'] || '') +
     '&media=' + encodeURIComponent(rec.fields['Image URL'] || '') + '&description=' + encodeURIComponent(f['Description']);
+  // Copy first: once the new tab has focus, iPad Safari refuses the clipboard write.
+  const copy = ebCopy(f['Pin Title']);
   window.open(url, '_blank');
-  let copy;
-  copy = ebCopy(f['Pin Title']);
   const copied = await copy;
   mkStatusMsg('<strong>Pinterest is open in a new tab</strong>' + (copied ? 'The title is copied — paste it into the title box. ' : 'Copy the title from this card into the title box. ') +
     'Pick the board <b>' + escHtml(f['Board'] || '') + '</b>, publish, then come back and tap <b>Mark as posted</b>.');
@@ -4695,7 +4711,9 @@ async function lpDriveLinkRename(){
 
 // ── Square crop (1:1) — crops the chosen region instead of padding with white ──
 // crop = {sx,sy,sSize} in source-pixel coords; falls back to a centered square.
-function lpCropToSquare(dataUrl,crop,targetSize,maxKB){return new Promise((resolve,reject)=>{const img=new Image();img.onerror=()=>reject(new Error('the browser could not open this photo (HEIC or damaged file?)'));img.onload=()=>{const natW=img.naturalWidth,natH=img.naturalHeight;let sSize,sx,sy;if(crop&&crop.sSize){sSize=Math.min(crop.sSize,natW,natH);sx=crop.sx;sy=crop.sy;}else{sSize=Math.min(natW,natH);sx=(natW-sSize)/2;sy=(natH-sSize)/2;}sx=Math.max(0,Math.min(sx,natW-sSize));sy=Math.max(0,Math.min(sy,natH-sSize));const canvas=document.createElement('canvas');canvas.width=targetSize;canvas.height=targetSize;const ctx=canvas.getContext('2d');ctx.drawImage(img,sx,sy,sSize,sSize,0,0,targetSize,targetSize);let quality=0.88;const tryExport=()=>{canvas.toBlob(blob=>{if(!blob)return reject(new Error('the photo could not be resized'));(blob.size/1024<=maxKB||quality<=0.5)?resolve(blob):(quality-=0.08,tryExport());},'image/jpeg',quality);};tryExport();};img.src=dataUrl;});}
+function lpCropToSquare(dataUrl,crop,targetSize,maxKB){return new Promise((resolve,reject)=>{const img=new Image();img.onerror=()=>reject(new Error('the browser could not open this photo (HEIC or damaged file?)'));img.onload=()=>{const natW=img.naturalWidth,natH=img.naturalHeight;let sSize,sx,sy;if(crop&&crop.sSize){sSize=Math.min(crop.sSize,natW,natH);sx=crop.sx;sy=crop.sy;}else{sSize=Math.min(natW,natH);sx=(natW-sSize)/2;sy=(natH-sSize)/2;}sx=Math.max(0,Math.min(sx,natW-sSize));sy=Math.max(0,Math.min(sy,natH-sSize));const canvas=document.createElement('canvas');canvas.width=targetSize;canvas.height=targetSize;const ctx=canvas.getContext('2d');ctx.drawImage(img,sx,sy,sSize,sSize,0,0,targetSize,targetSize);let quality=0.88;const done=(fn,v)=>{canvas.width=canvas.height=0;img.src='';fn(v);};const tryExport=()=>{canvas.toBlob(blob=>{if(!blob)return done(reject,new Error('the photo could not be resized'));(blob.size/1024<=maxKB||quality<=0.5)?done(resolve,blob):(quality-=0.08,tryExport());},'image/jpeg',quality);};tryExport();};img.src=dataUrl;});}
+// Above: each canvas is emptied once its photo is exported. Safari on iPhone/iPad caps the memory
+// all canvases may hold together; 15 full-size 2048 px canvases left alive reached it mid-publish.
 
 // ── Persistent crop store ────────────────────────────────────
 // Crops survive across sessions, keyed by Drive file ID (stable through the
@@ -4897,7 +4915,7 @@ async function lpPublish(){
     }catch(e){console.warn('Original rename skipped:',e.message);}
   }
   // Generate the square crop for each photo, save it to Drive (EB_square_NN), and send it to Shopify.
-  for(let i=0;i<lpPhotoItems.length;i++){try{btn.textContent='⏳ Photo '+(i+1)+' of '+lpPhotoItems.length+'…';await lpEnsureDriveBytes(lpPhotoItems[i]);const squareBlob=await lpCropToSquare(lpPhotoItems[i].dataUrl,lpPhotoItems[i].crop,2048,300);const squareDataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(squareBlob);});const b64=squareDataUrl.split(',')[1];const squareName=sku+'_square_'+String(i+1).padStart(2,'0')+'.jpg';if(lpLoadedFolderId){try{const ur=await fetch(SERVER_URL+'/drive-upload-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folderId:lpLoadedFolderId,name:squareName,dataBase64:b64,mimeType:'image/jpeg',ebNumber:sku,sourceFileId:lpPhotoItems[i].driveFileId})});if(ur.ok)squaresSaved++;else console.warn('Square not saved to Drive ('+squareName+'):',await ur.text().catch(()=>''));}catch(ue){console.warn('Square upload failed ('+squareName+'):',ue.message);}}images.push({data:b64,filename:squareName});}catch(imgErr){console.warn('Skipping photo '+i+':',imgErr.message);photoFails.push('Photo '+(i+1)+': '+imgErr.message);}}
+  for(let i=0;i<lpPhotoItems.length;i++){try{btn.textContent='⏳ Photo '+(i+1)+' of '+lpPhotoItems.length+'…';await lpEnsureDriveBytes(lpPhotoItems[i]);const squareBlob=await lpCropToSquare(lpPhotoItems[i].dataUrl,lpPhotoItems[i].crop,2048,300);const squareDataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(squareBlob);});const b64=squareDataUrl.split(',')[1];const squareName=sku+'_square_'+String(i+1).padStart(2,'0')+'.jpg';if(lpLoadedFolderId){try{const ur=await fetch(SERVER_URL+'/drive-upload-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folderId:lpLoadedFolderId,name:squareName,dataBase64:b64,mimeType:'image/jpeg',ebNumber:sku,sourceFileId:lpPhotoItems[i].driveFileId})});if(ur.ok)squaresSaved++;else console.warn('Square not saved to Drive ('+squareName+'):',await ur.text().catch(()=>''));}catch(ue){console.warn('Square upload failed ('+squareName+'):',ue.message);}}images.push({data:b64,filename:squareName});delete lpPhotoItems[i].dataUrl;}catch(imgErr){console.warn('Skipping photo '+i+':',imgErr.message);photoFails.push('Photo '+(i+1)+': '+imgErr.message);}}
   // A photo that couldn't be prepared used to be skipped silently, so a listing could go out
   // short of photos (or with none). Now it says so and lets you stop.
   if(photoFails.length&&(!images.length||!confirm(photoFails.length+' of '+lpPhotoItems.length+' photos couldn\'t be prepared:\n\n'+photoFails.join('\n')+'\n\nPublish with the other '+images.length+'?'))){
@@ -5698,7 +5716,11 @@ function costStep(n){const _cback={1:null,receipt:1,mileage:1,manual:1,review:nu
 
 function costChoosePath(path){costPath=path;costSelectedCat='';costSelectedSubcat='';if(path==='receipt'){costStep('receipt');document.getElementById('receipt-preview').style.display='none';}else if(path==='mileage'){document.getElementById('mile-date').value=localISODate();costStep('mileage');}else if(path==='manual'){document.getElementById('man-date').value=localISODate();renderCatGrid('man-cat-grid','man-subcat-wrap','man-subcat-grid');costStep('manual');}wipSaveCost();}
 
-function receiptOnFile(file){if(!file)return;const reader=new FileReader();reader.onload=e=>{const dataUrl=e.target.result;costReceiptBase64=dataUrl.split(',')[1];costReceiptMime=file.type;const preview=document.getElementById('receipt-preview');preview.style.display='block';if(file.type.startsWith('image/')){document.getElementById('receipt-preview-img').src=dataUrl;document.getElementById('receipt-preview-img').style.display='block';document.getElementById('receipt-preview-pdf').style.display='none';}else{document.getElementById('receipt-preview-img').style.display='none';document.getElementById('receipt-preview-pdf').style.display='block';document.getElementById('receipt-preview-pdf').textContent='\uD83D\uDCC4 '+file.name+' ready to parse';}};reader.readAsDataURL(file);}
+// Receipt photos are shrunk to 1600 px before they go to Claude: an iPhone camera photo is 4-10 MB
+// as text, slow on cellular and can be over Claude's per-image limit. PDFs go as they are.
+function receiptShrink(file){return new Promise(resolve=>{if(!file.type.startsWith('image/'))return resolve(null);const url=URL.createObjectURL(file),img=new Image();img.onerror=()=>{URL.revokeObjectURL(url);resolve(null);};img.onload=()=>{URL.revokeObjectURL(url);const k=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight)),c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);const out=c.toDataURL('image/jpeg',0.85);c.width=c.height=0;resolve(out.length>100?out:null);};img.src=url;});}
+async function receiptOnFile(file){if(!file)return;const shrunk=await receiptShrink(file);if(shrunk)return receiptShow(shrunk,'image/jpeg',file);const reader=new FileReader();reader.onload=e=>receiptShow(e.target.result,file.type,file);reader.readAsDataURL(file);}
+function receiptShow(dataUrl,mime,file){costReceiptBase64=dataUrl.split(',')[1];costReceiptMime=mime;const preview=document.getElementById('receipt-preview');preview.style.display='block';if(file.type.startsWith('image/')){document.getElementById('receipt-preview-img').src=dataUrl;document.getElementById('receipt-preview-img').style.display='block';document.getElementById('receipt-preview-pdf').style.display='none';}else{document.getElementById('receipt-preview-img').style.display='none';document.getElementById('receipt-preview-pdf').style.display='block';document.getElementById('receipt-preview-pdf').textContent='\uD83D\uDCC4 '+file.name+' ready to parse';}}
 function receiptOnDrop(e){e.preventDefault();document.getElementById('receipt-drop-zone').classList.remove('dragover');const f=e.dataTransfer.files[0];if(f)receiptOnFile(f);}
 
 async function parseReceipt(){if(!costReceiptBase64){alert('Please upload a receipt first.');return;}const btn=document.getElementById('parse-btn');btn.disabled=true;btn.textContent='\u23F3 Claude is reading your receipt...';setStatus('cost','Sending to Claude AI...','loading');try{const res=await fetch(SERVER_URL+'/parse-receipt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image_base64:costReceiptBase64,mime_type:costReceiptMime})});if(!res.ok)throw new Error('Server error '+res.status);const data=await res.json();document.getElementById('pr-vendor').value=data.vendor||'';document.getElementById('pr-amount').value=data.total!=null?data.total:'';document.getElementById('pr-date').value=data.date||localISODate();document.getElementById('pr-description').value=data.description||'';if(data.payment_method)document.getElementById('pr-payment').value=data.payment_method;costSelectedCat=data.suggested_category||'';costSelectedSubcat=data.suggested_subcategory||'';renderCatGrid('pr-cat-grid','pr-subcat-wrap','pr-subcat-grid');hideStatus('cost');costStep('review');}catch(e){setStatus('cost','Parse failed: '+e.message+'. Enter manually instead.','error');btn.disabled=false;btn.textContent='\u2728 Parse with Claude AI \u2192';}}
@@ -5733,7 +5755,6 @@ function printQRTag(ebNumber, price) {
   var isWreath = rec && (rec.fields['Type'] || '').toLowerCase().trim() === 'wreath';
   var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(SHOPIFY_BASE + cleanEB.toLowerCase());
   var priceDisplay = price && parseFloat(price) > 0 ? '$' + parseFloat(price).toFixed(2) : '';
-  var win = window.open('', '_blank');
   var refName = rec ? (rec.fields['Reference name'] || '').trim() : '';
   var inner = '<div class="top"><div class="left"><div class="brand">Eternal Blooms</div><div class="eb">' + cleanEB + '</div>' + (priceDisplay ? '<div class="price">' + priceDisplay + '</div>' : '') + '</div><img src="' + qrUrl + '" alt="QR"></div>' + (refName ? '<div class="sub">' + escHtml(refName) + '</div>' : '');
   var css = ['<style>','@page { size: 3in 2in; margin: 0mm; }','@media print { @page { margin: 0mm !important; } html, body { margin: 0 !important; padding: 0 !important; } }','html, body { margin: 0 !important; padding: 0 !important; }','body { width: 3in; overflow: hidden; }','* { box-sizing: border-box; }','.tag { width: 3in; height: 2in; display: flex; flex-direction: column; justify-content: space-between; font-family: Arial, sans-serif; background: #fff; padding: 0.09in 0.11in; overflow: hidden; }','.top { display: flex; flex-direction: row; align-items: center; justify-content: space-between; flex: 1; }','.left { display: flex; flex-direction: column; justify-content: center; flex: 1; padding-right: 0.08in; overflow: hidden; min-width: 0; }','.brand { font-size: 10pt; font-weight: 400; letter-spacing: .1em; text-transform: uppercase; color: #bb8588; margin-bottom: 4px; white-space: nowrap; }','.eb { font-size: 10pt; font-weight: 800; letter-spacing: .03em; color: #2b2622; line-height: 1.15; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }','.price { font-size: 14pt; font-weight: 800; color: #bb8588; }','.sub { font-size: 14pt; color: #bb8588; text-align: center; width: 100%; letter-spacing: .02em; padding-top: 0.02in; }','img { width: 1in; height: 1in; flex-shrink: 0; display: block; }','</style>'].join('\n');
@@ -5741,7 +5762,8 @@ function printQRTag(ebNumber, price) {
     ? '<div class="tag" style="break-after:page;page-break-after:always;">' + inner + '</div><div class="tag">' + inner + '</div>'
     : '<div class="tag">' + inner + '</div>';
   var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>' + css + '</head><body>' + body + '<script>window.onload=function(){setTimeout(function(){window.print();},800);};<\/script></body></html>';
-  win.document.write(html); win.document.close();
+  // Through bmPrintHTML: when Safari blocks the pop-up it prints from the page instead (before, nothing happened).
+  bmPrintHTML(function(autoPrint){ return autoPrint ? html : html.replace(/<script>[^]*?<\/script>/, ''); });
 }
 
 // ── CRAFT SHOW TAG SCREEN ──
@@ -5843,7 +5865,7 @@ function ptRender(filter) {
     const dateMade=f['Date made']?new Date(f['Date made']+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
     const color=statusColor[status]||'var(--text-muted)';
     const photoUrl=f['Photo URL']||'';
-    const thumb=photoUrl?'<img src="'+photoUrl+'" style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--border);cursor:pointer" onclick="ptPromptPhoto(\''+r.id+'\',\''+escHtml(eb)+'\')" title="Tap to update photo">':'<div onclick="ptPromptPhoto(\''+r.id+'\',\''+escHtml(eb)+'\')" title="Tap to add photo" style="width:48px;height:48px;border-radius:6px;background:var(--ivory-dark);flex-shrink:0;border:1.5px dashed var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px">📷</div>';
+    const thumb=photoUrl?'<img src="'+escHtml(mkThumb(photoUrl,120))+'" loading="lazy" decoding="async" style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--border);cursor:pointer" onclick="ptPromptPhoto(\''+r.id+'\',\''+escHtml(eb)+'\')" title="Tap to update photo">':'<div onclick="ptPromptPhoto(\''+r.id+'\',\''+escHtml(eb)+'\')" title="Tap to add photo" style="width:48px;height:48px;border-radius:6px;background:var(--ivory-dark);flex-shrink:0;border:1.5px dashed var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px">📷</div>';
     return'<div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow-sm)">'+thumb+'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800;color:var(--text)">'+escHtml(eb)+'</div>'+(refName?'<div style="font-size:12px;color:var(--text);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(refName)+'</div>':'')+'<div style="font-size:11px;color:var(--text-muted);margin-top:1px">'+escHtml(detail)+'</div><div style="font-size:10px;margin-top:3px;display:flex;gap:8px;align-items:center"><span style="color:'+color+';font-weight:700">'+escHtml(status)+'</span>'+(dateMade?'<span style="color:var(--text-muted)">'+escHtml(dateMade)+'</span>':'')+'</div><div style="margin-top:6px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="pt-tp-'+r.id+'" '+(f['Tag printed']?'checked':'')+' onchange="ptToggleTagPrinted(\''+r.id+'\',this.checked)" style="width:14px;height:14px;accent-color:var(--sage)"> Tag printed</label></div></div><button onclick="printQRTag(\''+escHtml(eb)+'\',\''+(f['Price ($)']!=null?String(f['Price ($)']):'')+'\')" style="flex-shrink:0;background:var(--sage);color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer">🏷 Print</button></div>';
   }).join('');
 }
@@ -6830,11 +6852,11 @@ function blRenderGrid() {
   blFiles.forEach(file => {
     const isVideo    = file.mimeType && file.mimeType.startsWith('video/');
     const isSelected = blSelected.has(file.id);
-    const thumb      = file.thumbnailLink ? file.thumbnailLink.replace('=s220', '=s400') : '';
+    const thumb      = file.thumbnailLink ? file.thumbnailLink.replace('=s220', '=s300') : ''; // 130 px tiles; s400 decoded hundreds at once
     const card = document.createElement('div');
     card.id = 'blcard-' + file.id;
     card.style.cssText = ['background:var(--card)','border:2.5px solid ' + (isSelected ? 'var(--sage)' : 'var(--border)'),'border-radius:var(--radius-sm)','overflow:hidden','cursor:pointer','position:relative','transition:border-color .15s,box-shadow .15s','box-shadow:' + (isSelected ? '0 0 0 3px rgba(92,122,92,0.2)' : 'var(--shadow-sm)')].join(';');
-    card.innerHTML = ['<div style="position:absolute;top:6px;left:6px;z-index:2;width:22px;height:22px;border-radius:50%;background:' + (isSelected ? 'var(--sage)' : 'rgba(255,255,255,0.85)') + ';border:2px solid ' + (isSelected ? 'var(--sage)' : 'rgba(0,0,0,0.2)') + ';display:flex;align-items:center;justify-content:center;font-size:12px">' + (isSelected ? '✓' : '') + '</div>',isVideo ? '<div style="position:absolute;top:6px;right:6px;z-index:2;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:99px">VIDEO</div>' : '',thumb ? '<img src="' + thumb + '" style="width:100%;aspect-ratio:1;object-fit:cover;display:block"' + driveThumbOri(file) + '>' : '<div style="width:100%;aspect-ratio:1;background:var(--ivory-dark);display:flex;align-items:center;justify-content:center;font-size:28px">' + (isVideo ? '🎬' : '🖼') + '</div>','<div style="padding:5px 7px;font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + blEsc(file.name) + '</div>','<a href="' + blEsc(file.webViewLink || '#') + '" target="_blank" onclick="event.stopPropagation()" style="display:block;text-align:center;padding:5px;font-size:10px;font-weight:700;color:var(--teal);border-top:1px solid var(--border);text-decoration:none">Open ↗</a>'].join('');
+    card.innerHTML = ['<div style="position:absolute;top:6px;left:6px;z-index:2;width:22px;height:22px;border-radius:50%;background:' + (isSelected ? 'var(--sage)' : 'rgba(255,255,255,0.85)') + ';border:2px solid ' + (isSelected ? 'var(--sage)' : 'rgba(0,0,0,0.2)') + ';display:flex;align-items:center;justify-content:center;font-size:12px">' + (isSelected ? '✓' : '') + '</div>',isVideo ? '<div style="position:absolute;top:6px;right:6px;z-index:2;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:99px">VIDEO</div>' : '',thumb ? '<img src="' + thumb + '" loading="lazy" decoding="async" style="width:100%;aspect-ratio:1;object-fit:cover;display:block"' + driveThumbOri(file) + '>' : '<div style="width:100%;aspect-ratio:1;background:var(--ivory-dark);display:flex;align-items:center;justify-content:center;font-size:28px">' + (isVideo ? '🎬' : '🖼') + '</div>','<div style="padding:5px 7px;font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + blEsc(file.name) + '</div>','<a href="' + blEsc(file.webViewLink || '#') + '" target="_blank" onclick="event.stopPropagation()" style="display:block;text-align:center;padding:5px;font-size:10px;font-weight:700;color:var(--teal);border-top:1px solid var(--border);text-decoration:none">Open ↗</a>'].join('');
     card.addEventListener('click', (e) => blToggleSelect(file.id, e));
     grid.appendChild(card);
   });
