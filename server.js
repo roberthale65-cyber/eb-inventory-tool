@@ -4774,7 +4774,17 @@ const OUTREACH_FROM_NAME = process.env.OUTREACH_FROM_NAME || 'Patti, Eternal Blo
 const OR_STATUSES = ['To research', 'Ready for review', 'Approved', 'Sent', 'Followed up', 'Replied', 'In conversation', 'Customer', 'Not interested', 'Do not contact', 'Skipped', 'Bounced'];
 const OR_EDITABLE_FIELDS = ['Draft subject', 'Draft email', 'Status', 'Notes', 'Relationship', 'Interest'];
 const OR_FOLLOWUP_DAYS = 10;
-const OR_DAILY_CAP = 25;          // first emails + follow-ups per day, to keep Gmail happy
+// Emails per day (first emails + follow-ups), ramped so a personal Gmail account that's new to
+// outreach builds up slowly (2026-11-03): OR_RAMP_CAP a day for the first OR_RAMP_DAYS days after the
+// first real send, then OR_DAILY_CAP. Test contacts (name contains "TEST") don't start the clock.
+const OR_RAMP_DAYS = 14;
+const OR_RAMP_CAP = 10;
+const OR_DAILY_CAP = 20;
+// Follow-ups go out one at a time, OR_FOLLOWUP_GAP_MS apart, during the day in Central time, and only
+// within OR_FOLLOWUP_FRESH_MS of an inbox check, so nobody who just replied gets one.
+const OR_FOLLOWUP_GAP_MS = 5 * 60 * 1000;
+const OR_FOLLOWUP_FRESH_MS = 60 * 60 * 1000;
+const OR_FOLLOWUP_HOURS = (process.env.OUTREACH_FOLLOWUP_HOURS || '8-18').split('-').map(Number); // [from, to) in Central time
 const OR_DRAFT_BATCH = 10;        // contacts drafted per run
 const OR_SWEEP_EVERY_MS = 3 * 60 * 60 * 1000;
 const OR_TZ = 'America/Chicago';
@@ -5011,10 +5021,21 @@ function orSentToday(day) {
   const re = new RegExp(`^${day} (first email sent|follow-up sent)$`, 'gm');
   return (orCache.records || []).reduce((n, r) => n + (String(r.fields['Contact log'] || '').match(re) || []).length, 0) + orUnsaved.size;
 }
-function orCountSend() {
+function orDailyCap() {
+  const first = (orCache.records || []).filter(r => r.fields['Sent date'] && !/TEST/.test(r.fields['Name'] || ''))
+    .map(r => r.fields['Sent date']).sort()[0];
+  if (!first) return OR_RAMP_CAP;
+  const days = Math.round((Date.parse(orToday() + 'T12:00:00Z') - Date.parse(first + 'T12:00:00Z')) / MKT_DAY_MS);
+  return days < OR_RAMP_DAYS ? OR_RAMP_CAP : OR_DAILY_CAP;
+}
+function orSentCount() {
   const day = orToday();
   if (orSent.day !== day) { orSent.day = day; orSent.n = orSentToday(day); }
-  if (orSent.n >= OR_DAILY_CAP) throw new Error(`Already sent ${OR_DAILY_CAP} emails today. The rest can go tomorrow.`);
+  return orSent.n;
+}
+function orCountSend() {
+  const cap = orDailyCap();
+  if (orSentCount() >= cap) throw new Error(`Already sent ${cap} emails today. The rest can go tomorrow.`);
   orSent.n++;
 }
 // The same email as a simple HTML page, so a piece's line ("Title: link") shows as its photo,
@@ -5142,31 +5163,46 @@ function orSweep() {
         }
       } finally { if (lock) lock.release(); await client.logout().catch(() => client.close()); }
     }
-    // One follow-up, in the same thread, for first emails nobody answered.
-    const today = orToday();
-    const due = (orCache.records || []).filter(r => r.fields['Status'] === 'Sent' && r.fields['Follow-up due'] && r.fields['Follow-up due'] <= today && r.fields['Message ID'] && !unchecked.has(r.id));
-    if (due.length && orSendReady()) {
-      await invEnsure().catch(() => {}); // to tell which pieces the first email showed (empty just after a restart)
-      const pool = shopifyAccessToken ? await orPiecePool().catch(() => []) : [];
-      for (const r of due) {
-        try {
-          const f = r.fields;
-          const featured = new Set((f['Featured pieces'] || []).map(id => ((invCache.byId.get(id) || {}).fields || {})['EB Number']));
-          const fresh = orShortlist(pool.filter(x => !featured.has(x.sku)), f['Segment'])[0];
-          const text = orFollowUpText(f, fresh);
-          const subject = /^re:/i.test(f['Draft subject'] || '') ? f['Draft subject'] : 'Re: ' + (f['Draft subject'] || 'my note');
-          await orSendMail({ id: r.id, to: f['Email'], subject, text, inReplyTo: f['Message ID'] });
-          await orSaveAfterSend(r.id, { 'Status': 'Followed up', 'Follow-up due': null }, 'follow-up sent');
-          out.followUps++;
-        } catch (e) { out.errors.push(`${r.fields['Name']}: ${e.message}`); if (/Already sent/.test(e.message)) break; }
-      }
-    }
+    // The inbox is read: follow-ups may go out for the next hour, one at a time.
+    orFollowCtx = { at: Date.now(), unchecked };
+    const fu = await orFollowUpNext();
+    if (fu && fu.sent) out.followUps++;
+    if (fu && fu.error) out.errors.push(fu.error);
     orLastSweep = { at: new Date().toISOString(), ...out };
     return orLastSweep;
   })().catch(e => { orLastSweep = { at: new Date().toISOString(), error: e.message }; console.warn('outreach: inbox check failed —', e.message); return orLastSweep; })
     .finally(() => { orSweeping = null; });
   return orSweeping;
 }
+// One follow-up, in the same thread, for a first email nobody answered: the next one due.
+let orFollowCtx = { at: 0, unchecked: new Set() }, orFollowing = false;
+function orFollowUpHour() {
+  const h = Number(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: OR_TZ })) % 24;
+  return h >= OR_FOLLOWUP_HOURS[0] && h < OR_FOLLOWUP_HOURS[1];
+}
+async function orFollowUpNext() {
+  if (orFollowing || !orSendReady() || Date.now() - orFollowCtx.at > OR_FOLLOWUP_FRESH_MS || !orFollowUpHour()) return null;
+  const today = orToday();
+  const r = (orCache.records || []).map(orWithUnsaved).find(r => r.fields['Status'] === 'Sent' && r.fields['Follow-up due'] && r.fields['Follow-up due'] <= today && r.fields['Message ID'] && !orFollowCtx.unchecked.has(r.id));
+  if (!r) return null;
+  orFollowing = true;
+  try {
+    await invEnsure().catch(() => {}); // to tell which pieces the first email showed (empty just after a restart)
+    const pool = shopifyAccessToken ? await orPiecePool().catch(() => []) : [];
+    const f = r.fields;
+    const featured = new Set((f['Featured pieces'] || []).map(id => ((invCache.byId.get(id) || {}).fields || {})['EB Number']));
+    const fresh = orShortlist(pool.filter(x => !featured.has(x.sku)), f['Segment'])[0];
+    const text = orFollowUpText(f, fresh);
+    const subject = /^re:/i.test(f['Draft subject'] || '') ? f['Draft subject'] : 'Re: ' + (f['Draft subject'] || 'my note');
+    await orSendMail({ id: r.id, to: f['Email'], subject, text, inReplyTo: f['Message ID'] });
+    await orSaveAfterSend(r.id, { 'Status': 'Followed up', 'Follow-up due': null }, 'follow-up sent');
+    return { sent: true };
+  } catch (e) {
+    if (/Already sent/.test(e.message)) orFollowCtx.at = 0; // today's limit is reached: wait for tomorrow's inbox check
+    return { error: `${r.fields['Name']}: ${e.message}` };
+  } finally { orFollowing = false; }
+}
+setInterval(() => { orFollowUpNext().catch(e => console.warn('outreach: follow-up failed —', e.message)); }, OR_FOLLOWUP_GAP_MS);
 function orFollowUpText(f, piece) {
   const hi = `Hi ${orFirstName(f['Name']) || 'there'},`;
   const link = piece ? `\n${piece.title}: ${orPieceUrl(piece.p, piece.sku)}\n` : '';
@@ -5191,6 +5227,7 @@ async function orView() {
     records, pieces,
     gmail: { connected: orGmailReady(), address: GMAIL_USER, footerAddress: !!OUTREACH_ADDRESS, ready: orSendReady() },
     drafting: !!orDrafting, draftError: orDraftError, lastCheck: orLastSweep,
+    sendLimit: { cap: orDailyCap(), sentToday: orSentCount() },
     footer: orFooter(), followUpDays: OR_FOLLOWUP_DAYS
   };
 }
