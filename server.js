@@ -2851,8 +2851,13 @@ const MKT_THEMES = [
   { name: 'Fall', start: [8, 1], end: [10, 31], tags: /season_fall/ },
   { name: 'Halloween', start: [8, 15], end: [10, 25], tags: /halloween/ },
   { name: 'Thanksgiving', start: [9, 15], end: [11, 20], tags: /thanksgiving/ },
-  { name: 'Christmas', start: [9, 15], end: [12, 18], tags: /christmas/ }
+  { name: 'Christmas', start: [9, 15], end: [12, 18], tags: /christmas|xmas|poinsettia|santa|snowman|sleigh|ornament/ }
 ];
+// Holiday focus: through the end of `until` (Omaha time), pieces that fit `theme` go ahead of
+// everything else in marketing drafts, the weekly group post and outreach emails, and the theme
+// stays in season through `until` even past its calendar end. Asked for 2026-11-05: Christmas
+// pieces over all other listings until the end of December. Set to null to turn it off.
+const MKT_FOCUS = { theme: 'Christmas', until: '2026-12-31' };
 // Year-round angles Patti can pick by hand; not on the calendar.
 const MKT_EXTRA_THEMES = [
   { name: 'Everyday', tags: /all[_ ]?season|everyday/ },
@@ -2862,6 +2867,9 @@ const MKT_EXTRA_THEMES = [
 const MKT_ALL_THEMES = [...MKT_THEMES, ...MKT_EXTRA_THEMES];
 const MKT_DAY_MS = 24 * 60 * 60 * 1000;
 const mktTagText = p => (p.tags || []).join(' ').toLowerCase();
+// What themes match against: tags plus title, so a "Snowy Poinsettias" piece tagged only
+// Season_Winter still counts as Christmas.
+const mktThemeText = p => (mktTagText(p) + ' ' + String(p.title || '')).toLowerCase();
 const mktTheme = name => MKT_ALL_THEMES.find(t => t.name === name) || null;
 function mktEaster(y) { // Gregorian computus
   const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
@@ -2875,19 +2883,32 @@ function mktThemeWindows(t, y) {
     ? [{ start: at(y - 1, t.start), end: at(y, t.end, true) }, { start: at(y, t.start), end: at(y + 1, t.end, true) }]
     : [{ start: at(y, t.start), end: at(y, t.end, true) }];
 }
+// The holiday focus in force at `now`, or null. It ends at the close of `until` in Omaha (UTC−6).
+function mktFocus(now = new Date()) {
+  if (!MKT_FOCUS || !mktTheme(MKT_FOCUS.theme)) return null;
+  const end = new Date(Date.parse(MKT_FOCUS.until + 'T00:00:00Z') + MKT_DAY_MS + 6 * 60 * 60 * 1000 - 1);
+  return now <= end ? { theme: MKT_FOCUS.theme, until: MKT_FOCUS.until, end } : null;
+}
+function mktFocusFit(p, now = new Date()) {
+  const f = mktFocus(now);
+  return !!f && mktTheme(f.theme).tags.test(mktThemeText(p));
+}
 // Themes in season now (soonest-ending first), then those starting within the next 3 weeks.
+// While a holiday focus lasts, its theme is in season through the focus end and listed first.
 function mktCalendar(now = new Date()) {
-  const out = [];
+  const out = [], focus = mktFocus(now);
   for (const t of MKT_THEMES) {
     const wins = [...mktThemeWindows(t, now.getUTCFullYear()), ...mktThemeWindows(t, now.getUTCFullYear() + 1)];
-    const w = wins.find(w => w.end >= now && w.start - now <= 21 * MKT_DAY_MS);
-    if (w) out.push({ name: t.name, start: w.start.toISOString().slice(0, 10), end: w.end.toISOString().slice(0, 10), active: w.start <= now });
+    let w = wins.find(w => w.end >= now && w.start - now <= 21 * MKT_DAY_MS);
+    const isFocus = !!focus && t.name === focus.theme;
+    if (isFocus) w = { start: w && w.start <= now ? w.start : now, end: w && w.end > focus.end ? w.end : focus.end };
+    if (w) out.push({ name: t.name, start: w.start.toISOString().slice(0, 10), end: isFocus && w.end === focus.end ? focus.until : w.end.toISOString().slice(0, 10), active: w.start <= now, focus: isFocus });
   }
-  return out.sort((a, b) => (b.active - a.active) || a.end.localeCompare(b.end) || a.start.localeCompare(b.start));
+  return out.sort((a, b) => (b.focus - a.focus) || (b.active - a.active) || a.end.localeCompare(b.end) || a.start.localeCompare(b.start));
 }
-// The angle a piece gets by default: the first in-season theme its tags match.
+// The angle a piece gets by default: the first in-season theme it matches (the focus theme first).
 function mktAutoTheme(p, now = new Date()) {
-  const t = mktTagText(p);
+  const t = mktThemeText(p);
   const hit = mktCalendar(now).find(c => c.active && mktTheme(c.name).tags.test(t));
   return hit ? hit.name : '';
 }
@@ -3059,6 +3080,11 @@ function mktTrackedUrl(url, f, { sold = false } = {}) {
 // The post text with every plain copy of the product link swapped for the tagged one.
 const mktTrackText = (text, f) => f['Product URL'] ? String(text || '').split(f['Product URL']).join(mktTrackedUrl(f['Product URL'], f)) : text;
 
+// Dec 26 onward (Omaha time), when "in time for Christmas" no longer applies.
+function mktAfterChristmas(now = new Date()) {
+  const d = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+  return d.getUTCMonth() === 11 && d.getUTCDate() >= 26;
+}
 function mktSeasonScore(p, now) {
   const t = mktTagText(p);
   if (mktAutoTheme(p, now)) return 2;
@@ -3070,6 +3096,7 @@ function mktSeasonScore(p, now) {
 function mktAngleLines(theme, previous, what) {
   const lines = [];
   if (theme) lines.push(`Seasonal angle: present this piece for ${theme} — how and where it fits that season or occasion. Stay truthful to what the piece is; if it only loosely fits, keep the angle light.`);
+  if (theme === 'Christmas' && mktAfterChristmas()) lines.push('Christmas Day has passed: present it as winter decor that can stay out through January and February, or as a piece to keep for next Christmas. Never imply it will arrive before Christmas.');
   if (previous && previous.length) lines.push(`This piece has been posted before. Write a FRESH ${what}: a different opening, different details emphasized, and no sentence reused from these earlier versions:\n${previous.map(t => '- ' + String(t).replace(/\s+/g, ' ').slice(0, 400)).join('\n')}`);
   return lines.join('\n');
 }
@@ -3242,15 +3269,21 @@ async function mktDraftBatch(count, opts = {}) {
   } else {
     let list = cands.map(c => ({ ...c, channels: chans.filter(ch => due(c.sku, ch)) })).filter(c => c.channels.length);
     const theme = opts.theme ? mktTheme(opts.theme) : null;
-    if (theme) list = list.filter(c => theme.tags.test(mktTagText(c.p)));
+    if (theme) list = list.filter(c => theme.tags.test(mktThemeText(c.p)));
     const fresh = list.filter(c => !mktEverPosted(hist, c.sku)), seen = list.filter(c => mktEverPosted(hist, c.sku));
     const byOldest = (a, b) => mktLastPosted(hist, a.sku) - mktLastPosted(hist, b.sku);
     if (opts.mode === 'surprise') list = list.map(c => ({ c, k: Math.random() })).sort((a, b) => a.k - b.k).map(x => x.c);
     else if (theme) list = [...fresh.sort(() => Math.random() - 0.5), ...seen.sort(byOldest)];
-    else list = [
-      ...fresh.map(c => ({ ...c, score: mktSeasonScore(c.p, nowD) + Math.random() })).sort((a, b) => b.score - a.score),
-      ...seen.filter(c => mktAutoTheme(c.p, nowD)).sort(byOldest)
-    ];
+    else {
+      // During a holiday focus its pieces lead: never-posted first, then reposts oldest first.
+      const fit = c => mktFocusFit(c.p, nowD);
+      list = [
+        ...fresh.filter(fit).sort(() => Math.random() - 0.5),
+        ...seen.filter(fit).sort(byOldest),
+        ...fresh.filter(c => !fit(c)).map(c => ({ ...c, score: mktSeasonScore(c.p, nowD) + Math.random() })).sort((a, b) => b.score - a.score),
+        ...seen.filter(c => !fit(c) && mktAutoTheme(c.p, nowD)).sort(byOldest)
+      ];
+    }
     eligible = list;
   }
   eligible = eligible.filter(c => c.channels.length);
@@ -3361,7 +3394,7 @@ app.get('/marketing/plan', async (req, res) => {
     const [queue, products] = await Promise.all([mktRecords(), mktShopifyCandidates()]);
     const hist = mktHistory(queue), now = Date.now();
     const pieces = products.map(p => {
-      const sku = String((p.variants.nodes[0] || {}).sku || '').trim(), img = mktPickImage(p), tags = mktTagText(p);
+      const sku = String((p.variants.nodes[0] || {}).sku || '').trim(), img = mktPickImage(p), tags = mktThemeText(p);
       if (!sku || !img || !p.onlineStoreUrl) return null;
       const channels = {};
       for (const ch of MKT_CHANNELS) {
@@ -3374,7 +3407,8 @@ app.get('/marketing/plan', async (req, res) => {
       const mine = pieces.filter(x => x.themes.includes(c.name));
       return { ...c, pieces: mine.length, neverPosted: mine.filter(x => !x.everPosted).length, due: mine.filter(x => x.everPosted && Object.values(x.channels).some(ch => ch.due)).length };
     });
-    res.json({ calendar, themes: MKT_ALL_THEMES.map(t => t.name), cooldownDays: MKT_COOLDOWN_MS / MKT_DAY_MS, pieces });
+    const focus = mktFocus();
+    res.json({ calendar, focus: focus ? { theme: focus.theme, until: focus.until } : null, themes: MKT_ALL_THEMES.map(t => t.name), cooldownDays: MKT_COOLDOWN_MS / MKT_DAY_MS, pieces });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -4619,8 +4653,8 @@ function mktReviewMessage(c) {
 // The piece the group post features: in season if possible, otherwise any piece with a photo.
 async function mktCheckPiece() {
   const list = (await mktShopifyCandidates()).filter(p => p.onlineStoreUrl && p.variants.nodes[0] && p.variants.nodes[0].sku && p.media.nodes.some(m => m.image));
-  const inSeason = list.filter(p => mktAutoTheme(p));
-  const pool = inSeason.length ? inSeason : list;
+  const focused = list.filter(p => mktFocusFit(p)), inSeason = list.filter(p => mktAutoTheme(p));
+  const pool = focused.length ? focused : inSeason.length ? inSeason : list;
   if (!pool.length) return null;
   const p = pool[Math.floor(Math.random() * pool.length)], sku = p.variants.nodes[0].sku;
   const u = new URL(p.onlineStoreUrl);
@@ -4884,7 +4918,9 @@ function orShortlist(pool, segment) {
   else if (segment === 'Realtor' || segment === 'Home stager') fit = pool.filter(x => !/wreath/.test(text(x)) || /door|porch/.test(text(x)));
   if (fit.length < 4) fit = pool;
   const shuffled = fit.slice().sort(() => Math.random() - 0.5);
-  return [...shuffled.filter(x => mktAutoTheme(x.p)), ...shuffled.filter(x => !mktAutoTheme(x.p))].slice(0, 12);
+  // Holiday focus pieces first, then other in-season pieces, then the rest.
+  const rank = x => mktFocusFit(x.p) ? 0 : mktAutoTheme(x.p) ? 1 : 2;
+  return shuffled.sort((a, b) => rank(a) - rank(b)).slice(0, 12);
 }
 
 const OR_SEGMENT_BRIEF = {
@@ -4920,7 +4956,7 @@ Business: ${f['Business'] || ''}
 Area: ${f['Area'] || ''}
 Personal detail: ${f['Personal hook'] || '(none)'}
 
-Pieces in stock (choose by number):
+${mktFocus() && segment !== 'Sympathy' ? `It's the ${mktFocus().theme} season: when one of the ${mktFocus().theme} pieces below suits them, choose it first (and mention it as ${mktAfterChristmas() ? 'winter decor that can stay out after the holidays' : 'ready for the holidays'}).\n\n` : ''}Pieces in stock (choose by number):
 ${list.map((x, i) => `${i + 1}. ${x.title} (${x.p.productType || 'arrangement'}): ${String(x.p.description || '').replace(/\s+/g, ' ').slice(0, 160)}`).join('\n')}
 
 Return ONLY valid JSON, no code fences: {"subject": "...", "body": "...", "pieces": [numbers]}`;
