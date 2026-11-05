@@ -2428,6 +2428,7 @@ function mkRenderPlan(){
       '<button class="btn" ' + (n ? '' : 'disabled ') + 'onclick="mkDraft({ theme:\'' + escHtml(c.name).replace(/'/g, '\\\'') + '\', count:' + Math.min(5, n || 1) + ' })">Draft ' + Math.min(5, n) + '</button></div>';
   }).join('') || '<div class="mk-muted">No seasonal themes in the next 3 weeks — everyday pieces fill the weekly batch.</div>';
   document.getElementById('mk-plan').innerHTML = '<div class="mk-plan-card"><div class="mk-plan-title">Plan posts</div>' +
+    (mkPlan.focus ? '<div class="mk-note" style="margin-top:0"><b>Holiday focus:</b> ' + escHtml(mkPlan.focus.theme) + ' pieces go first in the weekly drafts, the group post and outreach emails until ' + mkDate(mkPlan.focus.until + 'T12:00:00') + '.</div>' : '') +
     '<div class="mk-note" style="margin-top:0">Coming up, timed to when stores and Pinterest shoppers start on each season. Reposts are rewritten for the season, not repeated. A piece can repost on a channel ' + mkPlan.cooldownDays + ' days after its last post there.</div>' +
     cal + '<div class="mk-actions"><button class="btn" onclick="mkTogglePicker()">' + (mkPick.open ? 'Close picker' : '☑ Pick pieces…') + '</button><button class="btn" onclick="mkDraft({ mode:\'surprise\', count:5 })">🎲 Surprise me (5)</button></div></div>';
   mkRenderPicker();
