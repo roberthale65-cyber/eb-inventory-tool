@@ -4300,10 +4300,20 @@ async function mktSavePosted(id) {
 // Approving books the first free slot; if a slot earlier today was missed and nothing went
 // out on that channel in the last few hours, it goes out now.
 const MKT_SLOT_UTC_HOURS = { Pinterest: [1, 14, 19], Instagram: [17], Facebook: [19] };
+// Holiday push (asked for 2026-11-05): a second, evening post on Instagram (about 7 pm Central)
+// and Facebook (about 8 pm) on Central days up to and including `until`, so the Christmas queue
+// is out before Christmas. Set to null to go back to one a day.
+const MKT_EXTRA_SLOTS = { until: '2026-12-24', hours: { Instagram: [1], Facebook: [2] } };
 const MKT_SLOT_GAP_MS = 3 * 60 * 60 * 1000;
 const mktLocalDay = d => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(d);
+const mktExtraHours = channel => (MKT_EXTRA_SLOTS && MKT_EXTRA_SLOTS.hours[channel]) || [];
+// How many posts a channel gets on a Central day (YYYY-MM-DD).
+const mktSlotsPerDay = (channel, day) => (MKT_SLOT_UTC_HOURS[channel] || [18]).length + (MKT_EXTRA_SLOTS && day <= MKT_EXTRA_SLOTS.until ? mktExtraHours(channel).length : 0);
 function mktNextSlot(channel, records, now = new Date()) {
-  const hours = MKT_SLOT_UTC_HOURS[channel] || [18];
+  const extra = mktExtraHours(channel);
+  const hours = [...(MKT_SLOT_UTC_HOURS[channel] || [18]), ...extra];
+  // An extra (holiday) hour only counts on days inside the push.
+  const offered = slot => !extra.includes(slot.getUTCHours()) || (MKT_EXTRA_SLOTS && mktLocalDay(slot) <= MKT_EXTRA_SLOTS.until);
   const times = records.filter(r => mktChannel(r.fields) === channel).map(r => {
     const f = r.fields || {};
     if (f['Status'] === 'Posted') return Date.parse(f['Status changed'] || '');
@@ -4312,10 +4322,10 @@ function mktNextSlot(channel, records, now = new Date()) {
   }).filter(t => !isNaN(t));
   const perDay = {};
   for (const t of times) { const k = mktLocalDay(new Date(t)); perDay[k] = (perDay[k] || 0) + 1; }
-  const free = slot => (perDay[mktLocalDay(slot)] || 0) < hours.length && !times.some(t => Math.abs(t - slot) < MKT_SLOT_GAP_MS);
+  const free = slot => (perDay[mktLocalDay(slot)] || 0) < mktSlotsPerDay(channel, mktLocalDay(slot)) && !times.some(t => Math.abs(t - slot) < MKT_SLOT_GAP_MS);
   const today = mktLocalDay(now);
   for (let i = -1; i < 367; i++) {
-    const day = [...hours].sort((a, b) => a - b).map(h => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + i, h)));
+    const day = [...hours].sort((a, b) => a - b).map(h => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + i, h))).filter(offered);
     for (const slot of day) {
       if (slot > now) { if (free(slot)) return slot; }
       else if (mktLocalDay(slot) === today && free(now)) return now;
