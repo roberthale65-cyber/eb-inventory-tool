@@ -2484,7 +2484,7 @@ function mkRenderPicker(){
   const list = mkPlan.pieces.filter(x =>
     (!mkPick.theme || x.themes.includes(mkPick.theme)) && (!mkPick.type || x.type === mkPick.type) &&
     (mkPick.show === 'all' || (mkPick.show === 'never' ? !x.everPosted : x.everPosted && MK_CHANNELS.some(ch => x.channels[ch].due))) &&
-    (!q || (x.title + ' ' + x.sku).toLowerCase().includes(q)));
+    (!q || srchHit(x.title + ' ' + x.sku, q)));
   const types = [...new Set(mkPlan.pieces.map(x => x.type).filter(Boolean))].sort();
   const opt = (val, label, cur) => '<option value="' + escHtml(val) + '"' + (val === cur ? ' selected' : '') + '>' + escHtml(label) + '</option>';
   el.innerHTML = '<div class="mk-plan-card">' +
@@ -3060,7 +3060,7 @@ function readinessRender() {
 function rdFilterCards(q) {
   const lower = q.toLowerCase();
   const filtered = q.trim()
-    ? rdAllCards.filter(c => c.eb.toLowerCase().includes(lower) || c.name.toLowerCase().includes(lower))
+    ? rdAllCards.filter(c => srchHit(c.eb, lower) || srchHit(c.name, lower))
     : rdAllCards;
   rdRenderList(filtered);
 }
@@ -3208,7 +3208,7 @@ function _showEbResults(panelId, opts, onClickFn, emptyMsg) {
 function lpSearchInput(q) {
   const lower = q.trim().toLowerCase();
   const opts = lower
-    ? lpAllListableOpts.filter(o => o.label.toLowerCase().includes(lower))
+    ? lpAllListableOpts.filter(o => srchHit(o.label, lower))
     : lpAllListableOpts;
   const panel = document.getElementById('lp-eb-results');
   if (!panel) return;
@@ -3237,7 +3237,7 @@ function lpSearchInput(q) {
       if (!isListed) return false;
       const eb = (f['EB Number'] || '').toLowerCase();
       const name = (f['Reference name'] || '').toLowerCase();
-      return eb.includes(lower) || name.includes(lower);
+      return srchHit(eb, lower) || srchHit(name, lower);
     });
 
     if (listedMatches.length > 0) {
@@ -3269,7 +3269,7 @@ function lpSearchInput(q) {
 function msSearchInput(q) {
   const lower = q.trim().toLowerCase();
   const opts = lower
-    ? msAllOpts.filter(o => o.label.toLowerCase().includes(lower))
+    ? msAllOpts.filter(o => srchHit(o.label, lower))
     : msAllOpts;
   _showEbResults('ms-eb-results', opts,
     (recId, label) => {
@@ -3636,7 +3636,7 @@ function npFolderComboRender(query){
   const menu=document.getElementById('np-folder-menu'); if(!menu) return;
   const q=(query||'').trim().toLowerCase();
   if(!npFolderList.length){ menu.innerHTML='<div class="ms-opt" style="cursor:default;color:var(--text-muted)">No folders loaded — tap ↻ to refresh</div>'; return; }
-  const matches=q ? npFolderList.filter(f=>(f.name||'').toLowerCase().includes(q)) : npFolderList;
+  const matches=q ? npFolderList.filter(f=>srchHit(f.name, q)) : npFolderList;
   if(!matches.length){ menu.innerHTML='<div class="ms-opt" style="cursor:default;color:var(--text-muted)">No matching folders</div>'; return; }
   menu.innerHTML=matches.map(f=>'<div class="ms-opt" data-id="'+escHtml(f.id)+'">'+escHtml(f.name)+'</div>').join('');
   // mousedown (not click) + preventDefault so picking doesn't blur the search first.
@@ -3782,6 +3782,9 @@ function npUpdateSub5Hint(){
       : "You're in Edit mode, so this saves changes to an existing piece. Pick the piece at the top of Step 1 — or, for a new piece, tap ➕ Add new at the top of Step 1 (what you've entered is kept).";
 }
 // Shared label for all "pick a piece" dropdowns: EB number · Reference name.
+// Search match: ignores capitals, and also matches with dashes/spaces/punctuation removed
+// on both sides, so "26fawr013", "wr 013" and "WR-013" all find EB-26FA-WR-013.
+function srchHit(hay, q){hay=String(hay||'').toLowerCase();q=String(q||'').toLowerCase().trim();if(hay.includes(q))return true;const n=t=>t.replace(/[^a-z0-9]/g,'');const nq=n(q);return !!nq&&n(hay).includes(nq);}
 function pieceLabel(f){const eb=f['EB Number']||'';const ref=(f['Reference name']||'').trim();return eb+(ref?' · '+ref:'');}
 
 // ── Shared piece-dropdown ordering ──
@@ -3818,7 +3821,7 @@ function npPopulateEditSelect(){
 // Type-to-search for the edit picker — mirrors the List & Publish / Mark Sold typeahead.
 function npEditSearchInput(q){
   const lower=q.trim().toLowerCase();
-  const opts=lower?npAllEditOpts.filter(o=>o.label.toLowerCase().includes(lower)):npAllEditOpts;
+  const opts=lower?npAllEditOpts.filter(o=>srchHit(o.label, lower)):npAllEditOpts;
   _showEbResults('np-edit-results',opts,(recId,label)=>{
     document.getElementById('np-edit-search').value=label;
     document.getElementById('np-edit-results').style.display='none';
@@ -4831,7 +4834,7 @@ function rsScreenInit(){
 function rsSearchInput(val){
   const results=document.getElementById('rs-results');
   const q=val.trim().toLowerCase();
-  const matches=q?rsAllListedOpts.filter(o=>o.label.toLowerCase().includes(q)).slice(0,12):rsAllListedOpts.slice(0,12);
+  const matches=q?rsAllListedOpts.filter(o=>srchHit(o.label, q)).slice(0,12):rsAllListedOpts.slice(0,12);
   if(!matches.length){results.style.display='none';return;}
   results.style.display='block';
   results.innerHTML=matches.map(o=>`<div style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)" onmousedown="rsSelectRecord('${o.value}')" onmouseover="this.style.background='var(--ivory-dark)'" onmouseout="this.style.background=''">${escHtml(o.label)}</div>`).join('');
@@ -5051,7 +5054,7 @@ function lpFolderRankedOptions(query){
   let scored = lpAllFolders
     .filter(f => !claimedIds.has(f.id))
     .map(f => ({ ...f, ...lpScoreFolder(f.name, lpSelectedRecord) }));
-  if(q) scored = scored.filter(f => (f.name||'').toLowerCase().includes(q));
+  if(q) scored = scored.filter(f => srchHit(f.name, q));
   scored.sort((a,b) =>
     (a.isSold - b.isSold) ||
     (b.score - a.score) ||
@@ -5496,7 +5499,7 @@ let saAllOpts=[], saSelectedRecord=null, saType=null;
 const SA_BANDS={Sale:{lo:10,hi:30,def:20},Clearance:{lo:30,hi:70,def:40}};
 function saOpen(){saSelectedRecord=null;saType=null;const p=document.getElementById('sa-panel');if(p)p.style.display='none';const r=document.getElementById('sa-result');if(r)r.style.display='none';_clearEbSearch('sa-eb-search','sa-eb-results');hideStatus('sa');goTo('screen-sale');}
 function populateSASelect(){saAllOpts=sortPiecesByEB(allRecords.filter(r=>r.fields['Status']==='Listed')).map(r=>({value:r.id,label:pieceLabel(r.fields)||r.id}));}
-function saSearchInput(q){const lower=q.trim().toLowerCase();const opts=lower?saAllOpts.filter(o=>o.label.toLowerCase().includes(lower)):saAllOpts;_showEbResults('sa-eb-results',opts,(recId,label)=>{document.getElementById('sa-eb-search').value=label;document.getElementById('sa-eb-results').style.display='none';saSelectPiece(recId);},lower?'No pieces match "'+q+'"':'No listed pieces found');}
+function saSearchInput(q){const lower=q.trim().toLowerCase();const opts=lower?saAllOpts.filter(o=>srchHit(o.label, lower)):saAllOpts;_showEbResults('sa-eb-results',opts,(recId,label)=>{document.getElementById('sa-eb-search').value=label;document.getElementById('sa-eb-results').style.display='none';saSelectPiece(recId);},lower?'No pieces match "'+q+'"':'No listed pieces found');}
 function saOrigPrice(){const p=saSelectedRecord&&saSelectedRecord.fields['Price ($)'];return (p!=null&&Number(p)>0)?Number(p):null;}
 function saSelectPiece(recId){saSelectedRecord=allRecords.find(r=>r.id===recId);if(!saSelectedRecord){document.getElementById('sa-panel').style.display='none';return;}const f=saSelectedRecord.fields;document.getElementById('sa-panel').style.display='block';document.getElementById('sa-result').style.display='none';saType=null;document.getElementById('sa-type-sale').classList.remove('selected');document.getElementById('sa-type-clear').classList.remove('selected');document.getElementById('sa-pct').value='';document.getElementById('sa-price').value='';document.getElementById('sa-preview-line').style.display='none';document.getElementById('sa-warn').style.display='none';saRenderCard();const cur=f['Sale status'];const onSale=cur==='Sale'||cur==='Clearance';document.getElementById('sa-remove-row').style.display=onSale?'':'none';if(onSale){saType=cur;document.getElementById('sa-type-'+(cur==='Sale'?'sale':'clear')).classList.add('selected');const sp=f['Sale price ($)'];if(sp!=null){document.getElementById('sa-price').value=Number(sp).toFixed(2);saPriceInput();}else if(f['Markdown (%)']!=null){document.getElementById('sa-pct').value=Math.round(Number(f['Markdown (%)'])*100);saPctInput();}}saUpdateApplyState();}
 function saRenderCard(){const f=saSelectedRecord.fields;const price=f['Price ($)'];const cur=f['Sale status'];const stateLine=(cur==='Sale'||cur==='Clearance')?'<div class="at-field"><div class="at-label">Currently</div><div class="at-value">'+escHtml(cur)+(f['Sale price ($)']!=null?' · $'+Number(f['Sale price ($)']).toFixed(2):'')+'</div></div>':'';document.getElementById('sa-piece-card').innerHTML='<div class="at-preview"><div class="at-preview-title">Selected piece</div><div class="at-grid"><div class="at-field"><div class="at-label">EB Number</div><div class="at-value">'+escHtml(f['EB Number'])+'</div></div><div class="at-field"><div class="at-label">Original price</div><div class="at-value">'+(price!=null?'$'+Number(price).toFixed(2):'— set a Price first')+'</div></div>'+stateLine+'</div></div>';}
@@ -5514,7 +5517,7 @@ async function saRemove(){if(!saSelectedRecord)return;const f=saSelectedRecord.f
 // ── CRAFT FAIR ──
 // Selling price at a show: the Craft show price ($) on the piece's tag when one was set, else the listed Price ($).
 function cfShowPrice(f){const v=f['Craft show price ($)']!=null?f['Craft show price ($)']:f['Price ($)'];return v!=null?Number(v):null;}
-function populateCFInventory(filter=''){const container=document.getElementById('cf-inventory');const records=cfCachedRecords.filter(r=>{const f=r.fields,status=f['Status']||'';if(status==='Archived')return false;if(!filter)return true;const q=filter.toLowerCase();return(f['EB Number']||'').toLowerCase().includes(q)||(f['Type']||'').toLowerCase().includes(q)||[].concat(f['Season']||[]).join(' ').toLowerCase().includes(q)||[].concat(f['Occasion']||[]).join(' ').toLowerCase().includes(q)||(f['Reference name']||'').toLowerCase().includes(q);});if(records.length===0){container.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:12px">🔍</div><div style="font-size:14px">No pieces found</div></div>';return;}const order={'In stock':0,'Photographed':0,'Ready to list':0,'Listed':1,'Craft fair':1,'Hair Salon':1,'Sold':2};records.sort((a,b)=>(order[a.fields['Status']]??3)-(order[b.fields['Status']]??3));container.innerHTML=records.map(r=>{const f=r.fields,isSold=f['Status']==='Sold'||f['Status']==='Archived';const sp=cfShowPrice(f),price=sp!=null?'$'+sp.toFixed(2):'—';const seasonDisplay=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||'');const tags=[seasonDisplay,f['Occasion']&&f['Occasion']!=='None'?f['Occasion']:null,f['Status']].filter(Boolean).join(' · ');return'<div class="cf-piece-card'+(isSold?' sold-out':'')+'" onclick="cfTapPiece(\''+r.id+'\')">'+'<div class="cf-piece-thumb-placeholder">'+cfTypeIcon(f['Type'])+'</div>'+'<div class="cf-piece-info"><div class="cf-piece-eb">'+escHtml(f['EB Number']||'—')+'</div>'+'<div class="cf-piece-type">'+escHtml(f['Type']||'Arrangement')+'</div>'+'<div class="cf-piece-tags">'+escHtml(tags)+'</div></div>'+(isSold?'<div class="cf-sold-badge">SOLD</div>':'<div class="cf-piece-price">'+price+'</div>')+'</div>';}).join('');}
+function populateCFInventory(filter=''){const container=document.getElementById('cf-inventory');const records=cfCachedRecords.filter(r=>{const f=r.fields,status=f['Status']||'';if(status==='Archived')return false;if(!filter)return true;const q=filter.toLowerCase();returnsrchHit(f['EB Number'], q)||(f['Type']||'').toLowerCase().includes(q)||[].concat(f['Season']||[]).join(' ').toLowerCase().includes(q)||[].concat(f['Occasion']||[]).join(' ').toLowerCase().includes(q)||srchHit(f['Reference name'], q);});if(records.length===0){container.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:12px">🔍</div><div style="font-size:14px">No pieces found</div></div>';return;}const order={'In stock':0,'Photographed':0,'Ready to list':0,'Listed':1,'Craft fair':1,'Hair Salon':1,'Sold':2};records.sort((a,b)=>(order[a.fields['Status']]??3)-(order[b.fields['Status']]??3));container.innerHTML=records.map(r=>{const f=r.fields,isSold=f['Status']==='Sold'||f['Status']==='Archived';const sp=cfShowPrice(f),price=sp!=null?'$'+sp.toFixed(2):'—';const seasonDisplay=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||'');const tags=[seasonDisplay,f['Occasion']&&f['Occasion']!=='None'?f['Occasion']:null,f['Status']].filter(Boolean).join(' · ');return'<div class="cf-piece-card'+(isSold?' sold-out':'')+'" onclick="cfTapPiece(\''+r.id+'\')">'+'<div class="cf-piece-thumb-placeholder">'+cfTypeIcon(f['Type'])+'</div>'+'<div class="cf-piece-info"><div class="cf-piece-eb">'+escHtml(f['EB Number']||'—')+'</div>'+'<div class="cf-piece-type">'+escHtml(f['Type']||'Arrangement')+'</div>'+'<div class="cf-piece-tags">'+escHtml(tags)+'</div></div>'+(isSold?'<div class="cf-sold-badge">SOLD</div>':'<div class="cf-piece-price">'+price+'</div>')+'</div>';}).join('');}
 function cfTypeIcon(type){const icons={'Wreath':'🌿','Home decor':'🌸','Outdoor planter':'🪴','Centerpiece':'💐','Wall decor':'🖼','Swag':'🌾','Custom order':'✨','Add-on':'➕'};return icons[type]||'🌺';}
 function cfFilter(){populateCFInventory(document.getElementById('cf-search').value.trim());}
 function cfTapPiece(recordId){const record=cfCachedRecords.find(r=>r.id===recordId);if(!record)return;const f=record.fields;if(f['Status']==='Sold'||f['Status']==='Archived'){alert(escHtml(f['EB Number'])+' is already sold.');return;}modalSelectedRecord=record;document.getElementById('modal-piece-title').textContent=f['EB Number']||'Mark as sold';document.getElementById('modal-piece-sub').textContent=(f['Type']||'Arrangement')+((f['Season'])?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Price ($)']!=null?' · $'+Number(f['Price ($)']).toFixed(2):'')+(f['Craft show price ($)']!=null?' · show $'+Number(f['Craft show price ($)']).toFixed(2):'');const sp=cfShowPrice(f);document.getElementById('modal-price').value=sp!=null?sp.toFixed(2):'';document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>{b.classList.remove('selected');if(b.querySelector('.channel-label').textContent==='Craft fair'){b.classList.add('selected');modalSelectedChannel='Craft fair';}});document.getElementById('modal-status').style.display='none';document.getElementById('modal-confirm-btn').disabled=false;document.getElementById('modal-confirm-btn').textContent='✓ Mark as sold';document.getElementById('sold-modal').classList.add('open');}
@@ -5556,7 +5559,7 @@ function avSearchInput(val) {
   const results = document.getElementById('av-results');
   const q = val.trim().toLowerCase();
   const matches = q
-    ? avAllListedOpts.filter(o => o.label.toLowerCase().includes(q)).slice(0, 12)
+    ? avAllListedOpts.filter(o => srchHit(o.label, q)).slice(0, 12)
     : avAllListedOpts.slice(0, 12);
   if (!matches.length) { results.style.display = 'none'; return; }
   results.style.display = 'block';
@@ -5784,7 +5787,7 @@ function cstInit() {
 function cstMatches(q) {
   q = (q || '').trim().toLowerCase();
   if (!q) return [];
-  return allRecords.filter(r => r.fields['Status'] !== 'Archived' && ((r.fields['EB Number'] || '').toLowerCase().includes(q) || (r.fields['Reference name'] || '').toLowerCase().includes(q)));
+  return allRecords.filter(r => r.fields['Status'] !== 'Archived' && (srchHit(r.fields['EB Number'], q) || srchHit(r.fields['Reference name'], q)));
 }
 function cstSearch(val) {
   const box = document.getElementById('cst-results');
@@ -5858,7 +5861,7 @@ function ptInit() { document.getElementById('pt-search').value = ''; ptRender(''
 function ptFilter() { ptRender(document.getElementById('pt-search').value.trim()); }
 function ptRender(filter) {
   const container = document.getElementById('pt-list');
-  const sorted = allRecords.filter(r => r.fields['Status'] !== 'Archived').filter(r => { if(!filter)return true; const q=filter.toLowerCase(); const seasonStr=Array.isArray(r.fields['Season'])?r.fields['Season'].join(' '):(r.fields['Season']||''); const occasionStr=Array.isArray(r.fields['Occasion'])?r.fields['Occasion'].join(' '):(r.fields['Occasion']||''); return(r.fields['EB Number']||'').toLowerCase().includes(q)||(r.fields['Type']||'').toLowerCase().includes(q)||seasonStr.toLowerCase().includes(q)||occasionStr.toLowerCase().includes(q)||(r.fields['Reference name']||'').toLowerCase().includes(q); }).sort((a,b)=>{ const da=a.fields['Date made']||'',db=b.fields['Date made']||''; return db.localeCompare(da); });
+  const sorted = allRecords.filter(r => r.fields['Status'] !== 'Archived').filter(r => { if(!filter)return true; const q=filter.toLowerCase(); const seasonStr=Array.isArray(r.fields['Season'])?r.fields['Season'].join(' '):(r.fields['Season']||''); const occasionStr=Array.isArray(r.fields['Occasion'])?r.fields['Occasion'].join(' '):(r.fields['Occasion']||''); return srchHit(r.fields['EB Number'], q)||(r.fields['Type']||'').toLowerCase().includes(q)||seasonStr.toLowerCase().includes(q)||occasionStr.toLowerCase().includes(q)||srchHit(r.fields['Reference name'], q); }).sort((a,b)=>{ const da=a.fields['Date made']||'',db=b.fields['Date made']||''; return db.localeCompare(da); });
   document.getElementById('print-tag-pill').textContent = filter ? sorted.length+' result'+(sorted.length!==1?'s':'') : sorted.length+' pieces';
   if(!sorted.length){container.innerHTML='<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">'+(filter?'No pieces match "'+escHtml(filter)+'"':'No pieces found')+'</div>';return;}
   const statusColor={'In stock':'var(--text-muted)','Photographed':'var(--teal)','Ready to list':'var(--gold)','Listed':'var(--sage)','Sold':'var(--rose)','Craft fair':'var(--gold)'};
@@ -6208,13 +6211,13 @@ function bmRenderOverview(filter) {
   // Search: keep a location if its own label matches, or if it holds a matching EB number.
   if (q) {
     locs = locs.filter(loc =>
-      loc.label.toLowerCase().includes(q) ||
-      (pieceMap[loc.key] || []).some(r => (r.fields['EB Number'] || '').toLowerCase().includes(q)));
+      srchHit(loc.label, q) ||
+      (pieceMap[loc.key] || []).some(r => srchHit(r.fields['EB Number'], q)));
   }
   if (locs.length === 0) {
     // Nothing matched. If the query names a real piece that just isn't binned yet,
     // say so plainly — that's the answer to "which bin is this EB in?".
-    const orphans = allRecords.filter(r => (r.fields['EB Number'] || '').toLowerCase().includes(q));
+    const orphans = allRecords.filter(r => srchHit(r.fields['EB Number'], q));
     container.innerHTML = orphans.length
       ? '<div style="text-align:center;padding:28px 20px;color:var(--text-muted);font-size:13px"><div style="font-size:28px;margin-bottom:10px">🔍</div>'
         + orphans.map(r => '<strong style="color:var(--text)">' + escHtml(r.fields['EB Number'] || '—') + '</strong>').join(', ')
