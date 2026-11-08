@@ -208,6 +208,12 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .channel-btn{background:var(--card);border:2px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:center;cursor:pointer;transition:all .15s;font-family:var(--font-body)}
 @media (hover:hover){.channel-btn:hover{border-color:var(--rose-light)}}
 .channel-btn.selected{background:var(--rose-bg);border-color:var(--rose);color:var(--rose)}
+.price-choice{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.price-opt{display:flex;align-items:center;gap:8px;background:var(--card);border:2px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;cursor:pointer;font-family:var(--font-body);font-size:13px;line-height:1.25}
+.price-opt input{width:18px;height:18px;margin:0;flex-shrink:0;accent-color:var(--rose)}
+.price-opt.selected{background:var(--rose-bg);border-color:var(--rose)}
+.price-opt.disabled{opacity:.5;cursor:default}
+.price-opt strong{display:block;font-size:15px}
 .channel-icon{font-size:22px;display:block;margin-bottom:5px}
 .channel-label{font-size:12px;font-weight:700;color:var(--text)}
 .channel-btn.selected .channel-label{color:var(--rose)}
@@ -607,10 +613,12 @@ button,a,label,select,input[type=checkbox],[onclick]{touch-action:manipulation}
 <div id="screen-craft-tag" class="screen">
   <div class="wizard-header"><button class="hdr-nav-btn home-btn" onclick="goHome()" title="Home screen">⌂ Home</button><div class="wizard-title">Craft show tag</div><div class="wizard-step-pill">3 × 2</div></div>
   <div class="wizard-body">
-    <div class="info-card sage"><strong>🎪 Temporary tag for a craft show.</strong> Enter the EB number, set the show price, then Print — select your Phomemo printer from the print dialog. The show price is saved to Airtable; the Shopify price doesn't change.</div>
+    <div class="info-card sage"><strong>🎪 Temporary tag for a craft show.</strong> Enter the EB number, pick the show or online price (or type one), then Print — select your Phomemo printer from the print dialog. The show price is saved to Airtable; the Shopify price doesn't change.</div>
     <div class="field" style="margin-top:12px"><label>EB number</label><div style="position:relative"><input type="text" id="cst-eb" placeholder="e.g. EB-26FA-WR-013 or just 013" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" oninput="cstSearch(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();cstPickTyped();}" onblur="setTimeout(()=>{const r=document.getElementById('cst-results');if(r)r.style.display='none';},220)"><div id="cst-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);max-height:260px;overflow-y:auto;z-index:500"></div></div></div>
     <div id="cst-piece" style="display:none">
-      <div class="field"><label>Craft show price ($)</label><input type="text" id="cst-price" inputmode="decimal" placeholder="e.g. 75.00" autocomplete="off" oninput="cstPreview()"><div id="cst-listed" style="font-size:11px;color:var(--text-muted);margin-top:3px"></div></div>
+      <div class="section-label">Price on the tag</div>
+      <div id="cst-price-choice" class="price-choice"></div>
+      <div class="field"><label>Craft show price ($)</label><input type="text" id="cst-price" inputmode="decimal" placeholder="e.g. 75.00" autocomplete="off" oninput="priceChoiceSync('cst');cstPreview()"><div id="cst-listed" style="font-size:11px;color:var(--text-muted);margin-top:3px"></div></div>
     </div>
     <div class="section-label">Preview</div>
     <div id="cst-preview"><div class="t-empty">Enter an EB number to preview the tag</div></div>
@@ -667,7 +675,10 @@ button,a,label,select,input[type=checkbox],[onclick]{touch-action:manipulation}
       <div id="np-outdoor-warning" style="display:none" class="info-card amber"><strong>⚠ Outdoor pot — local pickup / delivery only.</strong> It can’t ship; the listing is set up as local-only when you publish.</div>
       <div class="field"><label>Date made</label><input type="date" id="np-date-made"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">When the piece was made. Defaults to today (the EB creation date) if left blank.</div></div>
       <div class="grid-2">
-        <div class="field"><label>Price ($)</label><input type="text" inputmode="decimal" id="np-price" placeholder="e.g. 85.00" oninput="npAutoFillCost()"></div>
+        <div class="field"><label>Online price ($)</label><input type="text" inputmode="decimal" id="np-price" placeholder="e.g. 85.00" oninput="npAutoFillCost()"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Shopify price.</div></div>
+        <div class="field"><label>Show price ($)</label><input type="text" inputmode="decimal" id="np-show-price" placeholder="e.g. 75.00"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Craft show price. Optional; leave blank to use the online price.</div></div>
+      </div>
+      <div class="grid-2">
         <div class="field"><label>Quantity</label><input type="number" inputmode="numeric" id="np-quantity" min="0" step="1" value="1"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">Units in stock. Defaults to 1 for one-of-a-kind pieces.</div></div>
       </div>
       <div class="grid-2">
@@ -1042,7 +1053,9 @@ button,a,label,select,input[type=checkbox],[onclick]{touch-action:manipulation}
         <div class="channel-btn" onclick="msSelectChannel(this,'Direct')"><span class="channel-icon">🤝</span><div class="channel-label">Direct / other</div></div>
       </div>
       <div class="info-card teal" style="font-size:12px">Note: Facebook Marketplace sales = Direct / other. Facebook Shop will be added as an option once the Commerce Manager is configured to sell items through the Facebook Business Page.</div>
-      <div class="field"><label>Sale price (confirm or adjust)</label><input type="text" inputmode="decimal" id="ms-sale-price" placeholder="e.g. 85.00"></div>
+      <div class="section-label">Which price did it sell for?</div>
+      <div id="ms-price-choice" class="price-choice"></div>
+      <div class="field"><label>Sale price (confirm or adjust)</label><input type="text" inputmode="decimal" id="ms-sale-price" placeholder="e.g. 85.00" oninput="priceChoiceSync('ms')"></div>
       <div class="field"><label>Date sold</label><input type="date" id="ms-sale-date"></div>
       <div class="info-card sage" style="font-size:12px"><strong>This will:</strong> Set Shopify inventory to 0 · Move to Sold/Portfolio · Update Airtable status to Sold</div>
       <div class="btn-row"><button class="btn-rose btn-full" id="ms-confirm-btn" onclick="msConfirmSale()">✓ Mark as sold</button><button class="btn btn-full" onclick="msStep(1)">← Back</button></div>
@@ -1209,7 +1222,9 @@ button,a,label,select,input[type=checkbox],[onclick]{touch-action:manipulation}
       <div class="channel-btn" onclick="modalSelectChannel(this,'Direct')"><span class="channel-icon">🤝</span><div class="channel-label">Direct</div></div>
     </div>
     <div class="info-card teal" style="font-size:12px">Note: Facebook Marketplace sales = Direct / other. Facebook Shop will be added as an option once the Commerce Manager is configured to sell items through the Facebook Business Page.</div>
-    <div class="field"><label>Sale price</label><input type="text" inputmode="decimal" enterkeyhint="done" id="modal-price" placeholder="e.g. 85.00"></div>
+    <div class="section-label">Which price did it sell for?</div>
+    <div id="modal-price-choice" class="price-choice"></div>
+    <div class="field"><label>Sale price</label><input type="text" inputmode="decimal" enterkeyhint="done" id="modal-price" placeholder="e.g. 85.00" oninput="priceChoiceSync('modal')"></div>
     <div id="modal-status" class="status-bar" style="display:none"><div class="sb-dot"></div><span id="modal-status-msg"></span></div>
     <div class="btn-row">
       <button class="btn" onclick="printQRTag(modalSelectedRecord&&modalSelectedRecord.fields['EB Number'], modalSelectedRecord&&modalSelectedRecord.fields['Price ($)']||'')">🏷 Print tag</button>
@@ -3281,6 +3296,8 @@ function msSearchInput(q) {
       document.getElementById('ms-next-btn').disabled = !msSelectedRecord;
       if (msSelectedRecord) {
         const f = msSelectedRecord.fields;
+        document.getElementById('ms-sale-price').value = '';
+        priceChoiceRender('ms', f, msSelectedChannel === 'Craft fair' || !msSelectedChannel ? 'show' : 'online');
         document.getElementById('ms-piece-preview').style.display = 'block';
         document.getElementById('ms-piece-preview').innerHTML = '<div class="at-preview"><div class="at-preview-title">Selected piece</div><div class="at-grid"><div class="at-field"><div class="at-label">EB Number</div><div class="at-value">' + escHtml(f['EB Number']) + '</div></div><div class="at-field"><div class="at-label">Type</div><div class="at-value">' + escHtml(f['Type'] || '\u2014') + '</div></div><div class="at-field"><div class="at-label">Price</div><div class="at-value">' + (f['Price ($)'] != null ? '$' + Number(f['Price ($)']).toFixed(2) : '\u2014') + '</div></div></div></div>';
       }
@@ -3832,6 +3849,7 @@ function npEditSearchInput(q){
 function npClearForm(){
   document.getElementById('np-ref-name').value='';
   document.getElementById('np-price').value='';
+  document.getElementById('np-show-price').value='';
   document.getElementById('np-quantity').value='1';
   document.getElementById('np-date-made').value=localISODate();
   document.getElementById('np-cost').value='';
@@ -3867,6 +3885,7 @@ function npLoadRecordForEdit(){
   npSetChecks('np-season',Array.isArray(f['Season'])?f['Season']:(f['Season']?[f['Season']]:[]));
   npSetChecks('np-occasion',Array.isArray(f['Occasion'])?f['Occasion']:((f['Occasion']&&f['Occasion']!=='None')?String(f['Occasion']).split(',').map(v=>v.trim()).filter(Boolean):[]));
   document.getElementById('np-price').value=f['Price ($)']!=null?f['Price ($)']:'';
+  document.getElementById('np-show-price').value=f['Craft show price ($)']!=null?f['Craft show price ($)']:'';
   document.getElementById('np-quantity').value=f['Quantity']!=null?f['Quantity']:1;
   document.getElementById('np-date-made').value=f['Date made']||'';
   document.getElementById('np-cost').value=f['Cost ($)']!=null?f['Cost ($)']:'';
@@ -3960,6 +3979,10 @@ function npBuildFieldsFromForm(){
   }
   const price=document.getElementById('np-price').value.trim();
   if(price) fields['Price ($)']=parseFloat(price);
+  // Show price: blank on an existing piece clears it (tags and sales then fall back to the online price).
+  const showPrice=parseFloat(document.getElementById('np-show-price').value.replace(/[$,\s]/g,''));
+  if(isFinite(showPrice)&&showPrice>0) fields['Craft show price ($)']=Math.round(showPrice*100)/100;
+  else if(npCurrentRecordId) fields['Craft show price ($)']=null;
   const cost=document.getElementById('np-cost').value.trim();
   if(cost) fields['Cost ($)']=parseFloat(cost);
   return {fields,seasons};
@@ -5471,12 +5494,12 @@ function lpReset(){lpSelectedRecord=null;lpPhotoItems=[];lpDriveImages=[];lpDriv
 
 // ── MARK AS SOLD ──
 function msStep(n){if(n===1&&msSaleDone){msReset();return;}stepBackFn=n>1?()=>msStep(n-1):null;updateHeaderBackBtn();document.querySelectorAll('#screen-sold .step-block').forEach(s=>s.classList.remove('active'));document.getElementById('ms-step-'+n).classList.add('active');document.getElementById('ms-step-pill').textContent='Step '+n+' of 2';document.getElementById('ms-progress').style.width=(n===1?50:100)+'%';window.scrollTo({top:0,behavior:'smooth'});}
-function populateMSSelect(){const listed=sortPiecesByEB(allRecords.filter(r=>r.fields['Status']==='Listed'||r.fields['Status']==='In stock'));msAllOpts=listed.map(r=>({value:r.id,label:pieceLabel(r.fields)||r.id}));const sel=document.getElementById('ms-eb-select');if(listed.length===0){sel.innerHTML='<option value="">— no listed pieces —</option>';return;}sel.innerHTML='<option value="">— pick a piece —</option>'+msAllOpts.map(o=>'<option value="'+escHtml(o.value)+'">'+escHtml(o.label)+'</option>').join('');_clearEbSearch('ms-eb-search','ms-eb-results');sel.onchange=()=>{const recId=sel.value;document.getElementById('ms-next-btn').disabled=!recId;if(!recId){msSelectedRecord=null;document.getElementById('ms-piece-preview').style.display='none';return;}msSelectedRecord=allRecords.find(r=>r.id===recId);if(!msSelectedRecord)return;const f=msSelectedRecord.fields;const msp=cfShowPrice(f);document.getElementById('ms-sale-price').value=msp!=null?msp.toFixed(2):'';document.getElementById('ms-piece-preview').style.display='block';document.getElementById('ms-piece-preview').innerHTML='<div class="at-preview"><div class="at-preview-title">Selected piece</div><div class="at-grid"><div class="at-field"><div class="at-label">EB Number</div><div class="at-value">'+escHtml(f['EB Number'])+'</div></div><div class="at-field"><div class="at-label">Type</div><div class="at-value">'+escHtml(f['Type']||'—')+'</div></div><div class="at-field"><div class="at-label">Price</div><div class="at-value">'+(f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—')+'</div></div></div></div>';};}
+function populateMSSelect(){const listed=sortPiecesByEB(allRecords.filter(r=>r.fields['Status']==='Listed'||r.fields['Status']==='In stock'));msAllOpts=listed.map(r=>({value:r.id,label:pieceLabel(r.fields)||r.id}));const sel=document.getElementById('ms-eb-select');if(listed.length===0){sel.innerHTML='<option value="">— no listed pieces —</option>';return;}sel.innerHTML='<option value="">— pick a piece —</option>'+msAllOpts.map(o=>'<option value="'+escHtml(o.value)+'">'+escHtml(o.label)+'</option>').join('');_clearEbSearch('ms-eb-search','ms-eb-results');sel.onchange=()=>{const recId=sel.value;document.getElementById('ms-next-btn').disabled=!recId;if(!recId){msSelectedRecord=null;document.getElementById('ms-piece-preview').style.display='none';return;}msSelectedRecord=allRecords.find(r=>r.id===recId);if(!msSelectedRecord)return;const f=msSelectedRecord.fields;document.getElementById('ms-sale-price').value='';priceChoiceRender('ms',f,msSelectedChannel==='Craft fair'||!msSelectedChannel?'show':'online');document.getElementById('ms-piece-preview').style.display='block';document.getElementById('ms-piece-preview').innerHTML='<div class="at-preview"><div class="at-preview-title">Selected piece</div><div class="at-grid"><div class="at-field"><div class="at-label">EB Number</div><div class="at-value">'+escHtml(f['EB Number'])+'</div></div><div class="at-field"><div class="at-label">Type</div><div class="at-value">'+escHtml(f['Type']||'—')+'</div></div><div class="at-field"><div class="at-label">Price</div><div class="at-value">'+(f['Price ($)']!=null?'$'+Number(f['Price ($)']).toFixed(2):'—')+'</div></div></div></div>';};}
 // After a sale the screen kept its "✓ Done!" button disabled, so the next sale needed a reload.
 // Coming back to Mark as sold after a sale starts a fresh one.
 var msSaleDone=false; // var: goTo can run before this line during start-up
-function msReset(){msSaleDone=false;msSelectedRecord=null;msSelectedChannel=null;document.querySelectorAll('#screen-sold .channel-btn').forEach(b=>b.classList.remove('selected'));const btn=document.getElementById('ms-confirm-btn');btn.disabled=false;btn.textContent='✓ Mark as sold';document.getElementById('ms-result').style.display='none';document.getElementById('ms-piece-preview').style.display='none';document.getElementById('ms-next-btn').disabled=true;document.getElementById('ms-sale-price').value='';document.getElementById('ms-sale-date').value=new Date().toLocaleDateString('en-CA');populateMSSelect();msStep(1);}
-function msSelectChannel(el,channel){document.querySelectorAll('#screen-sold .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');msSelectedChannel=channel;}
+function msReset(){msSaleDone=false;msSelectedRecord=null;msSelectedChannel=null;document.querySelectorAll('#screen-sold .channel-btn').forEach(b=>b.classList.remove('selected'));const btn=document.getElementById('ms-confirm-btn');btn.disabled=false;btn.textContent='✓ Mark as sold';document.getElementById('ms-result').style.display='none';document.getElementById('ms-piece-preview').style.display='none';document.getElementById('ms-next-btn').disabled=true;document.getElementById('ms-sale-price').value='';document.getElementById('ms-price-choice').innerHTML='';document.getElementById('ms-sale-date').value=new Date().toLocaleDateString('en-CA');populateMSSelect();msStep(1);}
+function msSelectChannel(el,channel){document.querySelectorAll('#screen-sold .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');msSelectedChannel=channel;priceChoiceAutoForChannel('ms',channel);}
 async function msConfirmSale(){if(!msSelectedRecord||!msSelectedChannel){alert('Select a piece and sale channel.');return;}const salePrice=document.getElementById('ms-sale-price').value.trim();const saleDate=document.getElementById('ms-sale-date').value;const btn=document.getElementById('ms-confirm-btn');btn.disabled=true;btn.textContent='⏳ Recording...';setStatus('ms','Marking as sold...','loading');try{await markSold(msSelectedRecord,msSelectedChannel,salePrice,saleDate);const result=document.getElementById('ms-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(msSelectedRecord.fields['EB Number'])+'</strong> marked as sold via '+msSelectedChannel+'.';btn.textContent='✓ Done!';msSaleDone=true;setStatus('ms','Sale recorded ✓','success');populateHomeStats();populateMSSelect();populateLPSelect();populateCFInventory();setTimeout(()=>hideStatus('ms'),4000);}catch(e){setStatus('ms','Error: '+e.message,'error');btn.disabled=false;btn.textContent='✓ Mark as sold';}}
 // What the buyer paid goes to Gross sale amount ($); the listed Price ($) is left as-is.
 async function markSold(record,channel,salePrice,saleDate){const f=record.fields;const atFields={'Status':'Sold','Sales channel':channel};if(salePrice)atFields['Gross sale amount ($)']=parseFloat(salePrice);if(saleDate)atFields['Date sold']=saleDate;await atWriteNow(record.id,atFields);Object.assign(f,atFields);
@@ -5514,14 +5537,59 @@ function saUpdateApplyState(){const {op,price}=saCurrentValues();const ok=!!saSe
 async function saApply(){if(!saSelectedRecord||!saType)return;const {op,price}=saCurrentValues();if(op==null){alert('This piece has no Price ($) set — add a price before marking it Sale/Clearance.');return;}if(!(Number.isFinite(price)&&price>0&&price<op)){alert('Enter a sale price below the original ($'+op.toFixed(2)+').');return;}const pct=Math.round((1-price/op)*100);const f=saSelectedRecord.fields;const eb=f['EB Number'];const btn=document.getElementById('sa-apply-btn');btn.disabled=true;btn.textContent='⏳ Applying…';setStatus('sa','Applying '+saType.toLowerCase()+' markdown…','loading');try{const atFields={'Sale status':saType,'Sale price ($)':price,'Markdown (%)':pct/100,'Sale date':localISODate()};await atWriteNow(saSelectedRecord.id,atFields);Object.assign(f,atFields);const r=await fetch(SERVER_URL+'/mark-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:eb,action:'apply',sale_type:saType,sale_price:price,original_price:op})});const d=await r.json().catch(()=>({}));if(!r.ok||d.error)throw new Error(d.error||('Shopify update failed ('+r.status+')'));const result=document.getElementById('sa-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(eb)+'</strong> marked <strong>'+saType+'</strong> at $'+price.toFixed(2)+' ('+pct+'% off).<br><span style="font-size:12px">'+(d.note?escHtml(d.note):'Live on the '+saType+' collection · original shown as a strikethrough.')+'</span>';btn.textContent='✓ Applied';setStatus('sa',saType+' applied ✓','success');document.getElementById('sa-remove-row').style.display='';saRenderCard();populateSASelect();populateHomeStats();setTimeout(()=>{hideStatus('sa');btn.disabled=false;btn.textContent='🏷️ Apply markdown';},4000);}catch(e){setStatus('sa','Error: '+e.message,'error');btn.disabled=false;btn.textContent='🏷️ Apply markdown';}}
 async function saRemove(){if(!saSelectedRecord)return;const f=saSelectedRecord.fields;const eb=f['EB Number'];const op=saOrigPrice();const btn=document.getElementById('sa-remove-btn');btn.disabled=true;btn.textContent='⏳ Removing…';setStatus('sa','Restoring full price…','loading');try{const atFields={'Sale status':'None','Sale price ($)':null,'Markdown (%)':null,'Sale date':null};await atWriteNow(saSelectedRecord.id,atFields);Object.assign(f,atFields);const r=await fetch(SERVER_URL+'/mark-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eb_number:eb,action:'remove',original_price:op})});const d=await r.json().catch(()=>({}));if(!r.ok||d.error)throw new Error(d.error||('Shopify update failed ('+r.status+')'));const result=document.getElementById('sa-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(eb)+'</strong> back to full price'+(op!=null?' ($'+op.toFixed(2)+')':'')+'.';setStatus('sa','Full price restored ✓','success');document.getElementById('sa-remove-row').style.display='none';document.getElementById('sa-pct').value='';document.getElementById('sa-price').value='';document.getElementById('sa-preview-line').style.display='none';document.getElementById('sa-warn').style.display='none';document.getElementById('sa-type-sale').classList.remove('selected');document.getElementById('sa-type-clear').classList.remove('selected');saType=null;saUpdateApplyState();saRenderCard();populateSASelect();populateHomeStats();setTimeout(()=>{hideStatus('sa');btn.disabled=false;btn.textContent='↩ Remove markdown — restore full price';},4000);}catch(e){setStatus('sa','Error: '+e.message,'error');btn.disabled=false;btn.textContent='↩ Remove markdown — restore full price';}}
 
+// ── ONLINE vs SHOW PRICE PICKER ──
+// Two checkboxes (only one can be ticked): the piece's online Price ($) and its Craft show price ($).
+// Ticking one fills the price box; typing a different amount unticks both. Used by the craft show
+// tag screen (cst) and both mark-sold screens (ms, modal).
+const PRICE_CHOICE_INPUT={cst:'cst-price',ms:'ms-sale-price',modal:'modal-price'};
+const priceChoiceState={};
+function priceChoiceRender(key,f,pick){
+  const online=f['Price ($)']!=null&&Number(f['Price ($)'])>0?Number(f['Price ($)']):null;
+  const show=f['Craft show price ($)']!=null&&Number(f['Craft show price ($)'])>0?Number(f['Craft show price ($)']):null;
+  priceChoiceState[key]={online,show};
+  if(pick==='show'&&show==null)pick='online';
+  if(pick==='online'&&online==null)pick=show!=null?'show':null;
+  const opt=(kind,label,v)=>'<label class="price-opt'+(v==null?' disabled':'')+'" id="'+key+'-pc-'+kind+'"><input type="checkbox"'+(v==null?' disabled':'')+' onchange="priceChoicePick(\''+key+'\',\''+kind+'\',this.checked)"><span>'+label+'<strong>'+(v!=null?'$'+v.toFixed(2):'not set')+'</strong></span></label>';
+  document.getElementById(key+'-price-choice').innerHTML=opt('online','Online price',online)+opt('show','Show price',show);
+  priceChoicePick(key,pick,true);
+}
+function priceChoicePick(key,kind,on){
+  const st=priceChoiceState[key]||{};
+  const v=on&&kind?st[kind]:null;
+  if(v!=null)document.getElementById(PRICE_CHOICE_INPUT[key]).value=v.toFixed(2);
+  priceChoiceMark(key,v!=null?kind:null);
+  if(key==='cst')cstPreview();
+}
+function priceChoiceMark(key,kind){
+  ['online','show'].forEach(k=>{const el=document.getElementById(key+'-pc-'+k);if(!el)return;el.classList.toggle('selected',k===kind);el.querySelector('input').checked=k===kind;});
+}
+// Typing in the price box: keep the ticked price if it still matches, else tick whichever matches, else neither.
+function priceChoiceSync(key){
+  const st=priceChoiceState[key]||{};
+  const v=parseFloat(String(document.getElementById(PRICE_CHOICE_INPUT[key]).value).replace(/[$,\s]/g,''));
+  const near=x=>x!=null&&isFinite(v)&&Math.abs(x-v)<0.005;
+  const cur=['online','show'].find(k=>{const el=document.getElementById(key+'-pc-'+k);return el&&el.classList.contains('selected');});
+  priceChoiceMark(key,cur&&near(st[cur])?cur:near(st.online)?'online':near(st.show)?'show':null);
+}
+// A channel tap picks the likely price (Craft fair → show price, anything else → online), unless an
+// amount was typed by hand (neither box ticked and the box isn't empty).
+function priceChoiceAutoForChannel(key,channel){
+  const box=document.getElementById(key+'-price-choice');
+  if(!box||!box.innerHTML)return;
+  const typed=!box.querySelector('.price-opt.selected')&&document.getElementById(PRICE_CHOICE_INPUT[key]).value.trim();
+  if(typed)return;
+  const want=channel==='Craft fair'?'show':'online', st=priceChoiceState[key]||{};
+  priceChoicePick(key,st[want]!=null?want:(want==='show'?'online':'show'),true);
+}
+
 // ── CRAFT FAIR ──
 // Selling price at a show: the Craft show price ($) on the piece's tag when one was set, else the listed Price ($).
 function cfShowPrice(f){const v=f['Craft show price ($)']!=null?f['Craft show price ($)']:f['Price ($)'];return v!=null?Number(v):null;}
 function populateCFInventory(filter=''){const container=document.getElementById('cf-inventory');const records=cfCachedRecords.filter(r=>{const f=r.fields,status=f['Status']||'';if(status==='Archived')return false;if(!filter)return true;const q=filter.toLowerCase();returnsrchHit(f['EB Number'], q)||(f['Type']||'').toLowerCase().includes(q)||[].concat(f['Season']||[]).join(' ').toLowerCase().includes(q)||[].concat(f['Occasion']||[]).join(' ').toLowerCase().includes(q)||srchHit(f['Reference name'], q);});if(records.length===0){container.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:12px">🔍</div><div style="font-size:14px">No pieces found</div></div>';return;}const order={'In stock':0,'Photographed':0,'Ready to list':0,'Listed':1,'Craft fair':1,'Hair Salon':1,'Sold':2};records.sort((a,b)=>(order[a.fields['Status']]??3)-(order[b.fields['Status']]??3));container.innerHTML=records.map(r=>{const f=r.fields,isSold=f['Status']==='Sold'||f['Status']==='Archived';const sp=cfShowPrice(f),price=sp!=null?'$'+sp.toFixed(2):'—';const seasonDisplay=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||'');const tags=[seasonDisplay,f['Occasion']&&f['Occasion']!=='None'?f['Occasion']:null,f['Status']].filter(Boolean).join(' · ');return'<div class="cf-piece-card'+(isSold?' sold-out':'')+'" onclick="cfTapPiece(\''+r.id+'\')">'+'<div class="cf-piece-thumb-placeholder">'+cfTypeIcon(f['Type'])+'</div>'+'<div class="cf-piece-info"><div class="cf-piece-eb">'+escHtml(f['EB Number']||'—')+'</div>'+'<div class="cf-piece-type">'+escHtml(f['Type']||'Arrangement')+'</div>'+'<div class="cf-piece-tags">'+escHtml(tags)+'</div></div>'+(isSold?'<div class="cf-sold-badge">SOLD</div>':'<div class="cf-piece-price">'+price+'</div>')+'</div>';}).join('');}
 function cfTypeIcon(type){const icons={'Wreath':'🌿','Home decor':'🌸','Outdoor planter':'🪴','Centerpiece':'💐','Wall decor':'🖼','Swag':'🌾','Custom order':'✨','Add-on':'➕'};return icons[type]||'🌺';}
 function cfFilter(){populateCFInventory(document.getElementById('cf-search').value.trim());}
-function cfTapPiece(recordId){const record=cfCachedRecords.find(r=>r.id===recordId);if(!record)return;const f=record.fields;if(f['Status']==='Sold'||f['Status']==='Archived'){alert(escHtml(f['EB Number'])+' is already sold.');return;}modalSelectedRecord=record;document.getElementById('modal-piece-title').textContent=f['EB Number']||'Mark as sold';document.getElementById('modal-piece-sub').textContent=(f['Type']||'Arrangement')+((f['Season'])?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Price ($)']!=null?' · $'+Number(f['Price ($)']).toFixed(2):'')+(f['Craft show price ($)']!=null?' · show $'+Number(f['Craft show price ($)']).toFixed(2):'');const sp=cfShowPrice(f);document.getElementById('modal-price').value=sp!=null?sp.toFixed(2):'';document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>{b.classList.remove('selected');if(b.querySelector('.channel-label').textContent==='Craft fair'){b.classList.add('selected');modalSelectedChannel='Craft fair';}});document.getElementById('modal-status').style.display='none';document.getElementById('modal-confirm-btn').disabled=false;document.getElementById('modal-confirm-btn').textContent='✓ Mark as sold';document.getElementById('sold-modal').classList.add('open');}
-function modalSelectChannel(el,channel){document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');modalSelectedChannel=channel;}
+function cfTapPiece(recordId){const record=cfCachedRecords.find(r=>r.id===recordId);if(!record)return;const f=record.fields;if(f['Status']==='Sold'||f['Status']==='Archived'){alert(escHtml(f['EB Number'])+' is already sold.');return;}modalSelectedRecord=record;document.getElementById('modal-piece-title').textContent=f['EB Number']||'Mark as sold';document.getElementById('modal-piece-sub').textContent=(f['Type']||'Arrangement')+((f['Season'])?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Price ($)']!=null?' · $'+Number(f['Price ($)']).toFixed(2):'')+(f['Craft show price ($)']!=null?' · show $'+Number(f['Craft show price ($)']).toFixed(2):'');document.getElementById('modal-price').value='';priceChoiceRender('modal',f,'show');document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>{b.classList.remove('selected');if(b.querySelector('.channel-label').textContent==='Craft fair'){b.classList.add('selected');modalSelectedChannel='Craft fair';}});document.getElementById('modal-status').style.display='none';document.getElementById('modal-confirm-btn').disabled=false;document.getElementById('modal-confirm-btn').textContent='✓ Mark as sold';document.getElementById('sold-modal').classList.add('open');}
+function modalSelectChannel(el,channel){document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');modalSelectedChannel=channel;priceChoiceAutoForChannel('modal',channel);}
 function closeSoldModal(e){if(e.target===document.getElementById('sold-modal'))document.getElementById('sold-modal').classList.remove('open');}
 async function modalConfirmSale(){if(!modalSelectedRecord||!modalSelectedChannel){alert('Select a sale channel.');return;}const salePrice=document.getElementById('modal-price').value.trim();const btn=document.getElementById('modal-confirm-btn');btn.disabled=true;btn.textContent='⏳ Recording...';const statusEl=document.getElementById('modal-status');statusEl.style.display='flex';statusEl.className='status-bar loading';document.getElementById('modal-status-msg').textContent='Recording sale...';try{await markSold(modalSelectedRecord,modalSelectedChannel,salePrice,localISODate());statusEl.className='status-bar success';document.getElementById('modal-status-msg').textContent='✓ Sold! Record updated.';btn.textContent='✓ Done!';populateHomeStats();populateCFInventory(document.getElementById('cf-search').value.trim());populateMSSelect();populateLPSelect();setTimeout(()=>document.getElementById('sold-modal').classList.remove('open'),1800);}catch(e){statusEl.className='status-bar error';document.getElementById('modal-status-msg').textContent='Error: '+e.message;btn.disabled=false;btn.textContent='✓ Mark as sold';}}
 
@@ -5811,11 +5879,9 @@ function cstSelect(recordId) {
   cstRecordId = recordId;
   document.getElementById('cst-eb').value = f['EB Number'] || '';
   document.getElementById('cst-results').style.display = 'none';
-  const listed = f['Price ($)'] != null ? Number(f['Price ($)']) : null;
-  const lastShow = f['Craft show price ($)'] != null ? Number(f['Craft show price ($)']) : null;
-  const start = lastShow != null ? lastShow : listed;
-  document.getElementById('cst-price').value = start != null ? start.toFixed(2) : '';
-  document.getElementById('cst-listed').textContent = (listed != null ? 'Listed price: $' + listed.toFixed(2) : 'No listed price') + (lastShow != null ? ' · last show price: $' + lastShow.toFixed(2) : '');
+  document.getElementById('cst-price').value = '';
+  priceChoiceRender('cst', f, 'show');
+  document.getElementById('cst-listed').textContent = 'Tick a price above or type a different one. The tag price is saved as the show price.';
   document.getElementById('cst-piece').style.display = 'block';
   document.getElementById('cst-status').textContent = f['Status'] === 'Sold' ? '⚠ This piece is marked Sold.' : '';
   cstPreview();
@@ -5850,6 +5916,8 @@ function cstPrint() {
   win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>' + css + '</head><body><div class="tag">' + inner + '</div><script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>');
   win.document.close();
   const status = document.getElementById('cst-status');
+  const onlineTicked = document.getElementById('cst-pc-online') && document.getElementById('cst-pc-online').classList.contains('selected');
+  if (onlineTicked) { status.textContent = '✓ Printed at the online price ($' + price.toFixed(2) + '). Show price left as it was.'; return; }
   queueFieldWrite(cstRecordId, {'Craft show price ($)': price});
   flushWrites(cstRecordId)
     .then(() => { status.textContent = '✓ Show price $' + price.toFixed(2) + ' saved for ' + t.eb; })
@@ -6664,6 +6732,7 @@ function wipRestoreNP(saved) {
   if(saved.lighting)npSetChecks('np-lighting',saved.lighting);
   if(saved.shape)npSetChecks('np-shape',saved.shape);
   if(saved.price){const el=document.getElementById('np-price');if(el)el.value=saved.price;}
+  if(saved.showPrice){const el=document.getElementById('np-show-price');if(el)el.value=saved.showPrice;}
   if(saved.quantity!==undefined&&saved.quantity!==''){const el=document.getElementById('np-quantity');if(el)el.value=saved.quantity;}
   if(saved.dateMade){const el=document.getElementById('np-date-made');if(el)el.value=saved.dateMade;}
   if(saved.cost){const el=document.getElementById('np-cost');if(el)el.value=saved.cost;}
@@ -6717,6 +6786,7 @@ function wipSaveNP() {
     lighting:npGetChecks('np-lighting'),
     shape:npGetChecks('np-shape'),
     price:    (document.getElementById('np-price')||{}).value||'',
+    showPrice:(document.getElementById('np-show-price')||{}).value||'',
     quantity: (document.getElementById('np-quantity')||{}).value||'',
     dateMade: (document.getElementById('np-date-made')||{}).value||'',
     cost:     (document.getElementById('np-cost')||{}).value||'',
