@@ -214,6 +214,10 @@ body{font-family:var(--font-body);background:var(--ivory);color:var(--text);min-
 .price-opt.selected{background:var(--rose-bg);border-color:var(--rose)}
 .price-opt.disabled{opacity:.5;cursor:default}
 .price-opt strong{display:block;font-size:15px}
+.pay-choice{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.pay-choice .price-opt{min-height:52px}
+#modal-photo img{width:100%;max-height:220px;object-fit:contain;border-radius:8px;background:var(--ivory-dark);display:block;margin-bottom:12px}
+@media (max-width:400px){.pay-choice{grid-template-columns:1fr}}
 .channel-icon{font-size:22px;display:block;margin-bottom:5px}
 .channel-label{font-size:12px;font-weight:700;color:var(--text)}
 .channel-btn.selected .channel-label{color:var(--rose)}
@@ -654,6 +658,12 @@ button,a,label,select,input[type=checkbox],[onclick]{touch-action:manipulation}
     <div id="cst-preview"><div class="t-empty">Enter an EB number to preview the tag</div></div>
     <button class="btn-primary btn-full" id="cst-print-btn" onclick="cstPrint()" disabled>🖨 Save price &amp; print tag</button>
     <div id="cst-status" style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:8px;min-height:16px"></div>
+
+    <div class="section-label" style="margin-top:24px;display:flex;justify-content:space-between;align-items:center">QR tags to print <span id="cst-reprint-count" style="text-transform:none;letter-spacing:0;font-weight:600"></span></div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Pieces with a show price but no QR show tag yet, or whose tag shows an old price. Tick the ones to print. They go out in one print job, one tag each.</div>
+    <div id="cst-reprint-tools" style="display:flex;gap:8px;margin-bottom:8px"><button class="btn" id="cst-reprint-all" onclick="cstReprintAll()" style="min-height:44px">Select all</button><button class="btn-rose" id="cst-reprint-btn" onclick="cstReprintPrint()" disabled style="flex:1;min-height:44px;font-weight:700;border-radius:var(--radius-sm);border:1.5px solid var(--rose)">🖨 Print selected tags</button></div>
+    <div id="cst-reprint-status" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;min-height:15px"></div>
+    <div id="cst-reprint-list"></div>
   </div>
 </div>
 
@@ -1180,6 +1190,7 @@ button,a,label,select,input[type=checkbox],[onclick]{touch-action:manipulation}
       <div class="bm-camera-wrap"><video id="cf-video" playsinline autoplay muted></video><div class="bm-scan-frame"></div></div>
       <div id="cf-scan-status" style="text-align:center;font-size:12px;color:var(--gold);font-weight:600;padding:4px">Point at the QR code on the tag…</div>
     </div>
+    <label id="cf-photo-scan" style="display:none;text-align:center;font-size:12px;color:var(--text-muted);margin-top:6px;cursor:pointer">Camera not reading it? <span style="color:var(--rose);font-weight:700;text-decoration:underline">📸 Take a photo of the tag</span><input type="file" accept="image/*" capture="environment" style="display:none" onchange="cfScanPhoto(this)"></label>
   </div>
   <div id="cf-inventory" class="cf-inventory"><div style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:12px">🌸</div><div style="font-size:14px">Loading inventory...</div></div></div>
 </div>
@@ -1273,6 +1284,9 @@ button,a,label,select,input[type=checkbox],[onclick]{touch-action:manipulation}
     <div class="modal-handle"></div>
     <div class="modal-title" id="modal-piece-title">Mark as sold</div>
     <div class="modal-sub" id="modal-piece-sub">Confirm the sale details below</div>
+    <div id="modal-photo"></div>
+    <div id="modal-channel-quick" style="display:none;font-size:13px;margin-bottom:12px">🛍️ <strong>Craft fair sale</strong> · <a href="#" onclick="modalShowChannels(true);return false" style="color:var(--rose)">change</a></div>
+    <div id="modal-channel-wrap">
     <div class="section-label">How did it sell?</div>
     <div class="channel-grid">
       <div class="channel-btn" onclick="modalSelectChannel(this,'Shopify')"><span class="channel-icon">🛒</span><div class="channel-label">Shopify</div></div>
@@ -1282,9 +1296,18 @@ button,a,label,select,input[type=checkbox],[onclick]{touch-action:manipulation}
       <div class="channel-btn" onclick="modalSelectChannel(this,'Direct')"><span class="channel-icon">🤝</span><div class="channel-label">Direct</div></div>
     </div>
     <div class="info-card teal" style="font-size:12px">Note: Facebook Marketplace sales = Direct / other. Facebook Shop will be added as an option once the Commerce Manager is configured to sell items through the Facebook Business Page.</div>
+    </div>
     <div class="section-label">Which price did it sell for?</div>
     <div id="modal-price-choice" class="price-choice"></div>
-    <div class="field"><label>Sale price</label><input type="text" inputmode="decimal" enterkeyhint="done" id="modal-price" placeholder="e.g. 85.00" oninput="priceChoiceSync('modal')"></div>
+    <div class="field"><label id="modal-price-label">Sale price</label><input type="text" inputmode="decimal" enterkeyhint="done" id="modal-price" placeholder="e.g. 85.00" oninput="priceChoiceSync('modal')"></div>
+    <div id="modal-pay-wrap" style="display:none">
+      <div class="section-label">How did they pay?</div>
+      <div class="pay-choice">
+        <label class="price-opt" data-pay="Cash"><input type="checkbox" onchange="modalPickPay('Cash',this.checked)"><span>💵 <strong>Cash</strong></span></label>
+        <label class="price-opt" data-pay="Credit card"><input type="checkbox" onchange="modalPickPay('Credit card',this.checked)"><span>💳 <strong>Credit card</strong></span></label>
+        <label class="price-opt" data-pay="Venmo"><input type="checkbox" onchange="modalPickPay('Venmo',this.checked)"><span>📱 <strong>Venmo</strong></span></label>
+      </div>
+    </div>
     <div id="modal-status" class="status-bar" style="display:none"><div class="sb-dot"></div><span id="modal-status-msg"></span></div>
     <div class="btn-row">
       <button class="btn" onclick="printQRTag(modalSelectedRecord&&modalSelectedRecord.fields['EB Number'], modalSelectedRecord&&modalSelectedRecord.fields['Price ($)']||'')">🏷 Print tag</button>
@@ -5565,7 +5588,7 @@ function msReset(){msSaleDone=false;msSelectedRecord=null;msSelectedChannel=null
 function msSelectChannel(el,channel){document.querySelectorAll('#screen-sold .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');msSelectedChannel=channel;priceChoiceAutoForChannel('ms',channel);}
 async function msConfirmSale(){if(!msSelectedRecord||!msSelectedChannel){alert('Select a piece and sale channel.');return;}const salePrice=document.getElementById('ms-sale-price').value.trim();const saleDate=document.getElementById('ms-sale-date').value;const btn=document.getElementById('ms-confirm-btn');btn.disabled=true;btn.textContent='⏳ Recording...';setStatus('ms','Marking as sold...','loading');try{await markSold(msSelectedRecord,msSelectedChannel,salePrice,saleDate);const result=document.getElementById('ms-result');result.className='publish-result success';result.style.display='block';result.innerHTML='✓ <strong>'+escHtml(msSelectedRecord.fields['EB Number'])+'</strong> marked as sold via '+msSelectedChannel+'.';btn.textContent='✓ Done!';msSaleDone=true;setStatus('ms','Sale recorded ✓','success');populateHomeStats();populateMSSelect();populateLPSelect();populateCFInventory();setTimeout(()=>hideStatus('ms'),4000);}catch(e){setStatus('ms','Error: '+e.message,'error');btn.disabled=false;btn.textContent='✓ Mark as sold';}}
 // What the buyer paid goes to Gross sale amount ($); the listed Price ($) is left as-is.
-async function markSold(record,channel,salePrice,saleDate){const f=record.fields;const atFields={'Status':'Sold','Sales channel':channel};if(salePrice)atFields['Gross sale amount ($)']=parseFloat(salePrice);if(saleDate)atFields['Date sold']=saleDate;await atWriteNow(record.id,atFields);Object.assign(f,atFields);
+async function markSold(record,channel,salePrice,saleDate,payment){const f=record.fields;const atFields={'Status':'Sold','Sales channel':channel};if(salePrice)atFields['Gross sale amount ($)']=parseFloat(salePrice);if(saleDate)atFields['Date sold']=saleDate;if(payment)atFields['Payment method']=payment;await atWriteNow(record.id,atFields);Object.assign(f,atFields);
   // Sold → move this piece's Drive folder into "Sold" (non-fatal, background).
   driveMoveFolder(f['Drive Folder ID'],'sold');
   // Shopify must hear about it too, or the piece stays buyable online: a failure is shown, and
@@ -5652,8 +5675,26 @@ function populateCFInventory(filter=''){const container=document.getElementById(
 function cfTypeIcon(type){const icons={'Wreath':'🌿','Home decor':'🌸','Outdoor planter':'🪴','Centerpiece':'💐','Wall decor':'🖼','Swag':'🌾','Custom order':'✨','Add-on':'➕'};return icons[type]||'🌺';}
 function cfFilter(){populateCFInventory(document.getElementById('cf-search').value.trim());}
 // tagPrice: the price printed on a scanned craft show tag (from its QR). It fills the sale price.
-function cfTapPiece(recordId,tagPrice){const record=cfCachedRecords.find(r=>r.id===recordId);if(!record)return;const f=record.fields;if(f['Status']==='Sold'||f['Status']==='Archived'){alert((f['EB Number']||'This piece')+' is already sold.');return;}modalSelectedRecord=record;document.getElementById('modal-piece-title').textContent=f['EB Number']||'Mark as sold';document.getElementById('modal-piece-sub').textContent=(f['Reference name']?f['Reference name']+' · ':'')+(f['Type']||'Arrangement')+((f['Season'])?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Price ($)']!=null?' · $'+Number(f['Price ($)']).toFixed(2):'')+(f['Craft show price ($)']!=null?' · show $'+Number(f['Craft show price ($)']).toFixed(2):'')+(tagPrice!=null?' · tag $'+tagPrice.toFixed(2):'');document.getElementById('modal-price').value='';priceChoiceRender('modal',f,'show');if(tagPrice!=null){document.getElementById('modal-price').value=tagPrice.toFixed(2);priceChoiceSync('modal');}document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>{b.classList.remove('selected');if(b.querySelector('.channel-label').textContent==='Craft fair'){b.classList.add('selected');modalSelectedChannel='Craft fair';}});document.getElementById('modal-status').style.display='none';document.getElementById('modal-confirm-btn').disabled=false;document.getElementById('modal-confirm-btn').textContent='✓ Mark as sold';document.getElementById('sold-modal').classList.add('open');}
-function modalSelectChannel(el,channel){document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');modalSelectedChannel=channel;priceChoiceAutoForChannel('modal',channel);}
+// A scan (tagPrice given) opens the short version: photo to check it's the right piece, Craft fair
+// already picked (the channel grid tucks away behind "change"), confirm the price, tap how they paid.
+var modalPayment = null;
+const MODAL_PAY_CHANNELS = ['Craft fair','Direct','Hair Salon']; // in-person sales ask how they paid
+function modalPickPay(pay,on){
+  modalPayment = on ? pay : null;
+  document.querySelectorAll('#modal-pay-wrap .price-opt').forEach(el=>{ const me = el.dataset.pay === modalPayment; el.classList.toggle('selected', me); el.querySelector('input').checked = me; });
+}
+function modalShowChannels(show){
+  document.getElementById('modal-channel-wrap').style.display = show ? '' : 'none';
+  document.getElementById('modal-channel-quick').style.display = show ? 'none' : '';
+}
+function modalSyncPay(){
+  const wrap = document.getElementById('modal-pay-wrap');
+  const ask = MODAL_PAY_CHANNELS.includes(modalSelectedChannel);
+  wrap.style.display = ask ? '' : 'none';
+  if (!ask) modalPickPay(null, false);
+}
+function cfTapPiece(recordId,tagPrice){modalPickPay(null,false);const fromScan=tagPrice!==undefined;modalShowChannels(!fromScan);const rec0=cfCachedRecords.find(r=>r.id===recordId);const ph=rec0&&rec0.fields['Photo URL'];document.getElementById('modal-photo').innerHTML=fromScan&&ph?'<img src="'+escHtml(mkThumb(ph,600))+'" alt="">':'';document.getElementById('modal-price-label').textContent=fromScan?'Sale price (confirm or change)':'Sale price';const record=cfCachedRecords.find(r=>r.id===recordId);if(!record)return;const f=record.fields;if(f['Status']==='Sold'||f['Status']==='Archived'){alert((f['EB Number']||'This piece')+' is already sold.');return;}modalSelectedRecord=record;document.getElementById('modal-piece-title').textContent=f['EB Number']||'Mark as sold';document.getElementById('modal-piece-sub').textContent=(f['Reference name']?f['Reference name']+' · ':'')+(f['Type']||'Arrangement')+((f['Season'])?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Price ($)']!=null?' · $'+Number(f['Price ($)']).toFixed(2):'')+(f['Craft show price ($)']!=null?' · show $'+Number(f['Craft show price ($)']).toFixed(2):'')+(tagPrice!=null?' · tag $'+tagPrice.toFixed(2):'');document.getElementById('modal-price').value='';priceChoiceRender('modal',f,'show');if(tagPrice!=null){document.getElementById('modal-price').value=tagPrice.toFixed(2);priceChoiceSync('modal');}document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>{b.classList.remove('selected');if(b.querySelector('.channel-label').textContent==='Craft fair'){b.classList.add('selected');modalSelectedChannel='Craft fair';}});modalSyncPay();document.getElementById('modal-status').style.display='none';document.getElementById('modal-confirm-btn').disabled=false;document.getElementById('modal-confirm-btn').textContent='✓ Mark as sold';document.getElementById('sold-modal').classList.add('open');}
+function modalSelectChannel(el,channel){document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');modalSelectedChannel=channel;priceChoiceAutoForChannel('modal',channel);modalSyncPay();}
 function closeSoldModal(e){if(e.target===document.getElementById('sold-modal'))document.getElementById('sold-modal').classList.remove('open');}
 
 // ── TAG QR CODES ──
@@ -5683,7 +5724,9 @@ var cfScanActive = false, cfScanStream = null; // var: goTo can run before this 
 async function cfToggleScan(){
   if (cfScanActive) { cfStopScan(); return; }
   if (typeof jsQR === 'undefined') { alert('Camera scanner not loaded. Type the EB number in the search box instead — it\'s printed on the tag.'); return; }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { alert('This browser can\'t use the camera here. Type the EB number in the search box instead.'); return; }
+  const photoOpt = document.getElementById('cf-photo-scan');
+  photoOpt.style.display = 'block';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { photoOpt.querySelector('input').click(); return; }
   document.getElementById('cf-camera-section').style.display = 'block';
   document.getElementById('cf-scan-status').textContent = 'Point at the QR code on the tag…';
   const btn = document.getElementById('cf-scan-btn'); btn.textContent = '⏹ Stop';
@@ -5693,12 +5736,14 @@ async function cfToggleScan(){
     video.srcObject = cfScanStream; await video.play();
     cfScanActive = true; requestAnimationFrame(cfScanLoop);
   } catch(e) {
-    cfStopScan();
-    alert('Camera unavailable: ' + e.message);
+    cfStopScan(true);
+    alert('Live camera unavailable (' + e.message + '). Tap "Take a photo of the tag" instead.');
   }
 }
-function cfStopScan(){
+// keepPhoto: leave the "Take a photo of the tag" option showing (the live camera failed).
+function cfStopScan(keepPhoto){
   cfScanActive = false;
+  const po = document.getElementById('cf-photo-scan'); if (po && !keepPhoto) po.style.display = 'none';
   if (cfScanStream) { cfScanStream.getTracks().forEach(t => t.stop()); cfScanStream = null; }
   const video = document.getElementById('cf-video'); if (video) video.srcObject = null;
   const sec = document.getElementById('cf-camera-section'); if (sec) sec.style.display = 'none';
@@ -5720,6 +5765,29 @@ function cfScanLoop(){
     if (code && code.data && cfHandleScan(code.data)) return;
   } catch(e) {}
   requestAnimationFrame(cfScanLoop);
+}
+// A photo of the tag (the phone's camera app): read the QR from it, trying a few sizes since a
+// small QR in a big photo can be missed when shrunk too far.
+function cfScanPhoto(input){
+  const file = input.files && input.files[0]; input.value = '';
+  if (!file) return;
+  if (typeof jsQR === 'undefined') { alert('QR reader not loaded. Type the EB number in the search box instead.'); return; }
+  const url = URL.createObjectURL(file), img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    let data = null;
+    for (const w of [1200, 1800, 800]) {
+      const s = Math.min(1, w / img.naturalWidth), c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+      const ctx = c.getContext('2d', { willReadFrequently:true }); ctx.drawImage(img, 0, 0, c.width, c.height);
+      const code = jsQR(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height, { inversionAttempts:'attemptBoth' });
+      if (code && code.data) { data = code.data; break; }
+    }
+    if (!data) { alert('Couldn\'t find the QR code in that photo. Get a little closer so the QR fills more of the picture, and try again.'); return; }
+    if (!cfHandleScan(data)) alert(document.getElementById('cf-scan-status').textContent);
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); alert('Couldn\'t open that photo.'); };
+  img.src = url;
 }
 // Returns true when the scan was used (stops the camera); false keeps scanning.
 function cfHandleScan(data){
@@ -5851,7 +5919,7 @@ function spShowDrive(i){
   const o = +x.orientation > 1 ? ' data-ori="' + (+x.orientation) + '" onload="driveBigFix(this)"' : '';
   document.getElementById('sp-big-wrap').innerHTML = '<img id="sp-big" src="' + escHtml(driveUpsize(x.thumbnailLink)) + '" alt="' + escHtml(x.name) + '" referrerpolicy="no-referrer"' + o + '>';
 }
-async function modalConfirmSale(){if(!modalSelectedRecord||!modalSelectedChannel){alert('Select a sale channel.');return;}const salePrice=document.getElementById('modal-price').value.trim();const btn=document.getElementById('modal-confirm-btn');btn.disabled=true;btn.textContent='⏳ Recording...';const statusEl=document.getElementById('modal-status');statusEl.style.display='flex';statusEl.className='status-bar loading';document.getElementById('modal-status-msg').textContent='Recording sale...';try{await markSold(modalSelectedRecord,modalSelectedChannel,salePrice,localISODate());statusEl.className='status-bar success';document.getElementById('modal-status-msg').textContent='✓ Sold! Record updated.';btn.textContent='✓ Done!';populateHomeStats();populateCFInventory(document.getElementById('cf-search').value.trim());populateMSSelect();populateLPSelect();setTimeout(()=>document.getElementById('sold-modal').classList.remove('open'),1800);}catch(e){statusEl.className='status-bar error';document.getElementById('modal-status-msg').textContent='Error: '+e.message;btn.disabled=false;btn.textContent='✓ Mark as sold';}}
+async function modalConfirmSale(){if(!modalSelectedRecord||!modalSelectedChannel){alert('Select a sale channel.');return;}const salePrice=document.getElementById('modal-price').value.trim();if(!(parseFloat(salePrice.replace(/[$,\s]/g,''))>0)){alert('Enter the sale price.');document.getElementById('modal-price').focus();return;}if(MODAL_PAY_CHANNELS.includes(modalSelectedChannel)&&!modalPayment){alert('Tick how they paid: Cash, Credit card or Venmo.');return;}const payment=MODAL_PAY_CHANNELS.includes(modalSelectedChannel)?modalPayment:null;const btn=document.getElementById('modal-confirm-btn');btn.disabled=true;btn.textContent='⏳ Recording...';const statusEl=document.getElementById('modal-status');statusEl.style.display='flex';statusEl.className='status-bar loading';document.getElementById('modal-status-msg').textContent='Recording sale...';try{await markSold(modalSelectedRecord,modalSelectedChannel,salePrice.replace(/[$,\s]/g,''),localISODate(),payment);statusEl.className='status-bar success';document.getElementById('modal-status-msg').textContent='✓ Sold'+(payment?' · '+payment:'')+'! Record updated.';btn.textContent='✓ Done!';populateHomeStats();populateCFInventory(document.getElementById('cf-search').value.trim());populateMSSelect();populateLPSelect();setTimeout(()=>document.getElementById('sold-modal').classList.remove('open'),1800);}catch(e){statusEl.className='status-bar error';document.getElementById('modal-status-msg').textContent='Error: '+e.message;btn.disabled=false;btn.textContent='✓ Mark as sold';}}
 
 // ── ADD VIDEO SCREEN ──
 // ── Add Video screen — Drive-integrated ──────────────────────
@@ -6110,7 +6178,9 @@ function cstInit() {
   document.getElementById('cst-price').value = '';
   document.getElementById('cst-piece').style.display = 'none';
   document.getElementById('cst-status').textContent = '';
+  document.getElementById('cst-reprint-status').textContent = '';
   cstPreview();
+  cstRenderReprint();
   setTimeout(() => document.getElementById('cst-eb').focus(), 50);
 }
 function cstMatches(q) {
@@ -6165,27 +6235,88 @@ function cstPreview() {
   if (!t) { box.innerHTML = '<div class="t-empty">Enter an EB number to preview the tag</div>'; return; }
   box.innerHTML = '<div class="t-row"><div class="t-left"><div class="t-brand">Eternal Blooms</div><div class="t-eb">' + escHtml(t.eb) + '</div>' + (t.price ? '<div class="t-price">' + t.price + '</div>' : '') + '</div>' + (t.price ? '<img class="t-qr" src="' + escHtml(tagQRImg(t.qr, 200)) + '" alt="QR">' : '') + '</div>' + (t.ref ? '<div class="t-sub">' + escHtml(t.ref) + '</div>' : '');
 }
+// One print job, one 3×2 page per tag. tags: [{ eb, ref, price (number), qr (QR data) }].
+// The print window has to be opened inside the click so pop-up blockers allow it.
+function cstOpenPrint(tags) {
+  const win = window.open('', '_blank');
+  if (!win) { alert('Pop-up blocked — allow pop-ups for this site to print tags.'); return false; }
+  // QR on the right: opens the listing for a shopper; EB Master's Craft fair "Scan tag" reads the
+  // EB number and this tag's price from it and opens Mark as sold.
+  const tagHtml = (t, last) => '<div class="tag"' + (last ? '' : ' style="break-after:page;page-break-after:always"') + '><div class="top"><div class="left"><div class="brand">Eternal Blooms</div><div class="eb">' + escHtml(t.eb) + '</div><div class="price">$' + t.price.toFixed(2) + '</div></div><img src="' + escHtml(tagQRImg(t.qr, 300)) + '" alt="QR"></div>' + (t.ref ? '<div class="sub">' + escHtml(t.ref) + '</div>' : '') + '</div>';
+  const css = ['<style>','@page { size: 3in 2in; margin: 0mm; }','@media print { @page { margin: 0mm !important; } html, body { margin: 0 !important; padding: 0 !important; } }','html, body { margin: 0 !important; padding: 0 !important; }','body { width: 3in; }','* { box-sizing: border-box; }','.tag { width: 3in; height: 2in; display: flex; flex-direction: column; justify-content: center; font-family: Arial, sans-serif; background: #fff; padding: 0.09in 0.12in; overflow: hidden; }','.top { display: flex; align-items: center; justify-content: space-between; }','.left { flex: 1; min-width: 0; padding-right: 0.08in; }','.brand { font-size: 10pt; font-weight: 400; letter-spacing: .1em; text-transform: uppercase; color: #bb8588; margin-bottom: 4px; white-space: nowrap; }','.eb { font-size: 10pt; font-weight: 800; letter-spacing: .03em; color: #2b2622; line-height: 1.15; margin-bottom: 4px; white-space: nowrap; }','.price { font-size: 20pt; font-weight: 800; color: #bb8588; }','img { width: 0.95in; height: 0.95in; flex-shrink: 0; display: block; }','.sub { font-size: 13pt; color: #bb8588; letter-spacing: .02em; line-height: 1.15; margin-top: 4px; max-height: 2.3em; overflow: hidden; }','</style>'].join('\n');
+  // window.onload waits for every QR image, so no tag prints without its QR.
+  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>' + css + '</head><body>' + tags.map((t, i) => tagHtml(t, i === tags.length - 1)).join('') + '<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>');
+  win.document.close();
+  return true;
+}
+// Remember what's on the printed tag, so the reprint list knows which pieces still need a QR tag.
+function cstRecordPrinted(id, price, extra) {
+  queueFieldWrite(id, Object.assign({ 'Show tag price ($)': price, 'Show tag printed': localISODate() }, extra || {}));
+}
 function cstPrint() {
   const t = cstTagParts(), price = cstPrice();
   if (!t) { alert('Pick a piece first.'); return; }
   if (price == null) { alert('Enter a craft show price.'); return; }
-  // Open the print window first, inside the click, so pop-up blockers allow it.
-  const win = window.open('', '_blank');
-  if (!win) { alert('Pop-up blocked — allow pop-ups for this site to print the tag.'); return; }
-  // QR on the right: opens the listing for a shopper; EB Master's Craft fair "Scan tag" reads the
-  // EB number and this tag's price from it and opens Mark as sold.
-  const inner = '<div class="top"><div class="left"><div class="brand">Eternal Blooms</div><div class="eb">' + escHtml(t.eb) + '</div><div class="price">' + t.price + '</div></div><img src="' + escHtml(tagQRImg(t.qr, 300)) + '" alt="QR"></div>' + (t.ref ? '<div class="sub">' + escHtml(t.ref) + '</div>' : '');
-  const css = ['<style>','@page { size: 3in 2in; margin: 0mm; }','@media print { @page { margin: 0mm !important; } html, body { margin: 0 !important; padding: 0 !important; } }','html, body { margin: 0 !important; padding: 0 !important; }','body { width: 3in; overflow: hidden; }','* { box-sizing: border-box; }','.tag { width: 3in; height: 2in; display: flex; flex-direction: column; justify-content: center; font-family: Arial, sans-serif; background: #fff; padding: 0.09in 0.12in; overflow: hidden; }','.top { display: flex; align-items: center; justify-content: space-between; }','.left { flex: 1; min-width: 0; padding-right: 0.08in; }','.brand { font-size: 10pt; font-weight: 400; letter-spacing: .1em; text-transform: uppercase; color: #bb8588; margin-bottom: 4px; white-space: nowrap; }','.eb { font-size: 10pt; font-weight: 800; letter-spacing: .03em; color: #2b2622; line-height: 1.15; margin-bottom: 4px; white-space: nowrap; }','.price { font-size: 20pt; font-weight: 800; color: #bb8588; }','img { width: 0.95in; height: 0.95in; flex-shrink: 0; display: block; }','.sub { font-size: 13pt; color: #bb8588; letter-spacing: .02em; line-height: 1.15; margin-top: 4px; max-height: 2.3em; overflow: hidden; }','</style>'].join('\n');
-  // window.onload waits for the QR image, so the tag never prints without it.
-  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>' + css + '</head><body><div class="tag">' + inner + '</div><script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>');
-  win.document.close();
+  if (!cstOpenPrint([{ eb: t.eb, ref: t.ref, price, qr: t.qr }])) return;
   const status = document.getElementById('cst-status');
   const onlineTicked = document.getElementById('cst-pc-online') && document.getElementById('cst-pc-online').classList.contains('selected');
-  if (onlineTicked) { status.textContent = '✓ Printed at the online price ($' + price.toFixed(2) + '). Show price left as it was.'; return; }
-  queueFieldWrite(cstRecordId, {'Craft show price ($)': price});
+  cstRecordPrinted(cstRecordId, price, onlineTicked ? null : { 'Craft show price ($)': price });
+  const done = onlineTicked ? '✓ Printed at the online price ($' + price.toFixed(2) + '). Show price left as it was.' : '✓ Show price $' + price.toFixed(2) + ' saved for ' + t.eb;
   flushWrites(cstRecordId)
-    .then(() => { status.textContent = '✓ Show price $' + price.toFixed(2) + ' saved for ' + t.eb; })
-    .catch(e => { status.textContent = 'Printed — price not saved to Airtable yet (kept on this device, will retry): ' + e.message; });
+    .then(() => { status.textContent = done; cstRenderReprint(); })
+    .catch(e => { status.textContent = 'Printed — not saved to Airtable yet (kept on this device, will retry): ' + e.message; cstRenderReprint(); });
+}
+
+// ── QR TAGS TO REPRINT ──
+// Pieces with a show price whose QR show tag is missing (printed before tags had QR codes, or
+// never printed) or shows a different price. Tick and print them together in one job.
+var cstReprintSel = {};
+function cstNeedsTag(r) {
+  const f = r.fields, show = spNum(f['Craft show price ($)']);
+  if (!SP_LIVE.includes(f['Status']) || show == null) return false;
+  const tag = spNum(f['Show tag price ($)']);
+  return tag == null || Math.abs(tag - show) >= 0.005;
+}
+function cstRenderReprint() {
+  const box = document.getElementById('cst-reprint-list'); if (!box) return;
+  const list = sortPiecesByEB(allRecords.filter(cstNeedsTag));
+  for (const id in cstReprintSel) if (!list.some(r => r.id === id)) delete cstReprintSel[id];
+  const n = Object.keys(cstReprintSel).length;
+  document.getElementById('cst-reprint-count').textContent = list.length ? list.length + ' piece' + (list.length === 1 ? '' : 's') : 'none';
+  const btn = document.getElementById('cst-reprint-btn');
+  btn.disabled = !n;
+  btn.textContent = '🖨 Print ' + (n ? n + ' ' : '') + 'selected tag' + (n === 1 ? '' : 's');
+  document.getElementById('cst-reprint-all').textContent = n && n === list.length ? 'Clear all' : 'Select all';
+  document.getElementById('cst-reprint-tools').style.display = list.length ? 'flex' : 'none';
+  if (!list.length) { box.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">✓ Every piece with a show price has a QR tag at that price.</div>'; return; }
+  box.innerHTML = list.map(r => {
+    const f = r.fields, show = spNum(f['Craft show price ($)']), tag = spNum(f['Show tag price ($)']), on = !!cstReprintSel[r.id];
+    const why = tag == null ? 'No QR tag yet' : 'Tag says $' + tag.toFixed(2) + ', not the show price';
+    const thumb = f['Photo URL'] ? '<img src="' + escHtml(mkThumb(f['Photo URL'], 120)) + '" loading="lazy" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--border)">' : '<div style="width:44px;height:44px;border-radius:6px;background:var(--ivory-dark);flex-shrink:0;display:flex;align-items:center;justify-content:center">' + cfTypeIcon(f['Type']) + '</div>';
+    return '<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1.5px solid ' + (on ? 'var(--rose)' : 'var(--border)') + ';background:' + (on ? 'var(--rose-bg)' : 'var(--card)') + ';border-radius:var(--radius-sm);margin-bottom:6px;cursor:pointer"><input type="checkbox"' + (on ? ' checked' : '') + ' onchange="cstReprintToggle(\'' + r.id + '\',this.checked)" style="width:20px;height:20px;flex-shrink:0;accent-color:var(--rose)">' + thumb + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:800">' + escHtml(f['EB Number'] || '—') + ' · $' + show.toFixed(2) + '</div>' + (f['Reference name'] ? '<div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(f['Reference name']) + '</div>' : '') + '<div style="font-size:11px;color:var(--text-muted)">' + why + '</div></div></label>';
+  }).join('');
+}
+function cstReprintToggle(id, on) { if (on) cstReprintSel[id] = true; else delete cstReprintSel[id]; cstRenderReprint(); }
+function cstReprintAll() {
+  const list = allRecords.filter(cstNeedsTag), all = list.length && list.every(r => cstReprintSel[r.id]);
+  cstReprintSel = {};
+  if (!all) list.forEach(r => { cstReprintSel[r.id] = true; });
+  cstRenderReprint();
+}
+function cstReprintPrint() {
+  const recs = sortPiecesByEB(allRecords.filter(r => cstReprintSel[r.id] && cstNeedsTag(r)));
+  if (!recs.length) return;
+  const tags = recs.map(r => { const price = spNum(r.fields['Craft show price ($)']); return { eb: r.fields['EB Number'] || '', ref: (r.fields['Reference name'] || '').trim(), price, qr: tagQRData(r.fields, price) }; });
+  if (!cstOpenPrint(tags)) return;
+  const status = document.getElementById('cst-reprint-status');
+  recs.forEach(r => cstRecordPrinted(r.id, spNum(r.fields['Craft show price ($)'])));
+  cstReprintSel = {};
+  const n = recs.length + ' tag' + (recs.length === 1 ? '' : 's');
+  status.textContent = '⏳ Sent ' + n + ' to print. Saving…';
+  cstRenderReprint();
+  flushWrites()
+    .then(() => { status.textContent = '✓ ' + n + ' printed and recorded.'; })
+    .catch(e => { status.textContent = 'Printed — not saved to Airtable yet (kept on this device, will retry): ' + e.message; });
 }
 
 // ── PRINT TAG SCREEN ──
