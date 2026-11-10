@@ -286,6 +286,35 @@ button:active{transform:scale(.97)}
 .mode-card.readiness{border-top:3px solid var(--purple)}
 .mode-card.raw-label{border-top:3px solid var(--gold)}
 .mode-card.craft-tag{border-top:3px solid var(--rose)}
+.mode-card.show-pricing{border-top:3px solid var(--rose)}
+.sp-tabs{display:flex;gap:8px;margin-bottom:10px}
+.sp-tabs .btn{flex:1;min-height:40px}
+.sp-tabs .btn.selected{background:var(--rose-bg);border-color:var(--rose);color:var(--rose)}
+.sp-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-sm);padding:12px;display:flex;gap:14px;margin-bottom:12px;align-items:flex-start}
+.sp-card.done{border-color:var(--sage);background:var(--sage-bg)}
+.sp-photo{width:140px;height:140px;flex-shrink:0;border-radius:8px;overflow:hidden;background:var(--ivory-dark);border:1px solid var(--border);cursor:zoom-in;position:relative;display:flex;align-items:center;justify-content:center;font-size:32px;padding:0}
+.sp-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.sp-photo .sp-more{position:absolute;bottom:5px;right:5px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px}
+.sp-info{flex:1;min-width:0}
+.sp-eb{font-size:14px;font-weight:800;color:var(--text)}
+.sp-ref{font-size:13px;color:var(--text);margin-top:2px}
+.sp-meta{font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4}
+.sp-quick{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.sp-quick .btn{font-size:12px;padding:6px 10px;min-height:34px}
+.sp-row{display:flex;gap:8px;align-items:center}
+.sp-row input{flex:1;min-width:0;font-size:16px;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm)}
+.sp-row .btn-rose{padding:10px 16px;font-size:14px;font-weight:700;border-radius:var(--radius-sm);border:1.5px solid var(--rose);white-space:nowrap}
+.sp-saved{font-size:12px;color:var(--sage);font-weight:700;margin-top:6px;min-height:15px}
+@media (max-width:480px){.sp-card{flex-direction:column;gap:10px}.sp-photo{width:100%;height:auto;aspect-ratio:4/3}.sp-photo img{object-fit:contain;background:#fff}}
+#sp-photo-modal .modal-sheet{max-width:640px}
+#sp-big{width:100%;max-height:60vh;object-fit:contain;display:block;border-radius:8px;background:var(--ivory-dark)}
+#sp-big-wrap canvas{width:100%;max-height:60vh;object-fit:contain;display:block;border-radius:8px}
+#sp-thumbs{display:flex;gap:6px;overflow-x:auto;margin-top:10px;padding-bottom:4px}
+#sp-thumbs img{width:64px;height:64px;object-fit:cover;border-radius:6px;border:2px solid transparent;cursor:pointer;flex-shrink:0}
+#sp-thumbs img.on{border-color:var(--rose)}
+#cst-preview .t-row{display:flex;align-items:center;gap:6%}
+#cst-preview .t-left{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+#cst-preview .t-qr{width:30%;aspect-ratio:1;flex-shrink:0}
 #cst-preview{width:100%;max-width:360px;aspect-ratio:3/2;margin:4px auto 16px;background:#fff;border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-sm);padding:4% 5%;display:flex;flex-direction:column;justify-content:center;gap:4px;font-family:Arial,Helvetica,sans-serif;overflow:hidden}
 #cst-preview .t-brand{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:#bb8588}
 #cst-preview .t-eb{font-size:13px;font-weight:800;color:#2b2622;letter-spacing:.03em}
@@ -549,7 +578,8 @@ button,a,label,select,input[type=checkbox],[onclick]{touch-action:manipulation}
     <div class="mode-card craft-fair" onclick="goTo('screen-craft-fair')"><span class="mode-icon">🛍️</span><div class="mode-title">Craft fair</div><div class="mode-desc">Mobile-optimized selling at shows and events</div><div class="mode-arrow">→</div></div>
     <div class="mode-card bin-mgmt" onclick="goTo('screen-bin-mgmt')"><span class="mode-icon">📦</span><div class="mode-title">Bin management</div><div class="mode-desc">Print bin, bar &amp; shelf labels, scan to assign pieces, update anytime</div><div class="mode-arrow">→</div></div>
     <div class="mode-card raw-label" onclick="goTo('screen-raw-label')"><span class="mode-icon">🧵</span><div class="mode-title">Raw material label</div><div class="mode-desc">Free-form 4×6 bin label — type up to 4 lines, big auto-sized text, print one off</div><div class="mode-arrow">→</div></div>
-    <div class="mode-card craft-tag" onclick="goTo('screen-craft-tag')"><span class="mode-icon">🎪</span><div class="mode-title">Craft show tag</div><div class="mode-desc">Temporary 3×2 price tag for a show — enter an EB number, set the show price, print (no QR)</div><div class="mode-arrow">→</div></div>
+    <div class="mode-card craft-tag" onclick="goTo('screen-craft-tag')"><span class="mode-icon">🎪</span><div class="mode-title">Craft show tag</div><div class="mode-desc">Temporary 3×2 price tag for a show — enter an EB number, set the show price, print. Scan its QR at the show to mark it sold</div><div class="mode-arrow">→</div></div>
+    <div class="mode-card show-pricing" onclick="goTo('screen-show-pricing')"><span class="mode-icon">💲</span><div class="mode-title">Set show prices<span class="mk-count" id="sp-home-count" style="display:none"></span></div><div class="mode-desc">Scroll through listed pieces with no show price, look at the photos, set a price for each</div><div class="mode-arrow">→</div></div>
     <div class="mode-card marketing" onclick="goTo('screen-marketing')"><span class="mode-icon">📌</span><div class="mode-title">Marketing<span class="mk-count" id="mk-home-count" style="display:none"></span></div><div class="mode-desc">Review Pinterest, Instagram & Facebook posts drafted from the shop — approve once, they post</div><div class="mode-arrow">→</div></div>
     <div class="mode-card outreach" onclick="goTo('screen-outreach')"><span class="mode-icon">✉️</span><div class="mode-title">Outreach<span class="mk-count" id="or-home-count" style="display:none"></span></div><div class="mode-desc">Personal emails to realtors, salons &amp; sympathy partners. Review each draft, tap Send; replies and follow-ups are tracked for you</div><div class="mode-arrow">→</div></div>
     <div class="mode-card readiness" onclick="goTo('screen-readiness')"><span class="mode-icon">&#x1F4CB;</span><div class="mode-title">Listing readiness</div><div class="mode-desc">See what each piece is missing before it can publish to Shopify</div><div class="mode-arrow">→</div></div>
@@ -613,7 +643,7 @@ button,a,label,select,input[type=checkbox],[onclick]{touch-action:manipulation}
 <div id="screen-craft-tag" class="screen">
   <div class="wizard-header"><button class="hdr-nav-btn home-btn" onclick="goHome()" title="Home screen">⌂ Home</button><div class="wizard-title">Craft show tag</div><div class="wizard-step-pill">3 × 2</div></div>
   <div class="wizard-body">
-    <div class="info-card sage"><strong>🎪 Temporary tag for a craft show.</strong> Enter the EB number, pick the show or online price (or type one), then Print — select your Phomemo printer from the print dialog. The show price is saved to Airtable; the Shopify price doesn't change.</div>
+    <div class="info-card sage"><strong>🎪 Temporary tag for a craft show.</strong> Enter the EB number, pick the show or online price (or type one), then Print — select your Phomemo printer from the print dialog. The show price is saved to Airtable; the Shopify price doesn't change. At the show, open <strong>Craft fair → 📷 Scan tag</strong> and point at the tag's QR to mark it sold at the tag price. A shopper who scans it sees the listing.</div>
     <div class="field" style="margin-top:12px"><label>EB number</label><div style="position:relative"><input type="text" id="cst-eb" placeholder="e.g. EB-26FA-WR-013 or just 013" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" oninput="cstSearch(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();cstPickTyped();}" onblur="setTimeout(()=>{const r=document.getElementById('cst-results');if(r)r.style.display='none';},220)"><div id="cst-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);max-height:260px;overflow-y:auto;z-index:500"></div></div></div>
     <div id="cst-piece" style="display:none">
       <div class="section-label">Price on the tag</div>
@@ -624,6 +654,31 @@ button,a,label,select,input[type=checkbox],[onclick]{touch-action:manipulation}
     <div id="cst-preview"><div class="t-empty">Enter an EB number to preview the tag</div></div>
     <button class="btn-primary btn-full" id="cst-print-btn" onclick="cstPrint()" disabled>🖨 Save price &amp; print tag</button>
     <div id="cst-status" style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:8px;min-height:16px"></div>
+  </div>
+</div>
+
+<!-- SET SHOW PRICES SCREEN -->
+<div id="screen-show-pricing" class="screen">
+  <div class="wizard-header"><button class="hdr-nav-btn home-btn" onclick="goHome()" title="Home screen">⌂ Home</button><div class="wizard-title">Set show prices</div><div class="wizard-step-pill" id="sp-pill">—</div></div>
+  <div class="wizard-body">
+    <div class="info-card sage"><strong>💲 Craft show prices for pieces already listed.</strong> Tap a photo to see all of the piece's photos. Type a price (or tap a shortcut) and Save. Enter saves and jumps to the next piece. The Shopify price doesn't change.</div>
+    <div class="sp-tabs" style="margin-top:12px">
+      <button class="btn selected" id="sp-tab-missing" onclick="spSetTab('missing')">Needs a show price</button>
+      <button class="btn" id="sp-tab-all" onclick="spSetTab('all')">All listed</button>
+    </div>
+    <input type="text" id="sp-search" class="rd-search" placeholder="Filter by EB number, name or type…" oninput="spRender()" autocomplete="off" spellcheck="false" style="padding-left:12px">
+    <div id="sp-list"></div>
+  </div>
+</div>
+<div class="modal-overlay" id="sp-photo-modal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="sp-photo-title">Photos</div>
+    <div class="modal-sub" id="sp-photo-sub"></div>
+    <div id="sp-big-wrap"></div>
+    <div id="sp-thumbs"></div>
+    <div id="sp-photo-status" style="font-size:11px;color:var(--text-muted);margin-top:6px"></div>
+    <div class="btn-row"><button class="btn btn-full" onclick="document.getElementById('sp-photo-modal').classList.remove('open')">Close</button></div>
   </div>
 </div>
 
@@ -1120,7 +1175,12 @@ button,a,label,select,input[type=checkbox],[onclick]{touch-action:manipulation}
     </div>
   </div>
   <div id="cf-offline-banner" class="cf-offline-banner">⚠ You appear to be offline. Showing cached inventory.</div>
-  <div class="cf-search"><input type="text" id="cf-search" placeholder="Search by EB number, type, or season..." oninput="cfFilter()"></div>
+  <div class="cf-search"><div style="display:flex;gap:8px;align-items:center"><input type="text" id="cf-search" placeholder="Search by EB number, type, or season..." oninput="cfFilter()" style="flex:1;min-width:0"><button id="cf-scan-btn" onclick="cfToggleScan()" title="Scan a tag's QR code to mark it sold" style="background:var(--gold);color:#fff;border:none;border-radius:99px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;min-height:44px">📷 Scan tag</button></div>
+    <div id="cf-camera-section" style="display:none;margin-top:10px">
+      <div class="bm-camera-wrap"><video id="cf-video" playsinline autoplay muted></video><div class="bm-scan-frame"></div></div>
+      <div id="cf-scan-status" style="text-align:center;font-size:12px;color:var(--gold);font-weight:600;padding:4px">Point at the QR code on the tag…</div>
+    </div>
+  </div>
   <div id="cf-inventory" class="cf-inventory"><div style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:12px">🌸</div><div style="font-size:14px">Loading inventory...</div></div></div>
 </div>
 
@@ -1997,6 +2057,8 @@ function goTo(screenId) {
   if(screenId==='screen-print-tag') ptInit();
   if(screenId==='screen-raw-label') rlInit();
   if(screenId==='screen-craft-tag') cstInit();
+  if(screenId==='screen-show-pricing') spInit();
+  if(prevScreen==='screen-craft-fair' && screenId!=='screen-craft-fair') cfStopScan();
   if(screenId==='screen-backlog') blOnScreenEnter();
   if(screenId==='screen-readiness') readinessRender();
   if(screenId==='screen-marketing') mkInit();
@@ -3324,6 +3386,7 @@ function goBackStep() { if (stepBackFn) stepBackFn(); }
 // ── HOME STATS ──
 function populateHomeStats() {
   const count = status => allRecords.filter(r=>r.fields['Status']===status).length;
+  try { spUpdateCount(); } catch(e) {}
   document.getElementById('stat-instock').textContent      = count('In stock');
   document.getElementById('stat-photographed').textContent = count('Photographed');
   document.getElementById('stat-readytolist').textContent  = count('Ready to list');
@@ -5588,9 +5651,206 @@ function cfShowPrice(f){const v=f['Craft show price ($)']!=null?f['Craft show pr
 function populateCFInventory(filter=''){const container=document.getElementById('cf-inventory');const records=cfCachedRecords.filter(r=>{const f=r.fields,status=f['Status']||'';if(status==='Archived')return false;if(!filter)return true;const q=filter.toLowerCase();returnsrchHit(f['EB Number'], q)||(f['Type']||'').toLowerCase().includes(q)||[].concat(f['Season']||[]).join(' ').toLowerCase().includes(q)||[].concat(f['Occasion']||[]).join(' ').toLowerCase().includes(q)||srchHit(f['Reference name'], q);});if(records.length===0){container.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:12px">🔍</div><div style="font-size:14px">No pieces found</div></div>';return;}const order={'In stock':0,'Photographed':0,'Ready to list':0,'Listed':1,'Craft fair':1,'Hair Salon':1,'Sold':2};records.sort((a,b)=>(order[a.fields['Status']]??3)-(order[b.fields['Status']]??3));container.innerHTML=records.map(r=>{const f=r.fields,isSold=f['Status']==='Sold'||f['Status']==='Archived';const sp=cfShowPrice(f),price=sp!=null?'$'+sp.toFixed(2):'—';const seasonDisplay=Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']||'');const tags=[seasonDisplay,f['Occasion']&&f['Occasion']!=='None'?f['Occasion']:null,f['Status']].filter(Boolean).join(' · ');return'<div class="cf-piece-card'+(isSold?' sold-out':'')+'" onclick="cfTapPiece(\''+r.id+'\')">'+'<div class="cf-piece-thumb-placeholder">'+cfTypeIcon(f['Type'])+'</div>'+'<div class="cf-piece-info"><div class="cf-piece-eb">'+escHtml(f['EB Number']||'—')+'</div>'+'<div class="cf-piece-type">'+escHtml(f['Type']||'Arrangement')+'</div>'+'<div class="cf-piece-tags">'+escHtml(tags)+'</div></div>'+(isSold?'<div class="cf-sold-badge">SOLD</div>':'<div class="cf-piece-price">'+price+'</div>')+'</div>';}).join('');}
 function cfTypeIcon(type){const icons={'Wreath':'🌿','Home decor':'🌸','Outdoor planter':'🪴','Centerpiece':'💐','Wall decor':'🖼','Swag':'🌾','Custom order':'✨','Add-on':'➕'};return icons[type]||'🌺';}
 function cfFilter(){populateCFInventory(document.getElementById('cf-search').value.trim());}
-function cfTapPiece(recordId){const record=cfCachedRecords.find(r=>r.id===recordId);if(!record)return;const f=record.fields;if(f['Status']==='Sold'||f['Status']==='Archived'){alert(escHtml(f['EB Number'])+' is already sold.');return;}modalSelectedRecord=record;document.getElementById('modal-piece-title').textContent=f['EB Number']||'Mark as sold';document.getElementById('modal-piece-sub').textContent=(f['Type']||'Arrangement')+((f['Season'])?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Price ($)']!=null?' · $'+Number(f['Price ($)']).toFixed(2):'')+(f['Craft show price ($)']!=null?' · show $'+Number(f['Craft show price ($)']).toFixed(2):'');document.getElementById('modal-price').value='';priceChoiceRender('modal',f,'show');document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>{b.classList.remove('selected');if(b.querySelector('.channel-label').textContent==='Craft fair'){b.classList.add('selected');modalSelectedChannel='Craft fair';}});document.getElementById('modal-status').style.display='none';document.getElementById('modal-confirm-btn').disabled=false;document.getElementById('modal-confirm-btn').textContent='✓ Mark as sold';document.getElementById('sold-modal').classList.add('open');}
+// tagPrice: the price printed on a scanned craft show tag (from its QR). It fills the sale price.
+function cfTapPiece(recordId,tagPrice){const record=cfCachedRecords.find(r=>r.id===recordId);if(!record)return;const f=record.fields;if(f['Status']==='Sold'||f['Status']==='Archived'){alert((f['EB Number']||'This piece')+' is already sold.');return;}modalSelectedRecord=record;document.getElementById('modal-piece-title').textContent=f['EB Number']||'Mark as sold';document.getElementById('modal-piece-sub').textContent=(f['Reference name']?f['Reference name']+' · ':'')+(f['Type']||'Arrangement')+((f['Season'])?(' · '+(Array.isArray(f['Season'])?f['Season'].join('/'):(f['Season']))):'')+(f['Price ($)']!=null?' · $'+Number(f['Price ($)']).toFixed(2):'')+(f['Craft show price ($)']!=null?' · show $'+Number(f['Craft show price ($)']).toFixed(2):'')+(tagPrice!=null?' · tag $'+tagPrice.toFixed(2):'');document.getElementById('modal-price').value='';priceChoiceRender('modal',f,'show');if(tagPrice!=null){document.getElementById('modal-price').value=tagPrice.toFixed(2);priceChoiceSync('modal');}document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>{b.classList.remove('selected');if(b.querySelector('.channel-label').textContent==='Craft fair'){b.classList.add('selected');modalSelectedChannel='Craft fair';}});document.getElementById('modal-status').style.display='none';document.getElementById('modal-confirm-btn').disabled=false;document.getElementById('modal-confirm-btn').textContent='✓ Mark as sold';document.getElementById('sold-modal').classList.add('open');}
 function modalSelectChannel(el,channel){document.querySelectorAll('#sold-modal .channel-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');modalSelectedChannel=channel;priceChoiceAutoForChannel('modal',channel);}
 function closeSoldModal(e){if(e.target===document.getElementById('sold-modal'))document.getElementById('sold-modal').classList.remove('open');}
+
+// ── TAG QR CODES ──
+// A tag's QR opens the piece's real product page (its handle is a title slug, not the EB number:
+// /products/eb-… is a 404), so a shopper who scans it lands on the listing. The EB number and the
+// tag's price ride along as ?eb=…&sp=…, which Shopify ignores and EB Master's scanners read.
+function tagQRData(f, price){
+  const eb = String(f['EB Number'] || '').toUpperCase();
+  const base = /^https:\/\/eternalbloomsbypatti\.com\/products\//i.test(f['Shopify URL'] || '') ? String(f['Shopify URL']).split('?')[0] : 'https://eternalbloomsbypatti.com/';
+  const p = parseFloat(price);
+  return base + '?eb=' + encodeURIComponent(eb) + (isFinite(p) && p > 0 ? '&sp=' + p.toFixed(2) : '');
+}
+function tagQRImg(data, size){ return 'https://api.qrserver.com/v1/create-qr-code/?size=' + (size || 300) + 'x' + (size || 300) + '&margin=0&data=' + encodeURIComponent(data); }
+// Reads a scanned tag: new QRs (?eb=…&sp=…), older QRs (/products/eb-…) or a bare EB number.
+function parseTagQR(data){
+  data = String(data || '').trim();
+  let eb = null, price = null;
+  try { const u = new URL(data); eb = u.searchParams.get('eb'); const sp = parseFloat(u.searchParams.get('sp')); if (isFinite(sp) && sp > 0) price = sp; } catch(e) {}
+  if (!eb) { const m = data.match(/EB-?\d{2}[A-Z]{2}-?[A-Z]{2,3}-?\d{3}/i); if (m) eb = m[0]; }
+  if (!eb) return null;
+  eb = eb.toUpperCase().replace(/^EB-?(\d{2}[A-Z]{2})-?([A-Z]{2,3})-?(\d{3})$/, 'EB-$1-$2-$3');
+  return { eb, price };
+}
+
+// ── CRAFT FAIR: SCAN A TAG TO MARK IT SOLD ──
+var cfScanActive = false, cfScanStream = null; // var: goTo can run before this line during start-up
+async function cfToggleScan(){
+  if (cfScanActive) { cfStopScan(); return; }
+  if (typeof jsQR === 'undefined') { alert('Camera scanner not loaded. Type the EB number in the search box instead — it\'s printed on the tag.'); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { alert('This browser can\'t use the camera here. Type the EB number in the search box instead.'); return; }
+  document.getElementById('cf-camera-section').style.display = 'block';
+  document.getElementById('cf-scan-status').textContent = 'Point at the QR code on the tag…';
+  const btn = document.getElementById('cf-scan-btn'); btn.textContent = '⏹ Stop';
+  try {
+    cfScanStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment', width:{ideal:1280}, height:{ideal:960} } });
+    const video = document.getElementById('cf-video');
+    video.srcObject = cfScanStream; await video.play();
+    cfScanActive = true; requestAnimationFrame(cfScanLoop);
+  } catch(e) {
+    cfStopScan();
+    alert('Camera unavailable: ' + e.message);
+  }
+}
+function cfStopScan(){
+  cfScanActive = false;
+  if (cfScanStream) { cfScanStream.getTracks().forEach(t => t.stop()); cfScanStream = null; }
+  const video = document.getElementById('cf-video'); if (video) video.srcObject = null;
+  const sec = document.getElementById('cf-camera-section'); if (sec) sec.style.display = 'none';
+  const btn = document.getElementById('cf-scan-btn'); if (btn) btn.textContent = '📷 Scan tag';
+}
+const cfScanCanvas = document.createElement('canvas');
+function cfScanLoop(){
+  if (!cfScanActive) return;
+  const video = document.getElementById('cf-video');
+  if (!video || video.readyState < 2 || video.paused) { requestAnimationFrame(cfScanLoop); return; }
+  // Scan a downscaled frame: full 1280px frames made older iPads lag.
+  const scale = Math.min(1, 640 / (video.videoWidth || 640));
+  cfScanCanvas.width = Math.round(video.videoWidth * scale); cfScanCanvas.height = Math.round(video.videoHeight * scale);
+  const ctx = cfScanCanvas.getContext('2d', { willReadFrequently:true });
+  ctx.drawImage(video, 0, 0, cfScanCanvas.width, cfScanCanvas.height);
+  try {
+    const img = ctx.getImageData(0, 0, cfScanCanvas.width, cfScanCanvas.height);
+    const code = jsQR(img.data, img.width, img.height, { inversionAttempts:'dontInvert' });
+    if (code && code.data && cfHandleScan(code.data)) return;
+  } catch(e) {}
+  requestAnimationFrame(cfScanLoop);
+}
+// Returns true when the scan was used (stops the camera); false keeps scanning.
+function cfHandleScan(data){
+  const t = parseTagQR(data);
+  const status = document.getElementById('cf-scan-status');
+  if (!t) { status.textContent = 'That QR isn\'t an Eternal Blooms tag — try another.'; return false; }
+  const rec = cfCachedRecords.find(r => String(r.fields['EB Number'] || '').toUpperCase() === t.eb);
+  if (!rec) { status.textContent = t.eb + ' isn\'t in the inventory on this device. Tap the status pill to refresh, or search for it.'; return false; }
+  cfStopScan();
+  if (navigator.vibrate) try { navigator.vibrate(60); } catch(e) {}
+  cfTapPiece(rec.id, t.price);
+  return true;
+}
+
+// ── SET SHOW PRICES ──
+// Listed pieces (most already on Shopify) with no Craft show price ($) yet. One card per piece with
+// its Shopify photo; tapping the photo opens every photo from its Drive folder. Saving writes only
+// Craft show price ($) to Airtable through the buffered writer (kept on the device and retried if
+// Airtable is unreachable).
+var spTab = 'missing';
+var spJustSaved = {}; // record id → saved price; keeps a saved card in the "needs" list until the next visit
+const SP_LIVE = ['Listed','In stock','Craft fair','Hair Salon'];
+function spNum(v){ return v != null && v !== '' && Number(v) > 0 ? Number(v) : null; }
+function spMissing(r){ return SP_LIVE.includes(r.fields['Status']) && spNum(r.fields['Craft show price ($)']) == null; }
+function spUpdateCount(){
+  const n = allRecords.filter(spMissing).length;
+  const el = document.getElementById('sp-home-count');
+  if (el) { el.textContent = n; el.style.display = n ? '' : 'none'; }
+  const pill = document.getElementById('sp-pill'); if (pill) pill.textContent = n ? n + ' to price' : 'All priced';
+  return n;
+}
+function spInit(){
+  for (const k in spJustSaved) delete spJustSaved[k];
+  document.getElementById('sp-search').value = '';
+  spSetTab(spTab);
+}
+function spSetTab(t){
+  spTab = t;
+  document.getElementById('sp-tab-missing').classList.toggle('selected', t === 'missing');
+  document.getElementById('sp-tab-all').classList.toggle('selected', t === 'all');
+  spRender();
+}
+function spRender(){
+  spUpdateCount();
+  const q = document.getElementById('sp-search').value.trim();
+  const list = sortPiecesByEB(allRecords.filter(r => {
+    const f = r.fields;
+    if (!SP_LIVE.includes(f['Status'])) return false;
+    if (spTab === 'missing' && !spMissing(r) && !(r.id in spJustSaved)) return false;
+    return !q || srchHit(f['EB Number'], q) || srchHit(f['Reference name'], q) || (f['Type'] || '').toLowerCase().includes(q.toLowerCase());
+  }));
+  const box = document.getElementById('sp-list');
+  if (!list.length) { box.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:10px">' + (spTab === 'missing' && !q ? '🎉' : '🔍') + '</div><div style="font-size:14px">' + (spTab === 'missing' && !q ? 'Every listed piece has a show price.' : 'No pieces match.') + '</div></div>'; return; }
+  box.innerHTML = list.map(spCardHtml).join('');
+}
+function spCardHtml(r){
+  const f = r.fields, id = r.id;
+  const online = spNum(f['Price ($)']), show = spNum(f['Craft show price ($)']), cost = spNum(f['Cost ($)']);
+  const dims = ['Height (in)','Width (in)','Depth (in)'].map(k => spNum(f[k])).filter(v => v != null);
+  const meta = [f['Type'], Array.isArray(f['Season']) ? f['Season'].join('/') : f['Season'], dims.length ? dims.join(' × ') + ' in' : null].filter(Boolean).join(' · ');
+  const prices = [online != null ? 'Online <strong>$' + online.toFixed(2) + '</strong>' : 'No online price', cost != null ? 'cost $' + cost.toFixed(2) : null, show != null ? 'show <strong>$' + show.toFixed(2) + '</strong>' : null].filter(Boolean).join(' · ');
+  const photo = f['Photo URL'] ? '<img src="' + escHtml(mkThumb(f['Photo URL'], 300)) + '" loading="lazy" decoding="async" alt="' + escHtml(f['EB Number'] || '') + '">' : cfTypeIcon(f['Type']);
+  // Quick picks: the online price, then 10/15/20% off rounded to whole dollars.
+  const quick = online == null ? '' : [['Online', online]].concat([10,15,20].map(p => ['−' + p + '%', Math.max(1, Math.round(online * (1 - p / 100)))]))
+    .map(([label, v]) => '<button class="btn" onclick="spQuick(\'' + id + '\',' + v + ')">' + label + ' $' + (v % 1 ? v.toFixed(2) : v) + '</button>').join('');
+  const saved = spJustSaved[id];
+  return '<div class="sp-card' + (saved != null ? ' done' : '') + '" id="sp-card-' + id + '">'
+    + '<button class="sp-photo" onclick="spOpenPhotos(\'' + id + '\')" title="See all photos">' + photo + (f['Drive Folder ID'] ? '<span class="sp-more">More photos</span>' : '') + '</button>'
+    + '<div class="sp-info"><div class="sp-eb">' + escHtml(f['EB Number'] || '—') + '</div>'
+    + (f['Reference name'] ? '<div class="sp-ref">' + escHtml(f['Reference name']) + '</div>' : '')
+    + '<div class="sp-meta">' + escHtml(meta) + '<br>' + prices + '</div>'
+    + '<div class="sp-quick">' + quick + '</div>'
+    + '<div class="sp-row"><input type="text" inputmode="decimal" enterkeyhint="next" id="sp-in-' + id + '" placeholder="Show price $" value="' + (show != null ? show.toFixed(2) : '') + '" onkeydown="if(event.key===\'Enter\'){event.preventDefault();spSave(\'' + id + '\',true);}"><button class="btn-rose" onclick="spSave(\'' + id + '\')">Save</button></div>'
+    + '<div class="sp-saved" id="sp-msg-' + id + '">' + (saved != null ? '✓ Show price $' + saved.toFixed(2) + ' saved' : '') + '</div>'
+    + '</div></div>';
+}
+function spQuick(id, v){ const el = document.getElementById('sp-in-' + id); if (el) el.value = Number(v).toFixed(2); spSave(id); }
+function spSave(id, jumpNext){
+  const el = document.getElementById('sp-in-' + id), msg = document.getElementById('sp-msg-' + id);
+  const v = parseFloat(String(el.value).replace(/[$,\s]/g, ''));
+  if (!(isFinite(v) && v > 0)) { msg.style.color = 'var(--red-text)'; msg.textContent = 'Enter a price above $0.'; el.focus(); return; }
+  const price = Math.round(v * 100) / 100;
+  el.value = price.toFixed(2);
+  queueFieldWrite(id, { 'Craft show price ($)': price });
+  spJustSaved[id] = price;
+  const card = document.getElementById('sp-card-' + id); if (card) card.classList.add('done');
+  msg.style.color = ''; msg.textContent = '⏳ Saving $' + price.toFixed(2) + '…';
+  spUpdateCount();
+  flushWrites(id)
+    .then(() => { msg.textContent = '✓ Show price $' + price.toFixed(2) + ' saved'; })
+    .catch(e => { msg.style.color = 'var(--amber-text)'; msg.textContent = 'Kept on this device — will save to Airtable when it can (' + e.message + ')'; });
+  if (jumpNext) {
+    let next = card && card.nextElementSibling;
+    while (next && next.classList.contains('done')) next = next.nextElementSibling;
+    const nin = next && next.querySelector('input');
+    if (nin) { next.scrollIntoView({ behavior:'smooth', block:'center' }); nin.focus({ preventScroll:true }); }
+    else el.blur();
+  }
+}
+let spPhotoReq = 0;
+async function spOpenPhotos(id){
+  const r = allRecords.find(x => x.id === id); if (!r) return;
+  const f = r.fields, req = ++spPhotoReq;
+  document.getElementById('sp-photo-title').textContent = f['EB Number'] || 'Photos';
+  document.getElementById('sp-photo-sub').textContent = [f['Reference name'], spNum(f['Price ($)']) != null ? 'online $' + spNum(f['Price ($)']).toFixed(2) : null].filter(Boolean).join(' · ');
+  const big = document.getElementById('sp-big-wrap'), thumbs = document.getElementById('sp-thumbs'), st = document.getElementById('sp-photo-status');
+  big.innerHTML = f['Photo URL'] ? '<img id="sp-big" src="' + escHtml(mkThumb(f['Photo URL'], 1200)) + '" alt="">' : '<div style="padding:40px;text-align:center;color:var(--text-muted)">No Shopify photo</div>';
+  thumbs.innerHTML = ''; st.textContent = '';
+  document.getElementById('sp-photo-modal').classList.add('open');
+  if (!f['Drive Folder ID']) { st.textContent = f['Photo URL'] ? 'Shopify main photo. No Drive folder on file for more.' : ''; return; }
+  st.textContent = 'Loading photos from Drive…';
+  try {
+    const res = await fetch(SERVER_URL + '/drive-folder-images?folderId=' + encodeURIComponent(f['Drive Folder ID']));
+    const d = await res.json();
+    if (req !== spPhotoReq) return;
+    if (!res.ok || d.error) throw new Error(d.error || ('error ' + res.status));
+    const files = (d.files || []).filter(x => x.thumbnailLink);
+    if (!files.length) { st.textContent = 'No photos in the Drive folder.'; return; }
+    spPhotoFiles = files;
+    thumbs.innerHTML = files.map((x, i) => '<img src="' + escHtml(x.thumbnailLink) + '" alt="' + escHtml(x.name) + '" referrerpolicy="no-referrer"' + driveThumbOri(x) + ' onclick="spShowDrive(' + i + ')">').join('');
+    st.textContent = files.length + ' photo' + (files.length === 1 ? '' : 's') + ' in Drive · tap one to enlarge';
+    if (!f['Photo URL']) spShowDrive(0);
+  } catch(e) { if (req === spPhotoReq) st.textContent = 'Could not load Drive photos: ' + e.message; }
+}
+var spPhotoFiles = [];
+function spShowDrive(i){
+  const x = spPhotoFiles[i]; if (!x) return;
+  document.querySelectorAll('#sp-thumbs img').forEach((el, j) => el.classList.toggle('on', j === i));
+  const o = +x.orientation > 1 ? ' data-ori="' + (+x.orientation) + '" onload="driveBigFix(this)"' : '';
+  document.getElementById('sp-big-wrap').innerHTML = '<img id="sp-big" src="' + escHtml(driveUpsize(x.thumbnailLink)) + '" alt="' + escHtml(x.name) + '" referrerpolicy="no-referrer"' + o + '>';
+}
 async function modalConfirmSale(){if(!modalSelectedRecord||!modalSelectedChannel){alert('Select a sale channel.');return;}const salePrice=document.getElementById('modal-price').value.trim();const btn=document.getElementById('modal-confirm-btn');btn.disabled=true;btn.textContent='⏳ Recording...';const statusEl=document.getElementById('modal-status');statusEl.style.display='flex';statusEl.className='status-bar loading';document.getElementById('modal-status-msg').textContent='Recording sale...';try{await markSold(modalSelectedRecord,modalSelectedChannel,salePrice,localISODate());statusEl.className='status-bar success';document.getElementById('modal-status-msg').textContent='✓ Sold! Record updated.';btn.textContent='✓ Done!';populateHomeStats();populateCFInventory(document.getElementById('cf-search').value.trim());populateMSSelect();populateLPSelect();setTimeout(()=>document.getElementById('sold-modal').classList.remove('open'),1800);}catch(e){statusEl.className='status-bar error';document.getElementById('modal-status-msg').textContent='Error: '+e.message;btn.disabled=false;btn.textContent='✓ Mark as sold';}}
 
 // ── ADD VIDEO SCREEN ──
@@ -5826,7 +6086,8 @@ function printQRTag(ebNumber, price) {
   var cleanEB = ebMatch ? ebMatch[1].toUpperCase() : ebNumber;
   var rec = allRecords.find(function(r){ return r.fields['EB Number'] === cleanEB || r.fields['EB Number'] === ebNumber; });
   var isWreath = rec && (rec.fields['Type'] || '').toLowerCase().trim() === 'wreath';
-  var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(SHOPIFY_BASE + cleanEB.toLowerCase());
+  // Real product page (the old /products/eb-… link was a 404), with the EB number for the scanners.
+  var qrUrl = tagQRImg(tagQRData(rec ? rec.fields : { 'EB Number': cleanEB }, price), 300);
   var priceDisplay = price && parseFloat(price) > 0 ? '$' + parseFloat(price).toFixed(2) : '';
   var refName = rec ? (rec.fields['Reference name'] || '').trim() : '';
   var inner = '<div class="top"><div class="left"><div class="brand">Eternal Blooms</div><div class="eb">' + cleanEB + '</div>' + (priceDisplay ? '<div class="price">' + priceDisplay + '</div>' : '') + '</div><img src="' + qrUrl + '" alt="QR"></div>' + (refName ? '<div class="sub">' + escHtml(refName) + '</div>' : '');
@@ -5895,14 +6156,14 @@ function cstTagParts() {
   const rec = cstRecordId && allRecords.find(r => r.id === cstRecordId);
   if (!rec) return null;
   const price = cstPrice();
-  return { eb: rec.fields['EB Number'] || '', ref: (rec.fields['Reference name'] || '').trim(), price: price != null ? '$' + price.toFixed(2) : '' };
+  return { eb: rec.fields['EB Number'] || '', ref: (rec.fields['Reference name'] || '').trim(), price: price != null ? '$' + price.toFixed(2) : '', qr: tagQRData(rec.fields, price) };
 }
 function cstPreview() {
   const box = document.getElementById('cst-preview'), btn = document.getElementById('cst-print-btn');
   const t = cstTagParts();
   btn.disabled = !(t && t.price);
   if (!t) { box.innerHTML = '<div class="t-empty">Enter an EB number to preview the tag</div>'; return; }
-  box.innerHTML = '<div class="t-brand">Eternal Blooms</div><div class="t-eb">' + escHtml(t.eb) + '</div>' + (t.price ? '<div class="t-price">' + t.price + '</div>' : '') + (t.ref ? '<div class="t-sub">' + escHtml(t.ref) + '</div>' : '');
+  box.innerHTML = '<div class="t-row"><div class="t-left"><div class="t-brand">Eternal Blooms</div><div class="t-eb">' + escHtml(t.eb) + '</div>' + (t.price ? '<div class="t-price">' + t.price + '</div>' : '') + '</div>' + (t.price ? '<img class="t-qr" src="' + escHtml(tagQRImg(t.qr, 200)) + '" alt="QR">' : '') + '</div>' + (t.ref ? '<div class="t-sub">' + escHtml(t.ref) + '</div>' : '');
 }
 function cstPrint() {
   const t = cstTagParts(), price = cstPrice();
@@ -5911,8 +6172,11 @@ function cstPrint() {
   // Open the print window first, inside the click, so pop-up blockers allow it.
   const win = window.open('', '_blank');
   if (!win) { alert('Pop-up blocked — allow pop-ups for this site to print the tag.'); return; }
-  const inner = '<div class="brand">Eternal Blooms</div><div class="eb">' + escHtml(t.eb) + '</div><div class="price">' + t.price + '</div>' + (t.ref ? '<div class="sub">' + escHtml(t.ref) + '</div>' : '');
-  const css = ['<style>','@page { size: 3in 2in; margin: 0mm; }','@media print { @page { margin: 0mm !important; } html, body { margin: 0 !important; padding: 0 !important; } }','html, body { margin: 0 !important; padding: 0 !important; }','body { width: 3in; overflow: hidden; }','* { box-sizing: border-box; }','.tag { width: 3in; height: 2in; display: flex; flex-direction: column; justify-content: center; font-family: Arial, sans-serif; background: #fff; padding: 0.09in 0.14in; overflow: hidden; }','.brand { font-size: 10pt; font-weight: 400; letter-spacing: .1em; text-transform: uppercase; color: #bb8588; margin-bottom: 4px; white-space: nowrap; }','.eb { font-size: 10pt; font-weight: 800; letter-spacing: .03em; color: #2b2622; line-height: 1.15; margin-bottom: 4px; white-space: nowrap; }','.price { font-size: 20pt; font-weight: 800; color: #bb8588; margin-bottom: 4px; }','.sub { font-size: 14pt; color: #bb8588; letter-spacing: .02em; line-height: 1.15; }','</style>'].join('\n');
+  // QR on the right: opens the listing for a shopper; EB Master's Craft fair "Scan tag" reads the
+  // EB number and this tag's price from it and opens Mark as sold.
+  const inner = '<div class="top"><div class="left"><div class="brand">Eternal Blooms</div><div class="eb">' + escHtml(t.eb) + '</div><div class="price">' + t.price + '</div></div><img src="' + escHtml(tagQRImg(t.qr, 300)) + '" alt="QR"></div>' + (t.ref ? '<div class="sub">' + escHtml(t.ref) + '</div>' : '');
+  const css = ['<style>','@page { size: 3in 2in; margin: 0mm; }','@media print { @page { margin: 0mm !important; } html, body { margin: 0 !important; padding: 0 !important; } }','html, body { margin: 0 !important; padding: 0 !important; }','body { width: 3in; overflow: hidden; }','* { box-sizing: border-box; }','.tag { width: 3in; height: 2in; display: flex; flex-direction: column; justify-content: center; font-family: Arial, sans-serif; background: #fff; padding: 0.09in 0.12in; overflow: hidden; }','.top { display: flex; align-items: center; justify-content: space-between; }','.left { flex: 1; min-width: 0; padding-right: 0.08in; }','.brand { font-size: 10pt; font-weight: 400; letter-spacing: .1em; text-transform: uppercase; color: #bb8588; margin-bottom: 4px; white-space: nowrap; }','.eb { font-size: 10pt; font-weight: 800; letter-spacing: .03em; color: #2b2622; line-height: 1.15; margin-bottom: 4px; white-space: nowrap; }','.price { font-size: 20pt; font-weight: 800; color: #bb8588; }','img { width: 0.95in; height: 0.95in; flex-shrink: 0; display: block; }','.sub { font-size: 13pt; color: #bb8588; letter-spacing: .02em; line-height: 1.15; margin-top: 4px; max-height: 2.3em; overflow: hidden; }','</style>'].join('\n');
+  // window.onload waits for the QR image, so the tag never prints without it.
   win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title></title>' + css + '</head><body><div class="tag">' + inner + '</div><script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>');
   win.document.close();
   const status = document.getElementById('cst-status');
@@ -6634,8 +6898,8 @@ function bmScanLoop() {
 function bmHandleQRScan(data) {
   bmStopCamera();
   document.getElementById('bm-scan-status').textContent = '✓ QR scanned!';
-  const urlMatch = data.match(/\/products\/(eb-[a-z0-9-]+)$/i);
-  const ebNumber = (urlMatch ? urlMatch[1] : data).toUpperCase();
+  const t = parseTagQR(data); // new tags (?eb=…), older /products/eb-… tags, or a bare EB number
+  const ebNumber = t ? t.eb : String(data).toUpperCase();
   document.getElementById('bm-eb-input').value = ebNumber;
   bmAssignPiece();
 }
