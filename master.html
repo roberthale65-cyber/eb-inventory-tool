@@ -402,6 +402,20 @@ textarea.mk-input{min-height:84px;resize:vertical;line-height:1.5}
 .mk-chk{font-size:13px;display:flex;align-items:center;gap:6px}
 .mk-history{font-size:12px;color:var(--text-muted);margin:2px 0 8px}
 .mk-logo{font-size:12px;color:var(--text-muted);margin:2px 0 8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.mk-music{border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin:4px 0 10px;font-size:12px;color:var(--text-muted)}
+.mk-music-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}.mk-music-head b{font-size:13px;color:var(--text-mid)}
+.mk-track{display:flex;align-items:center;gap:10px;padding:8px;border:1.5px solid var(--border);border-radius:8px;margin-bottom:6px;background:#fff}
+.mk-track.on{border-color:var(--teal);background:var(--teal-bg)}.mk-track.playing{border-color:var(--rose)}
+.mk-track-play{width:42px;height:42px;flex-shrink:0;border-radius:50%;border:1.5px solid var(--rose);background:var(--rose-bg);color:var(--rose);font-size:15px;cursor:pointer;padding:0}
+.mk-track-info{flex:1;min-width:0;line-height:1.35}.mk-track-info b{display:block;font-size:13px;color:var(--text);overflow-wrap:anywhere}
+.mk-track-acts{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.mk-track-use{font-size:12px;font-weight:700;padding:7px 12px;border-radius:99px;border:1.5px solid var(--teal);background:#fff;color:var(--teal);cursor:pointer;white-space:nowrap}
+.mk-track.on .mk-track-use{background:var(--teal);color:#fff}
+.mk-track-nope{font-size:11px;border:0;background:none;color:var(--text-muted);text-decoration:underline;cursor:pointer;padding:2px 0}
+.mk-music-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}.mk-music-row .btn{min-height:40px;font-size:13px}
+.mk-music-row .btn.on{border-color:var(--teal);color:var(--teal)}
+.mk-music-now{margin-top:8px}.mk-music-now b{color:var(--teal)}
+@media (max-width:420px){.mk-track{flex-wrap:wrap}.mk-track-acts{flex-direction:row;width:100%;justify-content:space-between;align-items:center}}
 .mk-logo select{font-size:12px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;background:#fff;color:var(--text-mid)}
 .mk-chip{display:inline-block;font-family:var(--font-body);font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;background:var(--ivory-dark);color:var(--text-mid);margin-left:6px;vertical-align:middle}
 .mk-chip.repost{background:#ece4f4;color:#6b4f8a}.mk-chip.theme{background:var(--rose-bg);color:var(--rose)}
@@ -2658,7 +2672,7 @@ function mkListBusy(){
   // A video counts while playing and for a minute after it stops, so it isn't swapped back to its
   // poster while someone is looking at it.
   const watching = v => (!v.paused && !v.ended) || Date.now() - (+v.dataset.pausedAt || 0) < 60000;
-  return !!(host && ((a && host.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) || [...host.querySelectorAll('video')].some(watching)));
+  return !!(host && ((a && host.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) || [...host.querySelectorAll('video')].some(watching) || (mkMusicPlaying && !mkAudio.paused)));
 }
 function mkRender(opts){
   const keepTyped = opts && opts.keepTyped;
@@ -2682,6 +2696,10 @@ function mkRender(opts){
   for(const id in typed){ const el = document.getElementById(id); if(el){ el.value = typed[id]; el.dispatchEvent(new Event('input')); } }
   if(focus){ const el = document.getElementById(focus.id); if(el){ el.focus(); try { el.setSelectionRange(focus.start, focus.end); } catch(e){} } }
   pieces.forEach(mkLoadCut);
+  pieces.forEach(rows => {
+    const v = rows.find(r => r.fields['Media'] === 'Video' && r.fields['Video URL']), eb = rows[0].fields['EB Number'];
+    if(v && eb && !mkMusic[eb] && (v.fields['Status'] === 'Draft' || v.fields['Status'] === 'Approved') && v.fields['Video version'] !== 'Original video') mkLoadMusic(eb);
+  });
 }
 
 // One card per piece: shared photo/video, then a block per channel.
@@ -2728,7 +2746,8 @@ function mkPieceHtml(rows){
     : (isVideo && open)
     ? '<div class="mk-logo">Video <select onchange="mkSetVideoVersion(\'' + escHtml(eb) + '\', this.value)">' +
         MK_VIDEO_OPTS.map(([v, label]) => '<option value="' + v + '"' + ((vf['Video version'] || 'Social cut') === v ? ' selected' : '') + '>' + label + '</option>').join('') +
-      '</select><span>' + (vf['Video version'] === 'Original video' ? 'Posts the listing video as it is.' : mkCutStatus(eb)) + '</span></div>'
+      '</select><span>' + (vf['Video version'] === 'Original video' ? 'Posts the listing video as it is.' : mkCutStatus(eb)) + '</span></div>' +
+      (vf['Video version'] === 'Original video' ? '<div class="mk-note" style="margin:0 0 8px">Music goes on the 15-second cut. Switch Video to the cut to add music.</div>' : mkMusicHtml(eb, rows))
     : '';
   let group = '';
   if(st === 'Draft'){
@@ -2742,7 +2761,7 @@ function mkPieceHtml(rows){
   const history = posted.length ? '<div class="mk-history">Posted before: ' + posted.slice(0, 6).map(r => MK_CH_ICON[mkChannel(r.fields)] + ' ' + mkDate(r.fields['Status changed']) + (r.fields['Theme'] ? ' (' + escHtml(r.fields['Theme']) + ')' : '')).join(' · ') + '</div>' : '';
   const chips = [f0['Post type'] === 'Repost' ? '<span class="mk-chip repost">Repost</span>' : (f0['Post type'] === 'New' ? '<span class="mk-chip">New</span>' : ''), f0['Theme'] ? '<span class="mk-chip theme">' + escHtml(f0['Theme']) + '</span>' : ''].join('');
   return '<div class="mk-card ' + st.toLowerCase() + (isVideo ? ' has-video' : '') + '">' +
-    '<div class="mk-media">' + media + '</div>' +
+    '<div class="mk-media" id="mk-media-' + escHtml(eb) + '">' + media + '</div>' +
     '<div class="mk-body">' +
       '<div class="rd-eb">' + escHtml(eb) + chips + '</div>' + history + logo +
       rows.map(r => mkChannelHtml(r, rows.length > 1)).join('') +
@@ -2921,6 +2940,118 @@ async function mkSetVideoVersion(eb, value){
     delete mkCuts[eb];
     mkRender({ keepText: true }); mkStatusMsg('Video for ' + escHtml(eb) + ': <b>' + escHtml(MK_VIDEO_OPTS.find(o => o[0] === value)[1]) + '</b>.');
   } catch(e){ mkRender({ keepText: true }); mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
+}
+// Music under the 15-second cut: three suggestions at a time (best match first), "Show next three"
+// pages through the rest, ▶ plays the card's video with that track, "Use this" saves the pick on
+// every channel's row, "No music" posts the cut silent, "Not for us" retires the track for good.
+const mkMusic = {}; // EB number → { loading } | { error } | { current, tracks, page }
+let mkMusicPlaying = null; // { eb, id } while a track plays over a card's video
+const mkAudio = new Audio();
+mkAudio.preload = 'none';
+async function mkLoadMusic(eb){
+  mkMusic[eb] = { loading: true };
+  try {
+    const r = await fetch(SERVER_URL + '/marketing/music/suggest/' + encodeURIComponent(eb));
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+    mkMusic[eb] = { current: d.current || '', tracks: d.tracks || [], page: 0 };
+  } catch(e){ mkMusic[eb] = { error: e.message }; }
+  mkRender({ keepTyped: true });
+}
+function mkMusicHtml(eb, rows){
+  const m = mkMusic[eb] || { loading: true }, e = escHtml(eb);
+  const head = t => '<div class="mk-music-head"><b>🎵 Music</b><span>' + t + '</span></div>';
+  if(m.loading) return '<div class="mk-music">' + head('') + 'Finding tracks…</div>';
+  if(m.error) return '<div class="mk-music">' + head('') + 'Couldn\'t load the music: ' + escHtml(m.error) + ' <button class="btn mk-small" onclick="delete mkMusic[\'' + e + '\'];mkRender({keepText:true})">Try again</button></div>';
+  const cur = rows.map(r => r.fields['Music']).find(Boolean) || m.current || '';
+  const sets = Math.max(1, Math.ceil(m.tracks.length / 3));
+  if(m.page >= sets) m.page = 0;
+  const shown = m.tracks.slice(m.page * 3, m.page * 3 + 3);
+  const curTrack = m.tracks.find(t => t.id === cur);
+  const track = t => {
+    const on = cur === t.id, playing = mkMusicPlaying && mkMusicPlaying.eb === eb && mkMusicPlaying.id === t.id;
+    return '<div class="mk-track' + (on ? ' on' : '') + (playing ? ' playing' : '') + '">' +
+      '<button type="button" class="mk-track-play" onclick="mkPlayMusic(\'' + e + '\',\'' + t.id + '\')" aria-label="' + (playing ? 'Stop' : 'Play the video with ' + escHtml(t.name)) + '">' + (playing ? '❚❚' : '▶') + '</button>' +
+      '<div class="mk-track-info"><b>' + escHtml(t.name) + '</b>' + escHtml(t.note || t.mood) + '</div>' +
+      '<div class="mk-track-acts"><button type="button" class="mk-track-use" onclick="mkSetMusic(\'' + e + '\',\'' + t.id + '\')">' + (on ? 'Chosen' : 'Use this') + '</button>' +
+      '<button type="button" class="mk-track-nope" onclick="mkRetireMusic(\'' + e + '\',\'' + t.id + '\')">Not for us</button></div></div>';
+  };
+  const now = cur === 'none' ? 'No music' : curTrack ? escHtml(curTrack.name) : (cur ? 'a track that\'s no longer in the library' : '');
+  return '<div class="mk-music">' + head('Suggestions ' + (m.page + 1) + ' of ' + sets) +
+    (shown.length ? shown.map(track).join('') : '<div>No tracks left in the library.</div>') +
+    '<div class="mk-music-row">' +
+      (sets > 1 ? '<button class="btn" onclick="mkMusicPage(\'' + e + '\')">' + (m.page === sets - 1 ? 'Back to first three' : 'Show next three') + '</button>' : '') +
+      '<button class="btn' + (cur === 'none' ? ' on' : '') + '" onclick="mkSetMusic(\'' + e + '\',\'none\')">No music</button>' +
+    '</div>' +
+    '<div class="mk-music-now">' + (now ? 'Posts with: <b>' + now + '</b>' : 'Nothing chosen yet. Without a pick, the cut posts with no music.') + '</div></div>';
+}
+function mkMusicPage(eb){
+  const m = mkMusic[eb]; if(!m || !m.tracks) return;
+  mkStopMusic();
+  m.page = (m.page + 1) % Math.max(1, Math.ceil(m.tracks.length / 3));
+  mkRender({ keepText: true });
+}
+function mkStopMusic(){
+  mkAudio.pause();
+  const p = mkMusicPlaying; mkMusicPlaying = null;
+  if(p){ const v = document.querySelector('#mk-media-' + CSS.escape(p.eb) + ' video'); if(v && !v.paused) v.pause(); }
+}
+// Plays the card's video (the 15-second cut when it's ready) from the start with the track. Both
+// start inside the tap, which iPhone and iPad need for sound.
+function mkPlayMusic(eb, id){
+  const m = mkMusic[eb], t = m && m.tracks && m.tracks.find(x => x.id === id);
+  if(!t) return;
+  if(mkMusicPlaying && mkMusicPlaying.eb === eb && mkMusicPlaying.id === id && !mkAudio.paused){ mkStopMusic(); return mkRender({ keepText: true }); }
+  mkStopMusic();
+  const box = document.getElementById('mk-media-' + eb);
+  let v = box && box.querySelector('video');
+  const btn = box && box.querySelector('.mk-vid');
+  if(!v && btn){ mkPlayVideo(btn); v = box.querySelector('video'); }
+  mkAudio.src = t.clip;
+  mkMusicPlaying = { eb, id };
+  if(v){
+    if(!v.dataset.music){
+      v.dataset.music = '1';
+      v.addEventListener('ended', () => { if(mkMusicPlaying && mkMusicPlaying.eb === eb){ mkAudio.pause(); mkMusicPlaying = null; mkRender({ keepText: true }); } });
+      v.addEventListener('pause', () => { if(mkMusicPlaying && mkMusicPlaying.eb === eb && !v.ended) mkAudio.pause(); });
+      v.addEventListener('play', () => { if(mkMusicPlaying && mkMusicPlaying.eb === eb){ mkAudio.currentTime = v.currentTime; mkAudio.play().catch(()=>{}); } });
+      v.addEventListener('seeked', () => { if(mkMusicPlaying && mkMusicPlaying.eb === eb) mkAudio.currentTime = v.currentTime; });
+    }
+    v.muted = true;
+    try { v.currentTime = 0; } catch(e){}
+    const p = v.play(); if(p && p.catch) p.catch(() => {});
+  }
+  mkAudio.currentTime = 0;
+  // AbortError: the video paused or another track started first; nothing to report.
+  mkAudio.play().catch(e => { if(e.name === 'AbortError') return; mkMusicPlaying = null; mkRender({ keepText: true }); mkStatusMsg('<strong>Couldn\'t play the track</strong>' + escHtml(e.message) + '. Tap ▶ again.', 'rose'); });
+  mkAudio.onended = () => { if(!v){ mkMusicPlaying = null; mkRender({ keepText: true }); } };
+  // Redraw the buttons only, so the video that just started isn't replaced.
+  const card = box && box.closest('.mk-card');
+  const music = card && card.querySelector('.mk-music');
+  if(music){ const rows = mkRecords.filter(r => r.fields['EB Number'] === eb && (r.fields['Status'] === 'Draft' || r.fields['Status'] === 'Approved')); const tmp = document.createElement('div'); tmp.innerHTML = mkMusicHtml(eb, rows); music.replaceWith(tmp.firstChild); }
+}
+async function mkSetMusic(eb, id){
+  const rows = mkRecords.filter(r => r.fields['EB Number'] === eb && (r.fields['Status'] === 'Draft' || r.fields['Status'] === 'Approved'));
+  const m = mkMusic[eb], t = m && m.tracks && m.tracks.find(x => x.id === id);
+  try {
+    for(const r of rows) await mkSave(r.id, { ...mkCardFields(r.id), 'Music': id }, { render:false });
+    if(m) m.current = id;
+    mkRender({ keepText: true });
+    mkStatusMsg('Music for ' + escHtml(eb) + ': <b>' + (id === 'none' ? 'No music' : escHtml(t ? t.name : 'chosen')) + '</b>.' + (id === 'none' ? '' : ' It goes under the 15-second cut when the post goes out.'));
+  } catch(e){ mkRender({ keepText: true }); mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
+}
+async function mkRetireMusic(eb, id){
+  const m = mkMusic[eb], t = m && m.tracks && m.tracks.find(x => x.id === id);
+  if(!t) return;
+  if(mkMusicPlaying && mkMusicPlaying.id === id) mkStopMusic();
+  try {
+    const r = await fetch(SERVER_URL + '/marketing/music/' + id + '/retire', { method: 'POST' });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+    for(const k in mkMusic) if(mkMusic[k].tracks) mkMusic[k].tracks = mkMusic[k].tracks.filter(x => x.id !== id);
+    mkRender({ keepText: true });
+    mkStatusMsg('<b>' + escHtml(t.name) + '</b> won\'t be suggested again.' + (m.current === id ? ' It\'s still the pick for ' + escHtml(eb) + ' until you choose another.' : ''));
+  } catch(e){ mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
 }
 async function mkPostNow(id){
   try { await mkSave(id, { 'Scheduled for': new Date().toISOString() }); mkStatusMsg('Posting now — it moves to <b>Posted</b> when it\'s live.'); }
