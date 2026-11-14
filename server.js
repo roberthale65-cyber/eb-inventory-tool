@@ -2829,7 +2829,7 @@ const AT_MARKETING_TBL = 'tblUeywr9I8jflj0O';
 // pin description, Instagram caption or Facebook post, and Pin ID / Pin URL hold the live post.
 const MKT_CHANNELS = ['Pinterest', 'Instagram', 'Facebook'];
 const mktChannel = f => (f && f['Channel']) || 'Pinterest';
-const MKT_EDITABLE_FIELDS = ['Pin Title', 'Description', 'Board', 'Alt Text', 'Status', 'Pin URL', 'Notes', 'Scheduled for', 'Logo', 'Video version'];
+const MKT_EDITABLE_FIELDS = ['Pin Title', 'Description', 'Board', 'Alt Text', 'Status', 'Pin URL', 'Notes', 'Scheduled for', 'Logo', 'Video version', 'Music'];
 const MKT_STATUSES = ['Draft', 'Approved', 'Posted', 'Skipped'];
 // Starter boards — the AI must pick one so boards stay few and searchable.
 const PIN_BOARDS = [
@@ -4151,6 +4151,169 @@ app.post('/marketing/cut-failed/:name', async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Music on the social cut ──
+// Patti picks the music for each piece's 15-second social cut on its Marketing card (asked
+// 2026-11-14, after the Soundraw tracks were dropped on 2026-10-30): three suggestions at a time,
+// "Show next three" for more, "No music", and "Not for us" to retire a track for good.
+// Tracks come from Mixkit's free library (its license allows social media video posts for a
+// business, no credit line). Each is kept in assets/music/<Mixkit ID>.mp3 as a 15-second clip,
+// already cut to its best stretch, volume-matched and faded out by 14 s, so the card plays the
+// same sound that posts. The Airtable "Music Library" table lists them (rows with a Mixkit ID;
+// the old Soundraw rows have none and are ignored); unticking Active there, or "Not for us" on a
+// card, takes a track out of the suggestions.
+// The queue row's Music field holds the track's record ID, or "none". At post time the clip is
+// laid under the finished cut. The video is copied as it is, not re-encoded, so this takes a
+// second or two even on this small instance (the heavy smoothing stays in the GitHub Action).
+// Music only goes on the 15-second cut: the original listing video posts with its own sound.
+const AT_MUSIC_TBL = 'tbll5NtHpdzHjvlql';
+const MUSIC_DIR = path.join(__dirname, 'assets', 'music');
+const MUSIC_F = {
+  track: 'fldsPSbkYKR6Dnk6Q', mood: 'fldC2xlPHIMrOE9lm', themes: 'fldXT0qUslNJrf7hc', active: 'fldKktrcNreHd1b4D',
+  used: 'fldGsdrjIvXSCExCd', last: 'fldPaIg8gTaYQsjWR', note: 'fldEavf39ZpXWgdb5', mixkit: 'fldJJF3VS9aAo166D'
+};
+const MUSIC_VERSION = 1; // bump when the mix changes so old copies are remade
+const MUSIC_FRESH_MS = 30 * 60 * 1000;
+const musicClip = t => path.join(MUSIC_DIR, t.mixkit + '.mp3');
+let musicCache = { at: 0, list: null };
+async function musicLibrary({ force = false } = {}) {
+  if (!force && musicCache.list && Date.now() - musicCache.at < MUSIC_FRESH_MS) return musicCache.list;
+  let rows = [], offset = null;
+  do {
+    const data = await airtableReq(`${AT_MUSIC_TBL}?pageSize=100&returnFieldsByFieldId=true${offset ? '&offset=' + encodeURIComponent(offset) : ''}`);
+    rows = rows.concat(data.records || []);
+    offset = data.offset || null;
+  } while (offset);
+  const list = rows.map(r => {
+    const f = r.fields || {};
+    return { id: r.id, name: f[MUSIC_F.track] || '', mood: f[MUSIC_F.mood] || '', themes: f[MUSIC_F.themes] || [], active: !!f[MUSIC_F.active],
+      used: f[MUSIC_F.used] || 0, last: f[MUSIC_F.last] || null, note: f[MUSIC_F.note] || '', mixkit: String(f[MUSIC_F.mixkit] || '').trim() };
+  }).filter(t => t.name && /^\d+$/.test(t.mixkit) && fs.existsSync(musicClip(t)));
+  musicCache = { at: Date.now(), list };
+  return list;
+}
+const mktMusicId = f => (f && /^rec\w+$/.test(f['Music'] || '')) ? f['Music'] : null;
+async function musicTrack(id) { return (await musicLibrary()).find(t => t.id === id) || null; }
+// A small, stable number per piece and track: breaks ties the same way every time, so "Show next
+// three" pages through a list that doesn't reshuffle between loads.
+const musicJitter = (eb, id) => crypto.createHash('md5').update(eb + '|' + id).digest()[0] / 255;
+
+// Every active track, best first, arranged so each group of three spreads across moods. Themes
+// count most when they're the post's chosen angle, then the piece's own themes (more when in
+// season); sympathy tracks rank lower for other pieces; tracks used lately drop back a little.
+function musicRank(lib, { eb, rowTheme, pieceThemes, inSeason }) {
+  const angleHasMusic = !rowTheme || lib.some(t => t.active && t.themes.includes(rowTheme));
+  const weight = name => (name === rowTheme || (!angleHasMusic && name === 'Everyday') ? 4 : 0) + (pieceThemes.includes(name) ? (inSeason.includes(name) ? 3 : 2) : 0);
+  const everyday = !pieceThemes.length || pieceThemes.includes('Everyday');
+  const now = Date.now();
+  const scored = lib.filter(t => t.active).map(t => {
+    let s = Math.max(0, ...t.themes.map(weight));
+    if (!s && t.themes.includes('Everyday')) s = everyday ? 2 : 1;
+    if (t.themes.includes('Sympathy & memorial') && !pieceThemes.includes('Sympathy & memorial') && rowTheme !== 'Sympathy & memorial') s -= 0.5;
+    const ageDays = t.last ? (now - Date.parse(t.last)) / MKT_DAY_MS : 999;
+    s -= (ageDays < 7 ? 1 : ageDays < 30 ? 0.3 : 0) + Math.min(0.6, t.used * 0.05) + musicJitter(eb, t.id) * 0.4;
+    return { t, s };
+  }).sort((a, b) => b.s - a.s);
+  // Fill groups of three, taking a track of a new mood ahead of a close-scoring repeat.
+  const out = [], left = scored.slice();
+  while (left.length) {
+    const group = [];
+    while (group.length < 3 && left.length) {
+      const moods = new Set(group.map(c => c.t.mood));
+      const top = left[0];
+      const fresh = left.find(c => !moods.has(c.t.mood) && top.s - c.s < 1.5);
+      const pick = moods.has(top.t.mood) && fresh ? fresh : top;
+      group.push(pick); left.splice(left.indexOf(pick), 1);
+    }
+    out.push(...group);
+  }
+  return out.map(c => c.t);
+}
+const musicPublic = t => t && { id: t.id, name: t.name, mood: t.mood, note: t.note, clip: `${SERVER_URL}/marketing/music/clip/${t.mixkit}.mp3` };
+
+// GET /marketing/music/suggest/:eb — { current, tracks: [every active track, best first] }.
+// The card shows them three at a time.
+app.get('/marketing/music/suggest/:eb', async (req, res) => {
+  try {
+    const eb = req.params.eb;
+    const rows = (await mktRecords()).filter(r => r.fields['EB Number'] === eb && (r.fields['Status'] === 'Draft' || r.fields['Status'] === 'Approved'));
+    const p = (await mktShopifyCandidates().catch(() => [])).find(c => ((c.variants && c.variants.nodes) || []).some(v => v.sku === eb));
+    const text = p ? mktThemeText(p) : '';
+    const pieceThemes = MKT_ALL_THEMES.filter(t => t.tags.test(text)).map(t => t.name);
+    const inSeason = mktCalendar().filter(c => c.active).map(c => c.name);
+    const ranked = musicRank(await musicLibrary(), { eb, rowTheme: (rows[0] && rows[0].fields['Theme']) || '', pieceThemes, inSeason });
+    res.json({ current: rows.map(r => r.fields['Music']).find(Boolean) || '', tracks: ranked.map(musicPublic) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /marketing/music/clip/<Mixkit ID>.mp3 — the clip, for listening on the card.
+app.get('/marketing/music/clip/:name', (req, res) => {
+  if (!/^\d+\.mp3$/.test(req.params.name)) return res.status(404).end();
+  const file = path.join(MUSIC_DIR, req.params.name);
+  if (!fs.existsSync(file)) return res.status(404).end();
+  res.type('audio/mpeg').sendFile(file, { maxAge: '7d' });
+});
+
+// POST /marketing/music/:id/retire — "Not for us": unticks Active so the track is never suggested
+// again (tick it back in Airtable to undo).
+app.post('/marketing/music/:id/retire', async (req, res) => {
+  if (!/^rec\w{14}$/.test(req.params.id)) return res.status(400).json({ error: 'bad track' });
+  try {
+    await airtableReq(`${AT_MUSIC_TBL}/${req.params.id}`, { method: 'PATCH', body: JSON.stringify({ fields: { [MUSIC_F.active]: false } }) });
+    if (musicCache.list) { const t = musicCache.list.find(x => x.id === req.params.id); if (t) t.active = false; }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// The cut with the track under it, made once per cut and track and kept with the other copies.
+const musicJobs = new Map(), musicCounted = new Set(); // counted once per piece, not per channel
+function musicMix(cutFile, track) {
+  const name = crypto.createHash('sha256').update(`${MUSIC_VERSION}|music|${path.basename(cutFile)}|${track.mixkit}`).digest('hex').slice(0, 32) + '.mp4';
+  const file = path.join(BRAND_DIR, name);
+  if (fs.existsSync(file)) return Promise.resolve(name);
+  if (!musicJobs.has(name)) {
+    const job = (async () => {
+      if (!fs.existsSync(cutFile)) throw new Error('the 15-second cut is not on the server');
+      const log = await ffmpeg(['-i', cutFile], { allowFail: true });
+      const m = log.match(/Duration: (\d+):(\d+):([\d.]+)/);
+      const d = m ? +m[1] * 3600 + +m[2] * 60 + +m[3] : 14;
+      const tmp = file + '.part.mp4';
+      // The clip already fades out by 14 s; a short fade at the cut's own end catches a cut that
+      // runs a little shorter.
+      await ffmpeg(['-i', cutFile, '-i', musicClip(track), '-map', '0:v', '-map', '1:a',
+        '-af', `atrim=0:${d.toFixed(2)},afade=t=out:st=${Math.max(0, d - 0.6).toFixed(2)}:d=0.6`,
+        '-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-shortest', '-movflags', '+faststart', tmp], { timeoutMs: 2 * 60 * 1000 });
+      fs.renameSync(tmp, file);
+      console.log(`music: ${track.name} added under ${path.basename(cutFile)} (${name})`);
+      return name;
+    })();
+    musicJobs.set(name, job);
+    job.catch(() => {}).finally(() => musicJobs.delete(name));
+  }
+  return musicJobs.get(name);
+}
+// Counts a track as used, so the same few don't come up first every time. Never throws.
+function musicUsed(track) {
+  track.used++; track.last = new Date().toISOString();
+  airtableReq(`${AT_MUSIC_TBL}/${track.id}`, { method: 'PATCH', body: JSON.stringify({ fields: { [MUSIC_F.used]: track.used, [MUSIC_F.last]: track.last } }) })
+    .catch(e => console.warn('music: usage not saved —', e.message));
+}
+// The video URL to post: the cut with the chosen music, or the cut as it is (with a note when the
+// music couldn't be added).
+async function musicForPost(f, cutUrl, notes) {
+  const id = mktMusicId(f);
+  if (!id) return cutUrl;
+  const track = await musicTrack(id).catch(() => null);
+  if (!track) { notes.push('Video posted without music: the chosen track is no longer in the Music Library.'); return cutUrl; }
+  try {
+    const name = await musicMix(path.join(BRAND_DIR, path.basename(new URL(cutUrl).pathname)), track);
+    if (!musicCounted.has(name)) { musicCounted.add(name); musicUsed(track); }
+    return brandUrl(name);
+  } catch (e) {
+    notes.push('Video posted without music: ' + e.message);
+    return cutUrl;
+  }
+}
+
 function mktChannelReady(channel) {
   if (channel === 'Instagram') return metaConnected() && !!metaAuth.igId;
   if (channel === 'Facebook') return metaConnected();
@@ -4256,6 +4419,8 @@ async function mktPostPin(id) {
     }
     const media = await mktBrandRow(f);
     if (videoNote) media.notes.push(videoNote);
+    // Patti's music goes under the 15-second cut only.
+    else if (video !== f['Video URL']) video = await musicForPost(f, video, media.notes);
     const g = { ...f, 'Image URL': media.image, 'Video URL': video };
     const post = await (channel === 'Instagram' ? mktPublishInstagram(g) : channel === 'Facebook' ? mktPublishFacebook(g) : mktPublishPinterest(g));
     const fields = { 'Status': 'Posted', 'Status changed': new Date().toISOString(), 'Pin ID': post.id, 'Pin URL': post.url, 'Post error': '' };
