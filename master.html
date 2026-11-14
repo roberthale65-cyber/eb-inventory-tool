@@ -2692,7 +2692,7 @@ function mkRender(opts){
   const keepText = keepTyped || (opts && opts.keepText);
   const typed = {}, active = document.activeElement, focus = keepText && active && host.contains(active) && active.id ? { id: active.id, start: active.selectionStart, end: active.selectionEnd } : null;
   if(keepText) host.querySelectorAll('input[id],textarea[id]').forEach(el => { if(el.value !== el.defaultValue) typed[el.id] = el.value; });
-  host.innerHTML = pieces.map(mkPieceHtml).join('');
+  host.innerHTML = (mkTab === 'Approved' ? mkMusicFillHtml() : '') + pieces.map(mkPieceHtml).join('');
   for(const id in typed){ const el = document.getElementById(id); if(el){ el.value = typed[id]; el.dispatchEvent(new Event('input')); } }
   if(focus){ const el = document.getElementById(focus.id); if(el){ el.focus(); try { el.setSelectionRange(focus.start, focus.end); } catch(e){} } }
   pieces.forEach(mkLoadCut);
@@ -3039,6 +3039,39 @@ async function mkSetMusic(eb, id){
     mkRender({ keepText: true });
     mkStatusMsg('Music for ' + escHtml(eb) + ': <b>' + (id === 'none' ? 'No music' : escHtml(t ? t.name : 'chosen')) + '</b>.' + (id === 'none' ? '' : ' It goes under the 15-second cut when the post goes out.'));
   } catch(e){ mkRender({ keepText: true }); mkStatusMsg('<strong>Couldn\'t save</strong>' + escHtml(e.message), 'rose'); }
+}
+// Approved video pieces with no music picked yet (same rule as the server's fill-approved).
+function mkMusicUnpicked(){
+  const by = {};
+  for(const r of mkRecords){
+    const f = r.fields;
+    if(f['Status'] !== 'Approved' || f['Media'] !== 'Video' || !f['Video URL'] || f['Pin ID'] || f['Video version'] === 'Original video' || !f['EB Number']) continue;
+    (by[f['EB Number']] = by[f['EB Number']] || []).push(r);
+  }
+  return Object.keys(by).filter(eb => !by[eb].some(r => r.fields['Music']));
+}
+let mkMusicFilling = false;
+function mkMusicFillHtml(){
+  const n = mkMusicUnpicked().length;
+  if(!n && !mkMusicFilling) return '';
+  return '<div class="info-card teal" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between;margin-bottom:12px">' +
+    '<span>🎵 <b>' + n + ' approved video' + (n === 1 ? '' : 's') + '</b> ' + (n === 1 ? 'has' : 'have') + ' no music yet.</span>' +
+    '<button class="btn btn-primary" style="min-height:40px" onclick="mkMusicFill()"' + (mkMusicFilling ? ' disabled' : '') + '>' + (mkMusicFilling ? 'Adding music…' : 'Give each its top suggestion') + '</button></div>';
+}
+// Gives every approved video without music its best-matching track. Patti can change any of them
+// on its card afterwards.
+async function mkMusicFill(){
+  if(mkMusicFilling) return;
+  mkMusicFilling = true; mkRender({ keepText: true });
+  try {
+    const r = await fetch(SERVER_URL + '/marketing/music/fill-approved', { method: 'POST' });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+    await mkLoad();
+    for(const p of d.pieces || []) if(mkMusic[p.eb]) delete mkMusic[p.eb];
+    mkMusicFilling = false; mkRender({ keepText: true });
+    mkStatusMsg('Added music to <b>' + (d.pieces || []).length + '</b> approved piece' + ((d.pieces || []).length === 1 ? '' : 's') + '. Each card shows its track; tap ▶ to hear it or pick another.');
+  } catch(e){ mkMusicFilling = false; mkRender({ keepText: true }); mkStatusMsg('<strong>Couldn\'t add the music</strong>' + escHtml(e.message), 'rose'); }
 }
 async function mkRetireMusic(eb, id){
   const m = mkMusic[eb], t = m && m.tracks && m.tracks.find(x => x.id === id);

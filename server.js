@@ -4232,16 +4232,60 @@ const musicPublic = t => t && { id: t.id, name: t.name, mood: t.mood, note: t.no
 
 // GET /marketing/music/suggest/:eb — { current, tracks: [every active track, best first] }.
 // The card shows them three at a time.
+// The ranked tracks for one piece and its open queue rows.
+async function musicRankFor(eb, rows) {
+  const p = (await mktShopifyCandidates().catch(() => [])).find(c => ((c.variants && c.variants.nodes) || []).some(v => v.sku === eb));
+  const text = p ? mktThemeText(p) : '';
+  const pieceThemes = MKT_ALL_THEMES.filter(t => t.tags.test(text)).map(t => t.name);
+  const inSeason = mktCalendar().filter(c => c.active).map(c => c.name);
+  return musicRank(await musicLibrary(), { eb, rowTheme: (rows[0] && rows[0].fields['Theme']) || '', pieceThemes, inSeason });
+}
 app.get('/marketing/music/suggest/:eb', async (req, res) => {
   try {
     const eb = req.params.eb;
     const rows = (await mktRecords()).filter(r => r.fields['EB Number'] === eb && (r.fields['Status'] === 'Draft' || r.fields['Status'] === 'Approved'));
-    const p = (await mktShopifyCandidates().catch(() => [])).find(c => ((c.variants && c.variants.nodes) || []).some(v => v.sku === eb));
-    const text = p ? mktThemeText(p) : '';
-    const pieceThemes = MKT_ALL_THEMES.filter(t => t.tags.test(text)).map(t => t.name);
-    const inSeason = mktCalendar().filter(c => c.active).map(c => c.name);
-    const ranked = musicRank(await musicLibrary(), { eb, rowTheme: (rows[0] && rows[0].fields['Theme']) || '', pieceThemes, inSeason });
+    const ranked = await musicRankFor(eb, rows);
     res.json({ current: rows.map(r => r.fields['Music']).find(Boolean) || '', tracks: ranked.map(musicPublic) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Approved video posts with no music picked yet (none chosen, not "No music", and posting the
+// 15-second cut), grouped by piece.
+function musicUnpicked(records) {
+  const byEb = new Map();
+  for (const r of records) {
+    const f = r.fields || {};
+    if (f['Status'] !== 'Approved' || f['Media'] !== 'Video' || !f['Video URL'] || f['Pin ID'] || f['Video version'] === 'Original video' || !f['EB Number']) continue;
+    if (!byEb.has(f['EB Number'])) byEb.set(f['EB Number'], []);
+    byEb.get(f['EB Number']).push(r);
+  }
+  // A piece counts as picked when any of its rows has a pick (the card saves all of them).
+  for (const [eb, rows] of byEb) if (rows.some(r => r.fields['Music'])) byEb.delete(eb);
+  return byEb;
+}
+// POST /marketing/music/fill-approved — gives each of those pieces its best suggestion, so the
+// approved backlog posts with music; Patti can change any of them on its card. Among each piece's
+// top three, the track given out least in this pass wins, so a run of Christmas pieces doesn't
+// all get the same song. Saved 10 rows per Airtable call. ?dry=1 only counts.
+app.post('/marketing/music/fill-approved', async (req, res) => {
+  try {
+    const pieces = musicUnpicked(await mktRecords());
+    if (req.query.dry) return res.json({ pieces: pieces.size });
+    const given = new Map(), updates = [], picked = [];
+    for (const [eb, rows] of pieces) {
+      const top = (await musicRankFor(eb, rows)).slice(0, 3);
+      if (!top.length) continue;
+      const t = top.reduce((best, x) => (given.get(x.id) || 0) < (given.get(best.id) || 0) ? x : best, top[0]);
+      given.set(t.id, (given.get(t.id) || 0) + 1);
+      picked.push({ eb, track: t.name });
+      for (const r of rows) updates.push({ id: r.id, fields: { 'Music': t.id } });
+    }
+    for (let i = 0; i < updates.length; i += 10) {
+      const d = await airtableReq(AT_MARKETING_TBL, { method: 'PATCH', body: JSON.stringify({ records: updates.slice(i, i + 10), typecast: true }) });
+      mktCacheUpsert(d.records || []);
+    }
+    console.log(`music: gave ${picked.length} approved piece(s) their top suggestion`);
+    res.json({ ok: true, pieces: picked });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
