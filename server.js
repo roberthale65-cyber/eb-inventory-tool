@@ -3609,7 +3609,13 @@ async function pinCreateBoard(name) {
   pinBoards.set(String(name).toLowerCase(), b.id);
   return b.id;
 }
+// Boards found to be leftover Sandbox boards (Pinterest refuses real pins on them). Pins meant for
+// one go to a real board with the same name, "&" spelled "and" (or "Collection" added), which is
+// made the first time. In memory only: after a restart the first pin finds out again and retries.
+const pinSandboxBoards = new Set();
+const pinRealBoardName = name => / & /.test(name) ? name.replace(/ & /g, ' and ') : name + ' Collection';
 async function pinBoardId(name) {
+  if (pinSandboxBoards.has(String(name).toLowerCase())) name = pinRealBoardName(name);
   if (!pinBoards) await pinLoadBoards();
   const key = String(name).toLowerCase();
   if (!pinBoards.has(key)) {
@@ -4376,7 +4382,19 @@ async function mktPublishPinterest(f) {
     try { body.media_source = { source_type: 'video_id', media_id: await pinUploadVideo(f['Video URL']), cover_image_url: f['Image URL'] }; }
     catch (e) { note = 'Posted as a photo pin — the video failed: ' + e.message; }
   }
-  const pin = await pinApi('/pins', { method: 'POST', body });
+  let pin;
+  try { pin = await pinApi('/pins', { method: 'POST', body }); }
+  catch (e) {
+    // A board made while the connection was in Pinterest's Sandbox (Oct 2026) still shows up in the
+    // real board list, but Pinterest refuses real pins on it ("Christmas Wreaths & Decor", 2026-11-14).
+    // Pin to a real board under a slightly different name instead, from now on.
+    if (!/non-sandbox pins on sandbox boards/i.test(e.message)) throw e;
+    const name = f['Board'] || 'Everyday Faux Florals';
+    pinSandboxBoards.add(name.toLowerCase());
+    body.board_id = await pinBoardId(name);
+    console.warn(`Pinterest: "${name}" is a leftover Sandbox board; pinning to "${pinRealBoardName(name)}" instead`);
+    pin = await pinApi('/pins', { method: 'POST', body });
+  }
   return { id: pin.id, url: `https://www.pinterest.com/pin/${pin.id}/`, note };
 }
 
