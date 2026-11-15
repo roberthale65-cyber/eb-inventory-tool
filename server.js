@@ -4485,6 +4485,7 @@ async function mktPostPin(id) {
     else if (video !== f['Video URL']) video = await musicForPost(f, video, media.notes);
     const g = { ...f, 'Image URL': media.image, 'Video URL': video };
     const post = await (channel === 'Instagram' ? mktPublishInstagram(g) : channel === 'Facebook' ? mktPublishFacebook(g) : mktPublishPinterest(g));
+    if (channel === 'Instagram') mktSeenOnInstagram(f['Product URL']);
     const fields = { 'Status': 'Posted', 'Status changed': new Date().toISOString(), 'Pin ID': post.id, 'Pin URL': post.url, 'Post error': '' };
     const notes = [...media.notes, post.note].filter(Boolean);
     if (notes.length) fields['Notes'] = [f['Notes'], ...notes].filter(Boolean).join('\n');
@@ -4500,6 +4501,23 @@ async function mktPostPin(id) {
     console.warn(`marketing: posting ${id} failed —`, e.message);
     await save({ 'Post error': e.message.slice(0, 1000) }).catch(() => {});
   } finally { mktPosting.delete(id); }
+}
+// Instagram captions can't carry links, so they point to the link in bio, which goes to the
+// "Seen on Instagram" collection (/collections/seen-on-instagram, made 2026-11-15): an automatic
+// collection of in-stock products tagged seen_on_instagram, newest first. A piece is tagged when
+// it posts to Instagram, so whoever taps through from a post finds it near the top. Never throws.
+const IG_SEEN_TAG = 'seen_on_instagram';
+async function mktSeenOnInstagram(productUrl) {
+  try {
+    const handle = (String(productUrl || '').match(/\/products\/([^/?#]+)/) || [])[1];
+    if (!handle) return;
+    const d = await shopifyGraphql(`query($q:String!){products(first:1,query:$q){nodes{id tags}}}`, { q: `handle:${handle}` });
+    const p = d && d.data && d.data.products && d.data.products.nodes[0];
+    if (!p || (p.tags || []).includes(IG_SEEN_TAG)) return;
+    const r = await shopifyGraphql(`mutation($id:ID!,$tags:[String!]!){tagsAdd(id:$id,tags:$tags){userErrors{message}}}`, { id: p.id, tags: [IG_SEEN_TAG] });
+    const errs = (r && r.errors) || (r && r.data && r.data.tagsAdd && r.data.tagsAdd.userErrors) || [];
+    if (errs.length) throw new Error(errs.map(e => e.message).join('; '));
+  } catch (e) { console.warn(`marketing: couldn't tag ${productUrl} as seen on Instagram —`, e.message); }
 }
 // Posts that went out but aren't saved as Posted in Airtable yet: kept in the cache (and over
 // reloads, see mktRecords) and saved again on the 5-minute tick. Never throws.
