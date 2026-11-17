@@ -5401,6 +5401,28 @@ function orMentions(text, key) {
   }
   return false;
 }
+// A reply in the email's thread from a different address (2026-11-17): looked up by subject, then
+// kept only if its headers point back at the first email's Message ID. Gmail's IMAP doesn't reliably
+// search References / In-Reply-To directly, so the subject narrows it and the headers confirm it. A
+// plain "Re: <subject>" with no such headers counts only when no other open contact has that subject.
+const orBaseSubject = s => String(s || '').replace(/^\s*((re|fwd?|aw)\s*:\s*)+/i, '').trim();
+async function orThreadReply(client, r, since, open) {
+  const f = r.fields, msgId = String(f['Message ID'] || '').trim(), subject = orBaseSubject(f['Draft subject']);
+  if (!subject) return null;
+  const uids = (await client.search({ subject, since }, { uid: true })) || [];
+  if (!uids.length) return null;
+  const shared = open.some(o => o.id !== r.id && orBaseSubject(o.fields['Draft subject']).toLowerCase() === subject.toLowerCase());
+  for (const uid of uids.slice().reverse()) { // newest first
+    const msg = await client.fetchOne(String(uid), { envelope: true, headers: ['references', 'in-reply-to'] }, { uid: true });
+    const from = orEmailKey(((((msg && msg.envelope) || {}).from || [])[0] || {}).address);
+    if (!from || from === orEmailKey(GMAIL_USER) || /^(mailer-daemon|postmaster)@/.test(from)) continue;
+    const headers = msg.headers ? msg.headers.toString('utf8') : '';
+    const inThread = !!msgId && headers.includes(msgId);
+    const sameSubject = orBaseSubject((msg.envelope || {}).subject).toLowerCase() === subject.toLowerCase();
+    if (inThread || (sameSubject && !shared)) return { uid, from };
+  }
+  return null;
+}
 function orSweep() {
   if (orSweeping || !orGmailReady() || !AIRTABLE_TOKEN) return orSweeping;
   orSweeping = (async () => {
@@ -5420,14 +5442,21 @@ function orSweep() {
         lock = await client.getMailboxLock('INBOX');
         for (const r of open) try {
           const f = r.fields, since = new Date(Date.parse(f['Sent date'] || orToday()) - MKT_DAY_MS);
-          const uids = await client.search({ from: orEmailKey(f['Email']), since }, { uid: true });
+          let uids = await client.search({ from: orEmailKey(f['Email']), since }, { uid: true });
+          let replyFrom = '';
+          // Someone else may answer for them (an assistant, the office manager, a second address).
+          if (!uids || !uids.length) {
+            const hit = await orThreadReply(client, r, since, open);
+            if (hit) { uids = [hit.uid]; replyFrom = hit.from; }
+          }
           if (!uids || !uids.length) continue;
           const uid = uids[uids.length - 1];
           const msg = await client.fetchOne(String(uid), { bodyStructure: true }, { uid: true });
           const part = orPlainPart(msg && msg.bodyStructure);
           const text = part ? orReplyText(await orReadPart(client, uid, part)) : '';
           const status = OR_OPT_OUT.test(text) ? 'Do not contact' : OR_NOT_INTERESTED.test(text) ? 'Not interested' : 'Replied';
-          await orSave(r.id, { 'Status': status, 'Replied date': orToday(), 'Reply': text || '(no text)', 'Follow-up due': null, ...(status === 'Do not contact' ? { 'Opted out': orToday() } : {}) }, status === 'Replied' ? 'replied' : `replied (${status.toLowerCase()})`);
+          const reply = (replyFrom ? `(from ${replyFrom})\n` : '') + (text || '(no text)');
+          await orSave(r.id, { 'Status': status, 'Replied date': orToday(), 'Reply': reply, 'Follow-up due': null, ...(status === 'Do not contact' ? { 'Opted out': orToday() } : {}) }, (status === 'Replied' ? 'replied' : `replied (${status.toLowerCase()})`) + (replyFrom ? ` from ${replyFrom}` : ''));
           out.replies++;
         } catch (e) {
           // One unreadable message no longer ends the whole check; that contact just gets no follow-up this time.
