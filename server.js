@@ -5268,11 +5268,12 @@ function orDraftNew() {
 // ── Email finder (Hunter.io) ──
 // A contact researched without an email (Status "To research") but with a website gets looked up
 // on Hunter once. Only an address Hunter actually found published on a web page is used, never a
-// guessed pattern (first.last@…), even one Hunter calls verified: bounces from Patti's own Gmail
-// would hurt every email she sends. A find fills Email + Source and clears Status, so the contact
-// is drafted like any other. "Email lookup" holds the date either way, so a site is never paid for
-// twice (clear it in Airtable to try again). The free plan has 25 lookups a month: Hunter's own
-// count is checked first, and no more than OR_HUNTER_PER_DAY go out a day.
+// guessed pattern (first.last@…), even one Hunter calls verified, and never one seen only in a
+// search engine's results: bounces from Patti's own Gmail would hurt every email she sends. A find
+// fills Email + Source and clears Status, so the contact is drafted like any other. "Email lookup"
+// holds the date either way, so a site is never paid for twice (clear it in Airtable to try again).
+// The free plan's monthly lookups (50 in 2026-11) are checked on Hunter first, and no more than
+// OR_HUNTER_PER_DAY go out a day.
 const HUNTER_API_KEY = (process.env.HUNTER_API_KEY || '').trim();
 const OR_HUNTER_PER_DAY = 5;
 const OR_HUNTER_EVERY_MS = 6 * 60 * 60 * 1000;
@@ -5296,9 +5297,18 @@ async function orHunterGet(path, params) {
   if (!r.ok) throw new Error('Hunter: ' + (((body.errors || [])[0] || {}).details || r.status));
   return body;
 }
+// A source counts only if it's a real page that still shows the address. Hunter sometimes lists a
+// search results page instead (google.com/search?q=site:linkedin.com …, 2026-11-18): the address was
+// seen in a snippet, but nobody can open the page it came from, so it's treated as unproven.
+const OR_HUNTER_SEARCH_HOST = /(^|\.)(google|bing|duckduckgo|yahoo|yandex|baidu|ask|ecosia|startpage)\.[a-z.]+$/i;
+function orHunterRealSource(src) {
+  if (!src || !src.uri || src.still_on_page === false) return false;
+  try { return !OR_HUNTER_SEARCH_HOST.test(new URL(src.uri).hostname); } catch { return false; }
+}
 // Picks the address to use from a domain search, or null. Exported for the tests.
 function orHunterPick(rec, data) {
-  const emails = ((data && data.emails) || []).filter(e => e && e.value && (e.sources || []).length && ((e.verification || {}).status !== 'invalid'));
+  const emails = ((data && data.emails) || []).map(e => e && { ...e, sources: (e.sources || []).filter(orHunterRealSource) })
+    .filter(e => e && e.value && e.sources.length && ((e.verification || {}).status !== 'invalid'));
   if (!emails.length) return null;
   const words = String(rec.fields['Name'] || '').toLowerCase().split(/[^a-z]+/).filter(w => w.length > 1);
   const first = words[0] || '', last = words.length > 1 ? words[words.length - 1] : '';
