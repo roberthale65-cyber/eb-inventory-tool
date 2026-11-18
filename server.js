@@ -5265,6 +5265,96 @@ function orDraftNew() {
   return orDrafting;
 }
 
+// ── Email finder (Hunter.io) ──
+// A contact researched without an email (Status "To research") but with a website gets looked up
+// on Hunter once. Only an address Hunter actually found published on a web page is used, never a
+// guessed pattern (first.last@…), even one Hunter calls verified: bounces from Patti's own Gmail
+// would hurt every email she sends. A find fills Email + Source and clears Status, so the contact
+// is drafted like any other. "Email lookup" holds the date either way, so a site is never paid for
+// twice (clear it in Airtable to try again). The free plan has 25 lookups a month: Hunter's own
+// count is checked first, and no more than OR_HUNTER_PER_DAY go out a day.
+const HUNTER_API_KEY = (process.env.HUNTER_API_KEY || '').trim();
+const OR_HUNTER_PER_DAY = 5;
+const OR_HUNTER_EVERY_MS = 6 * 60 * 60 * 1000;
+// Sites that host many businesses: a lookup there finds the platform's own addresses, not theirs.
+const OR_HUNTER_SHARED_HOSTS = ['houzz.com', 'facebook.com', 'instagram.com', 'google.com', 'goo.gl', 'linktr.ee', 'yelp.com', 'bbb.org', 'zillow.com', 'realtor.com', 'homes.com', 'linkedin.com', 'nextdoor.com', 'tiktok.com', 'pinterest.com', 'wixsite.com', 'squarespace.com', 'godaddysites.com', 'weebly.com', 'business.site', 'square.site', 'vagaro.com', 'styleseat.com', 'booksy.com', 'glossgenius.com', 'legacy.com', 'tributearchive.com'];
+// Above this many addresses on one domain it's a big organisation (a brokerage, a hospital), where
+// a general inbox reaches the wrong people: only the contact's own address is used there.
+const OR_HUNTER_SMALL_ORG = 15;
+function orHunterDomain(website) {
+  let host = '';
+  try { host = new URL(/^https?:\/\//i.test(website) ? website : 'https://' + website).hostname.toLowerCase(); } catch { return ''; }
+  host = host.replace(/^www\./, '');
+  if (!host.includes('.') || OR_HUNTER_SHARED_HOSTS.some(d => host === d || host.endsWith('.' + d))) return '';
+  return host;
+}
+async function orHunterGet(path, params) {
+  const u = new URL('https://api.hunter.io/v2/' + path);
+  for (const [k, v] of Object.entries({ ...params, api_key: HUNTER_API_KEY })) u.searchParams.set(k, v);
+  const r = await fetch(u);
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error('Hunter: ' + (((body.errors || [])[0] || {}).details || r.status));
+  return body;
+}
+// Picks the address to use from a domain search, or null. Exported for the tests.
+function orHunterPick(rec, data) {
+  const emails = ((data && data.emails) || []).filter(e => e && e.value && (e.sources || []).length && ((e.verification || {}).status !== 'invalid'));
+  if (!emails.length) return null;
+  const words = String(rec.fields['Name'] || '').toLowerCase().split(/[^a-z]+/).filter(w => w.length > 1);
+  const first = words[0] || '', last = words.length > 1 ? words[words.length - 1] : '';
+  const isPerson = e => {
+    const fn = String(e.first_name || '').toLowerCase(), ln = String(e.last_name || '').toLowerCase(), local = e.value.split('@')[0].toLowerCase();
+    if (last) return (ln === last && (!fn || fn === first || fn[0] === first[0])) || (last.length > 2 && local.includes(last) && local.includes(first[0]));
+    return !!first && (fn === first || local === first);
+  };
+  const best = list => list.sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0];
+  const own = best(emails.filter(isPerson));
+  if (own) return { email: own.value, source: own.sources[0].uri, how: 'their own address' };
+  const total = ((data.meta || {}).results) || emails.length;
+  if (total > OR_HUNTER_SMALL_ORG) return null;
+  const general = best(emails.filter(e => e.type === 'generic'));
+  return general ? { email: general.value, source: general.sources[0].uri, how: 'the business\'s general address' } : null;
+}
+let orHunting = null, orHunterLast = null; // { at, looked, found, used, available, error }
+function orHunterDue() {
+  return (orCache.records || []).filter(r => r.fields['Status'] === 'To research' && !r.fields['Email'] && !r.fields['Email lookup'] && orHunterDomain(r.fields['Website'] || ''));
+}
+function orFindEmails() {
+  if (orHunting || !HUNTER_API_KEY || !AIRTABLE_TOKEN) return orHunting;
+  orHunting = (async () => {
+    const records = await orRecords();
+    const today = orToday();
+    const doneToday = records.filter(r => r.fields['Email lookup'] === today).length;
+    const todo = orHunterDue().slice(0, Math.max(0, OR_HUNTER_PER_DAY - doneToday));
+    const out = { at: new Date().toISOString(), looked: 0, found: 0 };
+    const acct = (await orHunterGet('account', {})).data || {};
+    const s = ((acct.requests || {}).searches) || {};
+    out.used = s.used || 0; out.available = s.available || 0;
+    for (const rec of todo) {
+      if (out.used >= out.available) { out.error = 'This month\'s free lookups are used up; more on ' + (acct.reset_date || 'the 1st') + '.'; break; }
+      const domain = orHunterDomain(rec.fields['Website']);
+      const body = await orHunterGet('domain-search', { domain, limit: 10 });
+      const data = { ...(body.data || {}), meta: body.meta };
+      out.looked++; if ((data.emails || []).length) out.used++;
+      const pick = orHunterPick(rec, data);
+      const dup = pick && (orCache.records || []).find(r => r.id !== rec.id && orEmailKey(r.fields['Email']) === orEmailKey(pick.email));
+      if (pick && !dup) {
+        out.found++;
+        const note = `Email found by Hunter on ${pick.source} (${pick.how}).`;
+        await orSave(rec.id, { 'Email': pick.email, 'Source': pick.source, 'Status': null, 'Email lookup': today, 'Notes': [rec.fields['Notes'], note].filter(Boolean).join('\n') }, `email found on Hunter (${domain}): ${pick.email}`);
+      } else {
+        await orSave(rec.id, { 'Email lookup': today }, dup ? `Hunter found ${pick.email}, already on ${dup.fields['Name'] || 'another'} row` : `Hunter: no published email on ${domain}`);
+      }
+    }
+    orHunterLast = out;
+    if (out.found) orDraftNew();
+    return out;
+  })().catch(e => { orHunterLast = { at: new Date().toISOString(), error: e.message }; console.warn('outreach: email lookup failed —', e.message); return orHunterLast; })
+    .finally(() => { orHunting = null; });
+  return orHunting;
+}
+setInterval(() => { orFindEmails(); }, OR_HUNTER_EVERY_MS);
+
 // ── Gmail ──
 let orMailer = null;
 function orTransport() {
@@ -5519,7 +5609,8 @@ async function orView() {
     gmail: { connected: orGmailReady(), address: GMAIL_USER, footerAddress: !!OUTREACH_ADDRESS, ready: orSendReady() },
     drafting: !!orDrafting, draftError: orDraftError, lastCheck: orLastSweep,
     sendLimit: { cap: orDailyCap(), sentToday: orSentCount() },
-    footer: orFooter(), followUpDays: OR_FOLLOWUP_DAYS
+    footer: orFooter(), followUpDays: OR_FOLLOWUP_DAYS,
+    emailFinder: HUNTER_API_KEY ? { ...(orHunterLast || {}), running: !!orHunting, waiting: orHunterDue().length } : null
   };
 }
 
@@ -5529,6 +5620,7 @@ app.get('/outreach/queue', async (req, res) => {
   try {
     await orRecords({ force: req.query.refresh === '1' });
     orDraftNew();
+    orFindEmails();
     res.json(await orView());
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -5620,4 +5712,5 @@ app.listen(PORT, () => {
   if (AIRTABLE_TOKEN) mktRecords().catch(e => console.warn('marketing: could not load the queue —', e.message));
   cutStateLoad();
   setTimeout(() => { orSweep(); }, 2 * 60 * 1000); // replies that came in while the server was restarting
+  setTimeout(() => { orFindEmails(); }, 4 * 60 * 1000);
 });
