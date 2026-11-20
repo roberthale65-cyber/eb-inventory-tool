@@ -2914,9 +2914,22 @@ function mktAutoTheme(p, now = new Date()) {
 }
 
 // Posting history per piece and channel, from the queue itself. A piece can be drafted again on a
-// channel once nothing is open there and its last post (or skip) is MKT_COOLDOWN_MS old; Patti can
-// pick a piece by hand any time.
+// channel once nothing is open there and its last post (or skip) is that channel's wait old; Patti
+// can pick a piece by hand any time.
+// Waits per channel (2026-11-20, was 30 days everywhere): Pinterest rewards new pins of the same
+// product, so a piece can go back there after 14 days when it has another photo or video to show;
+// Facebook followers notice repeats soonest, so it waits longest.
 const MKT_COOLDOWN_MS = 30 * MKT_DAY_MS;
+const MKT_COOLDOWN_DAYS = { Pinterest: 14, Instagram: 30, Facebook: 45 };
+const mktMediaCount = p => ((p && p.media && p.media.nodes) || []).filter(n => n && ((n.image && n.image.url) || n.sources)).length;
+function mktCooldownMs(ch, p) {
+  if (ch === 'Pinterest' && p && mktMediaCount(p) < 2) return MKT_COOLDOWN_MS; // nothing new to pin
+  return (MKT_COOLDOWN_DAYS[ch] || 30) * MKT_DAY_MS;
+}
+const mktDue = (h, ch, p, now = Date.now()) => !h || (!h.open && now - h.last >= mktCooldownMs(ch, p));
+// Everyday / all-season pieces come back in the automatic drafts no sooner than this after their
+// last post on any channel, so they stay visible all year without crowding the seasonal pieces.
+const MKT_EVERGREEN_GAP_MS = 42 * MKT_DAY_MS;
 function mktHistory(records) {
   const out = {}; // sku → channel → { open, last, posts: [fields, newest first] }
   for (const r of records) {
@@ -3028,11 +3041,24 @@ async function mktShopifyCandidates() {
   return out;
 }
 
-// Portrait photos crop best into Pinterest's 2:3 frame, so prefer the tallest image.
-function mktPickImage(p) {
+// Portrait photos crop best into Pinterest's 2:3 frame, so prefer the tallest image. A repost
+// passes `used` (image keys from earlier posts, newest first) and gets the tallest photo not
+// posted yet, or, when every photo has been used, the one posted longest ago.
+const mktImageKey = u => String(u || '').split('?')[0];
+function mktPickImage(p, used = []) {
   const imgs = ((p.media && p.media.nodes) || []).map(n => n && n.image).filter(i => i && i.url);
   if (!imgs.length) return null;
-  return imgs.slice().sort((a, b) => (b.height / b.width) - (a.height / a.width))[0];
+  const tall = imgs.slice().sort((a, b) => (b.height / b.width) - (a.height / a.width));
+  if (!used.length) return tall[0];
+  return tall.find(i => !used.includes(mktImageKey(i.url)))
+    || tall.slice().sort((a, b) => used.indexOf(mktImageKey(b.url)) - used.indexOf(mktImageKey(a.url)))[0];
+}
+// What earlier posts of a piece showed, on any channel: image keys newest first, and whether the
+// most recent post was a video. Reposts use these to show something different.
+function mktUsedMedia(hist, sku) {
+  const posts = Object.values(hist[sku] || {}).flatMap(h => h.posts)
+    .sort((a, b) => String(b['Status changed'] || '').localeCompare(String(a['Status changed'] || '')));
+  return { images: [...new Set(posts.map(f => mktImageKey(f['Image URL'])).filter(Boolean))], lastWasVideo: !!posts[0] && posts[0]['Media'] === 'Video' };
 }
 
 // Listing videos become video pins when Pinterest will show them well: at least 4 s long
@@ -3259,7 +3285,6 @@ async function mktDraftBatch(count, opts = {}) {
   const hist = mktHistory(queue), nowD = new Date(), nowMs = nowD.getTime();
   const chans = (Array.isArray(opts.channels) && opts.channels.length ? opts.channels : MKT_CHANNELS).filter(ch => MKT_CHANNELS.includes(ch));
   const h = (sku, ch) => (hist[sku] || {})[ch];
-  const due = (sku, ch) => !h(sku, ch) || (!h(sku, ch).open && nowMs - h(sku, ch).last >= MKT_COOLDOWN_MS);
   const cands = products
     .map(p => ({ p, sku: String((p.variants.nodes[0] || {}).sku || '').trim(), img: mktPickImage(p), video: mktPickVideo(p) }))
     .filter(c => c.sku && c.img && c.p.onlineStoreUrl);
@@ -3267,7 +3292,7 @@ async function mktDraftBatch(count, opts = {}) {
   if (Array.isArray(opts.skus) && opts.skus.length) {
     eligible = cands.filter(c => opts.skus.includes(c.sku)).map(c => ({ ...c, channels: chans.filter(ch => !(h(c.sku, ch) || {}).open) }));
   } else {
-    let list = cands.map(c => ({ ...c, channels: chans.filter(ch => due(c.sku, ch)) })).filter(c => c.channels.length);
+    let list = cands.map(c => ({ ...c, channels: chans.filter(ch => mktDue(h(c.sku, ch), ch, c.p, nowMs)) })).filter(c => c.channels.length);
     const theme = opts.theme ? mktTheme(opts.theme) : null;
     if (theme) list = list.filter(c => theme.tags.test(mktThemeText(c.p)));
     const fresh = list.filter(c => !mktEverPosted(hist, c.sku)), seen = list.filter(c => mktEverPosted(hist, c.sku));
@@ -3275,13 +3300,22 @@ async function mktDraftBatch(count, opts = {}) {
     if (opts.mode === 'surprise') list = list.map(c => ({ c, k: Math.random() })).sort((a, b) => a.k - b.k).map(x => x.c);
     else if (theme) list = [...fresh.sort(() => Math.random() - 0.5), ...seen.sort(byOldest)];
     else {
-      // During a holiday focus its pieces lead: never-posted first, then reposts oldest first.
+      // When the new pieces run out, reuse beats switching seasons (2026-11-20). In order: the
+      // holiday focus (never posted, then reposts oldest first), other in-season pieces (same),
+      // then everyday pieces (reposts only once MKT_EVERGREEN_GAP_MS has passed). Pieces for a
+      // season that isn't on yet are never used as filler: a short batch is better than spring
+      // flowers in December, and next week's run picks up whatever has come due by then.
       const fit = c => mktFocusFit(c.p, nowD);
+      const inSeason = c => !fit(c) && !!mktAutoTheme(c.p, nowD);
+      const evergreen = c => !fit(c) && !inSeason(c) && mktSeasonScore(c.p, nowD) === 1;
+      const shuffle = a => a.map(c => ({ c, k: Math.random() })).sort((x, y) => x.k - y.k).map(x => x.c);
       list = [
-        ...fresh.filter(fit).sort(() => Math.random() - 0.5),
+        ...shuffle(fresh.filter(fit)),
         ...seen.filter(fit).sort(byOldest),
-        ...fresh.filter(c => !fit(c)).map(c => ({ ...c, score: mktSeasonScore(c.p, nowD) + Math.random() })).sort((a, b) => b.score - a.score),
-        ...seen.filter(c => !fit(c) && mktAutoTheme(c.p, nowD)).sort(byOldest)
+        ...shuffle(fresh.filter(inSeason)),
+        ...seen.filter(inSeason).sort(byOldest),
+        ...shuffle(fresh.filter(evergreen)),
+        ...seen.filter(c => evergreen(c) && nowMs - mktLastPosted(hist, c.sku) >= MKT_EVERGREEN_GAP_MS).sort(byOldest)
       ];
     }
     eligible = list;
@@ -3297,26 +3331,31 @@ async function mktDraftBatch(count, opts = {}) {
       const now = new Date().toISOString();
       const theme = opts.theme !== undefined ? opts.theme : mktAutoTheme(c.p, nowD);
       const prev = ch => ((h(c.sku, ch) || {}).posts || []).slice(0, 2).map(f => f['Description']);
+      // A repost shows something new: a photo not posted before (or the one posted longest ago),
+      // and a photo instead of the video when the last post was the video.
+      const used = mktUsedMedia(hist, c.sku);
+      const img = mktPickImage(c.p, used.images) || c.img;
+      const video = c.video && !used.lastWasVideo ? c.video : null;
       const base = {
-        'EB Number': c.sku, 'Status': 'Draft', 'Product URL': c.p.onlineStoreUrl, 'Image URL': c.img.url,
-        'Similar URL': mktSimilarUrl(c.p), 'Media': c.video ? 'Video' : 'Photo', 'Drafted': now, 'Status changed': now, 'Theme': theme || ''
+        'EB Number': c.sku, 'Status': 'Draft', 'Product URL': c.p.onlineStoreUrl, 'Image URL': img.url,
+        'Similar URL': mktSimilarUrl(c.p), 'Media': video ? 'Video' : 'Photo', 'Drafted': now, 'Status changed': now, 'Theme': theme || ''
       };
-      if (c.video) base['Video URL'] = c.video;
+      if (video) base['Video URL'] = video;
       if (inv) base['Inventory'] = [inv.id];
       const type = ch => ((h(c.sku, ch) || {}).posts || []).length ? 'Repost' : 'New';
       if (c.channels.includes('Pinterest')) {
         const pinCtx = { theme, recent: recent.Pinterest, previous: ((h(c.sku, 'Pinterest') || {}).posts || []).slice(0, 2).map(f => (f['Pin Title'] || '') + ' — ' + (f['Description'] || '')) };
-        let pin = await mktDraftPin(c.p, c.img, { ...pinCtx, opener: deal('Pinterest') });
+        let pin = await mktDraftPin(c.p, img, { ...pinCtx, opener: deal('Pinterest') });
         // One redraft, with a different style, when the model still fell back on a used opening.
-        if (mktBadOpening('Pinterest', pin.description, recent.Pinterest)) pin = await mktDraftPin(c.p, c.img, { ...pinCtx, opener: deal('Pinterest') });
+        if (mktBadOpening('Pinterest', pin.description, recent.Pinterest)) pin = await mktDraftPin(c.p, img, { ...pinCtx, opener: deal('Pinterest') });
         noteOpening('Pinterest', pin.description);
         created.push({ fields: { ...base, 'Channel': 'Pinterest', 'Post type': type('Pinterest'), 'Pin Title': pin.title, 'Description': pin.description, 'Board': pin.board, 'Alt Text': pin.alt_text } });
       }
       if (c.channels.includes('Instagram') || c.channels.includes('Facebook')) {
         const socialCtx = { theme, recent, previous: { Instagram: prev('Instagram'), Facebook: prev('Facebook') } };
-        let social = await mktDraftSocial(c.p, c.img, { ...socialCtx, openers: { Instagram: deal('Instagram'), Facebook: deal('Facebook') } });
+        let social = await mktDraftSocial(c.p, img, { ...socialCtx, openers: { Instagram: deal('Instagram'), Facebook: deal('Facebook') } });
         if (mktBadOpening('Instagram', social.instagram, recent.Instagram) || mktBadOpening('Facebook', social.facebook, recent.Facebook))
-          social = await mktDraftSocial(c.p, c.img, { ...socialCtx, openers: { Instagram: deal('Instagram'), Facebook: deal('Facebook') } });
+          social = await mktDraftSocial(c.p, img, { ...socialCtx, openers: { Instagram: deal('Instagram'), Facebook: deal('Facebook') } });
         noteOpening('Instagram', social.instagram); noteOpening('Facebook', social.facebook);
         if (c.channels.includes('Instagram')) created.push({ fields: { ...base, 'Channel': 'Instagram', 'Post type': type('Instagram'), 'Pin Title': c.p.title, 'Description': social.instagram } });
         if (c.channels.includes('Facebook')) created.push({ fields: { ...base, 'Channel': 'Facebook', 'Post type': type('Facebook'), 'Pin Title': c.p.title, 'Description': social.facebook + '\n\n' + c.p.onlineStoreUrl } });
@@ -3413,7 +3452,7 @@ app.get('/marketing/plan', async (req, res) => {
       const channels = {};
       for (const ch of MKT_CHANNELS) {
         const x = (hist[sku] || {})[ch];
-        channels[ch] = { posts: x ? x.posts.length : 0, lastPosted: x && x.posts[0] ? x.posts[0]['Status changed'] : null, open: !!(x && x.open), due: !x || (!x.open && now - x.last >= MKT_COOLDOWN_MS) };
+        channels[ch] = { posts: x ? x.posts.length : 0, lastPosted: x && x.posts[0] ? x.posts[0]['Status changed'] : null, open: !!(x && x.open), due: mktDue(x, ch, p, now) };
       }
       return { sku, title: p.title, type: p.productType || '', image: img.url, url: p.onlineStoreUrl, themes: MKT_ALL_THEMES.filter(t => t.tags.test(tags)).map(t => t.name), channels, everPosted: mktEverPosted(hist, sku) };
     }).filter(Boolean);
@@ -3422,7 +3461,7 @@ app.get('/marketing/plan', async (req, res) => {
       return { ...c, pieces: mine.length, neverPosted: mine.filter(x => !x.everPosted).length, due: mine.filter(x => x.everPosted && Object.values(x.channels).some(ch => ch.due)).length };
     });
     const focus = mktFocus();
-    res.json({ calendar, focus: focus ? { theme: focus.theme, until: focus.until } : null, themes: MKT_ALL_THEMES.map(t => t.name), cooldownDays: MKT_COOLDOWN_MS / MKT_DAY_MS, pieces });
+    res.json({ calendar, focus: focus ? { theme: focus.theme, until: focus.until } : null, themes: MKT_ALL_THEMES.map(t => t.name), cooldownDays: MKT_COOLDOWN_MS / MKT_DAY_MS, cooldownByChannel: MKT_COOLDOWN_DAYS, pieces });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -4692,7 +4731,7 @@ function mktPrunePlan(records, { now = Date.now(), isSold = () => false } = {}) 
     let why = null;
     if (f['Status'] === 'Skipped') {
       if (/Skipped automatically: the piece sold/.test(f['Notes'] || '')) { if (age(f) >= MKT_PRUNE_SOLD_SKIP_MS) why = 'skipped, piece sold'; }
-      else if (age(f) >= MKT_COOLDOWN_MS) why = 'skipped, cooldown over';
+      else if (age(f) >= Math.max(MKT_COOLDOWN_MS, mktCooldownMs(mktChannel(f)))) why = 'skipped, cooldown over';
     } else if (f['Status'] === 'Posted' && age(f) >= MKT_PRUNE_POSTED_MS) {
       const sold = sku && isSold(sku);
       if (sold) { if (f['Sold redirect'] || !(f['Pin ID'] || f['Pin URL'])) why = 'posted, piece sold'; }
@@ -4979,10 +5018,18 @@ function mktReviewMessage(c) {
   return `${hi} ${opener} If you have a minute, would you leave a short review? It really helps other people find my little shop:\n${MKT_REVIEW_LINK}\nThank you so much.\n— Patti`;
 }
 // The piece the group post features: in season if possible, otherwise any piece with a photo.
+// Pieces featured in the last MKT_GROUP_REPEAT_WEEKS weeks sit out while others are left.
+const MKT_GROUP_REPEAT_WEEKS = 4;
 async function mktCheckPiece() {
-  const list = (await mktShopifyCandidates()).filter(p => p.onlineStoreUrl && p.variants.nodes[0] && p.variants.nodes[0].sku && p.media.nodes.some(m => m.image));
-  const focused = list.filter(p => mktFocusFit(p)), inSeason = list.filter(p => mktAutoTheme(p));
-  const pool = focused.length ? focused : inSeason.length ? inSeason : list;
+  const all = (await mktShopifyCandidates()).filter(p => p.onlineStoreUrl && p.variants.nodes[0] && p.variants.nodes[0].sku && p.media.nodes.some(m => m.image));
+  const recent = (mktCheck.data.groupPieces || []).map(x => x.sku); // newest first
+  const rank = p => mktFocusFit(p) ? 0 : mktAutoTheme(p) ? 1 : 2;
+  const best = Math.min(3, ...all.map(rank));
+  const top = all.filter(p => rank(p) === best);
+  // Stay in the best tier (the holiday, then the season): a rested piece if there is one,
+  // otherwise the one featured longest ago, never a piece from a later season.
+  const rested = top.filter(p => !recent.includes(p.variants.nodes[0].sku));
+  const pool = rested.length ? rested : top.sort((a, b) => recent.indexOf(b.variants.nodes[0].sku) - recent.indexOf(a.variants.nodes[0].sku)).slice(0, 1);
   if (!pool.length) return null;
   const p = pool[Math.floor(Math.random() * pool.length)], sku = p.variants.nodes[0].sku;
   const u = new URL(p.onlineStoreUrl);
@@ -5031,7 +5078,12 @@ function mktCheckEnsureDrafts(week, force) {
   if (!force && d.drafts && d.drafts.week === week) return Promise.resolve();
   if (!ANTHROPIC_API_KEY) return Promise.reject(new Error('ANTHROPIC_API_KEY not configured on server.'));
   if (!mktCheckDrafting) mktCheckDrafting = mktCheckDraft(week)
-    .then(async drafts => { d.drafts = drafts; await mktCheckSave(); })
+    .then(async drafts => {
+      d.drafts = drafts;
+      // One featured piece per week, newest first; a redraft replaces this week's.
+      if (drafts.piece) d.groupPieces = [{ week, sku: drafts.piece.sku }, ...(d.groupPieces || []).filter(x => x.week !== week)].slice(0, MKT_GROUP_REPEAT_WEEKS);
+      await mktCheckSave();
+    })
     .finally(() => { mktCheckDrafting = null; });
   return mktCheckDrafting;
 }
@@ -5238,8 +5290,27 @@ async function orPiecePool() {
     .filter(p => p.onlineStoreUrl && p.variants.nodes[0] && p.variants.nodes[0].sku && p.media.nodes.some(m => m.image))
     .map(p => ({ p, sku: p.variants.nodes[0].sku, title: p.title, image: p.media.nodes.find(m => m.image).image.url }));
 }
-// Up to 12 pieces for the AI to choose from: what suits the segment, in-season first.
-function orShortlist(pool, segment) {
+// How many recent emails featured each piece (EB number → count): drafts waiting for review or
+// approval, plus emails sent in the last OR_ROTATE_DAYS days. The shortlist puts the least-shown
+// pieces first so the same two or three don't end up in every email.
+const OR_ROTATE_DAYS = 7;
+function orRecentUse() {
+  const since = new Date(Date.now() - OR_ROTATE_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const use = new Map();
+  for (const r of orCache.records || []) {
+    const f = r.fields || {};
+    const recent = f['Status'] === 'Ready for review' || f['Status'] === 'Approved' || String(f['Sent date'] || '') >= since;
+    if (!recent) continue;
+    for (const id of f['Featured pieces'] || []) {
+      const sku = ((invCache.byId.get(id) || {}).fields || {})['EB Number'];
+      if (sku) use.set(sku, (use.get(sku) || 0) + 1);
+    }
+  }
+  return use;
+}
+// Up to 12 pieces for the AI to choose from: what suits the segment, in-season first, and within
+// that the pieces shown in the fewest recent emails.
+function orShortlist(pool, segment, use = new Map()) {
   const text = x => (x.title + ' ' + (x.p.productType || '') + ' ' + (x.p.tags || []).join(' ')).toLowerCase();
   let fit = pool;
   if (segment === 'Sympathy') fit = pool.filter(x => /sympathy|memorial|cemetery|grave|headstone|remembrance/.test(text(x)));
@@ -5248,7 +5319,7 @@ function orShortlist(pool, segment) {
   const shuffled = fit.slice().sort(() => Math.random() - 0.5);
   // Holiday focus pieces first, then other in-season pieces, then the rest.
   const rank = x => mktFocusFit(x.p) ? 0 : mktAutoTheme(x.p) ? 1 : 2;
-  return shuffled.sort((a, b) => rank(a) - rank(b)).slice(0, 12);
+  return shuffled.sort((a, b) => (rank(a) - rank(b)) || ((use.get(a.sku) || 0) - (use.get(b.sku) || 0))).slice(0, 12);
 }
 
 const OR_SEGMENT_BRIEF = {
@@ -5263,7 +5334,8 @@ const OR_SEGMENT_BRIEF = {
 async function orDraftEmail(rec, pool) {
   const f = rec.fields || {};
   const segment = OR_SEGMENT_BRIEF[f['Segment']] ? f['Segment'] : 'Other';
-  const list = orShortlist(pool, segment);
+  await invEnsure().catch(() => {});
+  const list = orShortlist(pool, segment, orRecentUse());
   const prompt = `${PIN_VOICE_RULES}
 
 Write a short first email from Patti to a local business she has never contacted. Patti makes handcrafted, one-of-a-kind faux floral arrangements in Omaha and sells them at eternalbloomsbypatti.com.
@@ -5684,7 +5756,7 @@ async function orFollowUpNext() {
     const pool = shopifyAccessToken ? await orPiecePool().catch(() => []) : [];
     const f = r.fields;
     const featured = new Set((f['Featured pieces'] || []).map(id => ((invCache.byId.get(id) || {}).fields || {})['EB Number']));
-    const fresh = orShortlist(pool.filter(x => !featured.has(x.sku)), f['Segment'])[0];
+    const fresh = orShortlist(pool.filter(x => !featured.has(x.sku)), f['Segment'], orRecentUse())[0];
     const text = orFollowUpText(f, fresh);
     const subject = /^re:/i.test(f['Draft subject'] || '') ? f['Draft subject'] : 'Re: ' + (f['Draft subject'] || 'my note');
     await orSendMail({ id: r.id, to: f['Email'], subject, text, inReplyTo: f['Message ID'] });
