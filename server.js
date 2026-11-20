@@ -5244,7 +5244,6 @@ function orShortlist(pool, segment) {
   let fit = pool;
   if (segment === 'Sympathy') fit = pool.filter(x => /sympathy|memorial|cemetery|grave|headstone|remembrance/.test(text(x)));
   else if (segment === 'Realtor' || segment === 'Home stager') fit = pool.filter(x => !/wreath/.test(text(x)) || /door|porch/.test(text(x)));
-  else if (segment === 'Client gifts') fit = pool.filter(x => !/planter|outdoor/.test(text(x))); // gifts are handed over: tabletop pieces, not local-only pots
   if (fit.length < 4) fit = pool;
   const shuffled = fit.slice().sort(() => Math.random() - 0.5);
   // Holiday focus pieces first, then other in-season pieces, then the rest.
@@ -5258,26 +5257,8 @@ const OR_SEGMENT_BRIEF = {
   'Interior designer': 'An interior designer or decorator who furnishes clients\' homes. Pitch one-of-a-kind finishing pieces for client projects: a dining table centerpiece, a mantel or entry arrangement, a wreath for the front door, chosen to suit the room, that never need watering. Speak designer to maker: specific about colors, textures and scale. Offer to drop a few by their studio or send photos of what she has now.',
   'Salon': 'A hair salon or similar shop. Several Omaha salons already display Patti\'s pieces to brighten their front desk or stations, and some sell them for her for a commission. Ask if they would like her to drop one by to see how it looks in their space.',
   'Sympathy': 'A funeral home, church, hospice or cemetery office that serves grieving families. Be gentle and brief, with no sales language at all. Patti makes lasting memorial pieces and sympathy arrangements, including headstone arrangements, that families can keep for years. Ask if she could be someone they mention when families ask about lasting flowers, and offer to drop off a few examples and cards. Sign off "With care," then "Patti".',
-  'Client gifts': 'A local business that thanks its clients or referral partners with gifts, above all at the holidays and after a closing: title companies, mortgage lenders, insurance agencies, financial advisers and similar offices. Pitch a one-of-a-kind arrangement as a thank-you gift that stays out on a table or mantel for years, long after a tin of cookies is gone. Offer to pull a few options and drop them by their office.',
   'Other': 'A local business that might display, gift or resell Patti\'s pieces. Keep the ask simple.'
 };
-
-// Holiday client gifts (2026-11-20): realtors, designers and offices buy thank-you gifts for
-// clients in December, so until OR_GIFT_SEASON.until first emails and follow-ups for these
-// segments lead with that. Set to null to turn it off, or change the date for next year.
-const OR_GIFT_SEASON = {
-  until: '2026-12-15',
-  who: {
-    'Realtor': 'past clients and referral partners',
-    'Interior designer': 'clients when a project wraps up',
-    'Client gifts': 'clients and referral partners',
-    'Other': 'clients and staff'
-  }
-};
-function orGiftSeason(segment, day = orToday()) {
-  if (!OR_GIFT_SEASON || day > OR_GIFT_SEASON.until || !OR_GIFT_SEASON.who[segment]) return null;
-  return { who: OR_GIFT_SEASON.who[segment], until: OR_GIFT_SEASON.until };
-}
 
 async function orDraftEmail(rec, pool) {
   const f = rec.fields || {};
@@ -5303,7 +5284,7 @@ Business: ${f['Business'] || ''}
 Area: ${f['Area'] || ''}
 Personal detail: ${f['Personal hook'] || '(none)'}
 
-${orGiftSeason(segment) ? `It's holiday gift season: make the one ask about holiday thank-you gifts for their ${orGiftSeason(segment).who} (Patti can pull a few options and drop them by before Christmas), instead of the usual ask. Keep it low-pressure: no prices, quantities or deadlines. A good subject names the gift, e.g. "Thank-you gifts for your clients this Christmas".\n\n` : ''}${mktFocus() && segment !== 'Sympathy' ? `It's the ${mktFocus().theme} season: when one of the ${mktFocus().theme} pieces below suits them, choose it first (and mention it as ${mktAfterChristmas() ? 'winter decor that can stay out after the holidays' : 'ready for the holidays'}).\n\n` : ''}Pieces in stock (choose by number):
+${mktFocus() && segment !== 'Sympathy' ? `It's the ${mktFocus().theme} season: when one of the ${mktFocus().theme} pieces below suits them, choose it first (and mention it as ${mktAfterChristmas() ? 'winter decor that can stay out after the holidays' : 'ready for the holidays'}).\n\n` : ''}Pieces in stock (choose by number):
 ${list.map((x, i) => `${i + 1}. ${x.title} (${x.p.productType || 'arrangement'}): ${String(x.p.description || '').replace(/\s+/g, ' ').slice(0, 160)}`).join('\n')}
 
 Return ONLY valid JSON, no code fences: {"subject": "...", "body": "...", "pieces": [numbers]}`;
@@ -5727,8 +5708,6 @@ function orFollowUpText(f, piece) {
   const hi = `Hi ${orFirstName(f['Name']) || 'there'},`;
   const link = piece ? `\n${piece.title}: ${orPieceUrl(piece.p, piece.sku)}\n` : '';
   if (f['Segment'] === 'Sympathy') return `${hi}\n\nI wanted to make sure my earlier note reached you. If families ever ask about flowers that last, I'd be glad to help, and I'm happy to drop off a few examples and cards whenever it suits you.\n\nWith care,\nPatti`;
-  const gift = orGiftSeason(f['Segment']);
-  if (gift) return `${hi}\n\nJust making sure my note reached you. With the holidays coming, my pieces also make lasting thank-you gifts for ${gift.who}.${link ? ` Here's one I finished recently:\n${link}` : '\n'}\nIf you're putting gifts together this year, I'm happy to pull a few options and drop them by before Christmas. No pressure at all.\n\nPatti`;
   return `${hi}\n\nJust making sure my note reached you. Here's one I finished recently, in case it gives you a better feel for my work:\n${link}\nNo pressure at all. If it's ever useful, I'm happy to drop a few pieces by.\n\nPatti`;
 }
 
