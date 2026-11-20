@@ -2545,7 +2545,7 @@ function mkRenderPlan(){
   }).join('') || '<div class="mk-muted">No seasonal themes in the next 3 weeks — everyday pieces fill the weekly batch.</div>';
   document.getElementById('mk-plan').innerHTML = '<div class="mk-plan-card"><div class="mk-plan-title">Plan posts</div>' +
     (mkPlan.focus ? '<div class="mk-note" style="margin-top:0"><b>Holiday focus:</b> ' + escHtml(mkPlan.focus.theme) + ' pieces go first in the weekly drafts, the group post and outreach emails until ' + mkDate(mkPlan.focus.until + 'T12:00:00') + '.</div>' : '') +
-    '<div class="mk-note" style="margin-top:0">Coming up, timed to when stores and Pinterest shoppers start on each season. Reposts are rewritten for the season, not repeated. A piece can repost on a channel ' + mkPlan.cooldownDays + ' days after its last post there.</div>' +
+    '<div class="mk-note" style="margin-top:0">Coming up, timed to when stores and Pinterest shoppers start on each season. Reposts are rewritten for the season and use a different photo where there is one. A piece can repost on a channel ' + mkWaitText() + ' after its last post there.</div>' +
     cal + '<div class="mk-actions"><button class="btn" onclick="mkTogglePicker()">' + (mkPick.open ? 'Close picker' : '☑ Pick pieces…') + '</button><button class="btn" onclick="mkDraft({ mode:\'surprise\', count:5 })">🎲 Surprise me (5)</button></div></div>';
   mkRenderPicker();
 }
@@ -2657,6 +2657,12 @@ function mkSchedulePoll(){
     const before = sig();
     try { await mkLoad(); if(sig() !== before || mkRenderPending) mkRender({ keepTyped: true }); else mkSchedulePoll(); } catch(e) { mkSchedulePoll(); }
   }, MK_POLL_MS);
+}
+// Repost waits per channel, e.g. "Pinterest 14 days, Instagram 30, Facebook 45".
+function mkWaitText(){
+  const w = (mkPlan && mkPlan.cooldownByChannel) || null;
+  if(!w) return ((mkPlan && mkPlan.cooldownDays) || 30) + ' days';
+  return Object.keys(w).map((ch, i) => ch + ' ' + w[ch] + (i ? '' : ' days')).join(', ');
 }
 function mkStatusMsg(msg, type){
   const el = document.getElementById('mk-status');
@@ -3173,7 +3179,7 @@ async function mkDraft(opts = {}){
     await mkLoad(); mkTab = 'Draft'; mkRender(); mkLoadPlan();
     const n = new Set((d.records || []).map(x => x.fields['EB Number'])).size, failed = (d.failed || []).length;
     const reposts = (d.records || []).filter(x => x.fields['Post type'] === 'Repost').length;
-    if(!n && !failed) mkStatusMsg('<strong>Nothing to draft</strong>' + (opts.skus ? 'Those pieces already have drafts waiting on the chosen channels.' : 'Every matching piece is already in the queue or was posted in the last ' + ((mkPlan && mkPlan.cooldownDays) || 30) + ' days. Use <b>Pick pieces</b> to choose some anyway.'), 'amber');
+    if(!n && !failed) mkStatusMsg('<strong>Nothing to draft</strong>' + (opts.skus ? 'Those pieces already have drafts waiting on the chosen channels.' : 'Every matching piece is already in the queue or was posted too recently (' + mkWaitText() + '). Out-of-season pieces aren't used as filler. Use <b>Pick pieces</b> to choose some anyway.'), 'amber');
     else mkStatusMsg(n + ' piece' + (n === 1 ? '' : 's') + ' drafted' + (reposts ? ' (' + reposts + ' reworded repost' + (reposts === 1 ? '' : 's') + ')' : '') + ' — ready to review.' + (failed ? ' ' + failed + ' couldn\'t be drafted — try again later.' : ''), failed ? 'amber' : 'teal');
     return n > 0;
   } catch(e){ mkStatusMsg('<strong>Couldn\'t draft</strong>' + escHtml(e.message), 'rose'); return false; }
