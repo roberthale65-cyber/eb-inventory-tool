@@ -3351,13 +3351,27 @@ function mktMaybeAutoRun(records) {
   if (!draftDue && !sweepDue) return;
   mktAutoBusy = true;
   (async () => {
-    if (sweepDue) { mktSweepAt = Date.now(); await mktSoldSweep(); }
+    if (sweepDue) {
+      mktSweepAt = Date.now();
+      await mktSoldSweep();
+      await mktPruneQueue().catch(e => console.warn('marketing: queue clean-up failed —', e.message));
+    }
     if (draftDue) {
       const out = await mktDraftBatch(MKT_AUTO_BATCH);
       console.log(`marketing: weekly auto-draft created ${out.records.length} draft(s)` + (out.failed.length ? `, ${out.failed.length} failed` : ''));
     }
   })().catch(e => console.warn('marketing: auto run failed —', e.message)).finally(() => { mktAutoBusy = false; });
 }
+
+// GET /marketing/prune — what the daily queue clean-up would delete now (nothing is deleted).
+app.get('/marketing/prune', async (req, res) => {
+  try {
+    const out = await mktPruneQueue({ dryRun: true });
+    const byWhy = {};
+    for (const r of out.rows) byWhy[r.why] = (byWhy[r.why] || 0) + 1;
+    res.json({ due: out.due, byWhy, perRunCap: MKT_PRUNE_MAX, rows: out.rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // GET /marketing/queue — every queue row, newest draft first.
 app.get('/marketing/queue', async (req, res) => {
@@ -4646,6 +4660,65 @@ async function mktSoldSweep() {
       && invFindBySku(String(f['EB Number'] || '').trim()).some(i => i.fields['Status'] === 'Sold');
   }).map(r => String(r.fields['EB Number']).trim()));
   for (const sku of skus) await mktHandleSold(sku).catch(e => console.warn(`marketing: sold sweep for ${sku} failed —`, e.message));
+}
+
+// ── Queue clean-up ──
+// The queue only ever grew (about 130 rows a week), and on Airtable's Free plan a base holds
+// 1,000 records (2026-11-20). Rows are deleted once nothing reads them any more:
+//   • Skipped because the piece sold: after a week (they only explain the skip).
+//   • Skipped by Patti: after the 30-day cooldown, when they no longer hold the piece back.
+//   • Posted: older than 90 days (past the results report and Pinterest's 90-day stats), except
+//     the 2 newest per piece and channel while the piece is in stock, since reposts reuse them as
+//     "don't repeat this", and except posts of a sold piece still waiting for their sold redirect.
+// Drafts and approved rows are never touched. Runs with the daily sold sweep; capped per run
+// so a backlog spreads over a few days instead of a burst of Airtable calls.
+const MKT_PRUNE_SOLD_SKIP_MS = 7 * MKT_DAY_MS;
+const MKT_PRUNE_POSTED_MS = 90 * MKT_DAY_MS;
+const MKT_PRUNE_KEEP_POSTS = 2;
+const MKT_PRUNE_MAX = 200;
+function mktPrunePlan(records, { now = Date.now(), isSold = () => false } = {}) {
+  const age = f => now - (Date.parse(f['Status changed'] || f['Drafted'] || '') || now);
+  const out = [], keep = new Map(); // sku|channel → posted rows, newest first
+  for (const r of records) {
+    const f = r.fields || {};
+    if (f['Status'] !== 'Posted') continue;
+    const k = String(f['EB Number'] || '').trim() + '|' + mktChannel(f);
+    (keep.get(k) || keep.set(k, []).get(k)).push(r);
+  }
+  for (const list of keep.values()) list.sort((a, b) => String(b.fields['Status changed'] || '').localeCompare(String(a.fields['Status changed'] || '')));
+  for (const r of records) {
+    const f = r.fields || {}, sku = String(f['EB Number'] || '').trim();
+    if (mktPosting.has(r.id) || mktPostedUnsaved.has(r.id)) continue;
+    let why = null;
+    if (f['Status'] === 'Skipped') {
+      if (/Skipped automatically: the piece sold/.test(f['Notes'] || '')) { if (age(f) >= MKT_PRUNE_SOLD_SKIP_MS) why = 'skipped, piece sold'; }
+      else if (age(f) >= MKT_COOLDOWN_MS) why = 'skipped, cooldown over';
+    } else if (f['Status'] === 'Posted' && age(f) >= MKT_PRUNE_POSTED_MS) {
+      const sold = sku && isSold(sku);
+      if (sold) { if (f['Sold redirect'] || !(f['Pin ID'] || f['Pin URL'])) why = 'posted, piece sold'; }
+      else if (!keep.get(sku + '|' + mktChannel(f)).slice(0, MKT_PRUNE_KEEP_POSTS).includes(r)) why = 'posted, older than the 2 kept';
+    }
+    if (why) out.push({ id: r.id, sku, channel: mktChannel(f), status: f['Status'], changed: f['Status changed'] || f['Drafted'] || null, why });
+  }
+  return out;
+}
+async function mktPruneQueue({ dryRun = false } = {}) {
+  await invEnsure();
+  const isSold = sku => invFindBySku(sku).some(i => i.fields['Status'] === 'Sold');
+  const plan = mktPrunePlan(await mktRecords(), { isSold });
+  const batch = plan.slice(0, MKT_PRUNE_MAX);
+  if (dryRun || !batch.length) return { due: plan.length, deleted: 0, rows: plan };
+  let deleted = 0;
+  for (let i = 0; i < batch.length; i += 10) { // Airtable deletes up to 10 records per call
+    const ids = batch.slice(i, i + 10).map(x => x.id);
+    const d = await airtableReq(`${AT_MARKETING_TBL}?` + ids.map(id => 'records%5B%5D=' + id).join('&'), { method: 'DELETE', source: 'marketing-prune' });
+    const gone = new Set((d.records || []).filter(x => x.deleted).map(x => x.id));
+    if (mktCache.records) mktCache.records = mktCache.records.filter(x => !gone.has(x.id));
+    for (const id of gone) mktCache.savedDuringLoad.delete(id);
+    deleted += gone.size;
+  }
+  console.log(`marketing: queue clean-up deleted ${deleted} old row(s)` + (plan.length > deleted ? `, ${plan.length - deleted} left for the next run` : ''));
+  return { due: plan.length, deleted, rows: batch };
 }
 
 // ── Results report ──
